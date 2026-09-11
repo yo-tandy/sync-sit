@@ -1,54 +1,15 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { FieldValue } from 'firebase-admin/firestore';
-import { ageFromDob, getUserRole, getParentProfile, type User } from '@ejm/shared-core';
-import { db, adminAuth } from '../config/firebase.js';
+import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from './verifyAdmin.js';
 import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
-import { REFERENCE_PROVIDER_KEYS } from './referenceKeys.js';
-import { eraseDoUserData } from './doGdpr.js';
 import { raisePartialErasureAlert } from './partialErasureAlert.js';
-import { eraseStudyUserData } from './studyGdpr.js';
-import {
-  emptyCounterpartyTargets,
-  notifyErasureCounterparties,
-} from './erasureCounterpartyNotify.js';
-import { createClaimReleaser, SIT_PROVENANCE } from '../schedule/claimRelease.js';
-import type { SessionBlockEntry } from '../schedule/sessionOverride.js';
-import { notifyBlockedMinorBestEffort } from '../guardian/notifyBlockedMinorBestEffort.js';
+import { performErasure } from './performErasure.js';
 
 interface DeleteUserInput {
   targetUserId: string;
-}
-
-/** One queued write. Collected first, committed in chunks below. */
-type BatchOp = (batch: FirebaseFirestore.WriteBatch) => void;
-
-/**
- * Commit queued writes in chunks of 400, the way `doGdpr`'s `deleteAll` does.
- *
- * A single `db.batch()` rejects past 500 operations, and three of this
- * erasure's steps queue one op per matching document with no bound:
- * appointments, notifications, and `schedules/{uid}/overrides` — which is one
- * doc per DATE, so an active sitter clears 500 in about two years of marked
- * availability.
- *
- * The failure that guard prevents is not "the delete is slow": step 1 has
- * already committed by then, so a rejected step 3 leaves appointments
- * cancelled, no user document deleted, no audit entry, no
- * `partial_user_erasure` alert, and an `INTERNAL` to the caller — and every
- * retry fails at exactly the same place. Inherited from the admin path, where
- * it was rare and supervised; `deleteMyAccount` (#368) puts it behind a row in
- * front of every member, which is the same argument this PR makes about the
- * #420 notification gap.
- */
-async function commitInChunks(ops: BatchOp[]): Promise<void> {
-  for (let i = 0; i < ops.length; i += 400) {
-    const batch = db.batch();
-    for (const op of ops.slice(i, i + 400)) op(batch);
-    await batch.commit();
-  }
 }
 
 /**
@@ -60,26 +21,40 @@ async function commitInChunks(ops: BatchOp[]): Promise<void> {
  *
  * Runs inside a Firestore transaction with a count taken AT CALL TIME, never
  * a value the caller read earlier -- and, when the check passes, the SAME
- * transaction immediately writes `isAdmin: false` on the target. That write
- * is not about this account's admin rights (it is about to be fully erased
- * either way) -- it is what makes the count race-proof. Picture two admins,
- * exactly two active, each erasing the OTHER at the same moment: both
- * transactions run the identical count query and both read every admin doc
- * it returns, including each other's target. Whichever commits first flips
- * its target's `isAdmin` to false; Firestore then forces the second
- * transaction to retry, because it read the very doc the first one just
- * changed. On retry the count query no longer sees that admin, so the second
- * call now sees a real count of one and correctly refuses. A read-only check
- * (no write) would let both transactions see the same stale count of two and
- * both pass, leaving nobody able to administer the platform.
+ * transaction immediately writes `erasureStartedAt: <now>` on the target.
+ * NON-DESTRUCTIVE deliberately (review round on #421's first version, which
+ * flipped `isAdmin: false` here): that write was the first thing this
+ * function did, so an erasure that threw on ANY later step -- appointments,
+ * schedule, references, sync-do, sync-study, any of it -- left the target
+ * silently demoted and NOT deleted, with neither caller catching to notice.
+ * A timestamp marker undoes cleanly (`eraseUserAccount`'s own catch below
+ * clears it with `FieldValue.delete()` before rethrowing) where flipping a
+ * real permission flag does not -- there is no "the erasure sort of failed"
+ * value to restore it to.
  *
- * Returns the target's data (read before the `isAdmin` write), so the caller
- * gets the SAME snapshot `eraseUserAccount` has always started from, with no
- * second read.
+ * The marker still makes the count race-proof, which is the property this
+ * function exists for: the active-admin QUERY (`isAdmin == true, status ==
+ * active`) can return a doc that is already mid-erasure, so the eligible
+ * count EXCLUDES any result carrying `erasureStartedAt`. Picture two admins,
+ * exactly two active, each erasing the OTHER at the same moment: both
+ * transactions run the identical query and both read every admin doc it
+ * returns, including each other's target. Whichever commits first writes its
+ * target's marker; Firestore then forces the second transaction to retry,
+ * because it read the very doc the first one just changed. On retry the
+ * query still returns that doc (its `isAdmin`/`status` are untouched), but
+ * the EXCLUDE filter now drops it from the eligible count, so the second
+ * call correctly sees one and refuses. A read-only check (no write) would let
+ * both transactions see the same stale count of two and both pass, leaving
+ * nobody able to administer the platform.
+ *
+ * Returns the target's data (read before the marker write) plus whether the
+ * marker was actually written, so the caller knows whether it owns cleanup
+ * duty on a later failure.
  */
-async function guardAgainstLastAdmin(
-  userRef: FirebaseFirestore.DocumentReference,
-): Promise<FirebaseFirestore.DocumentData> {
+async function guardAgainstLastAdmin(userRef: FirebaseFirestore.DocumentReference): Promise<{
+  data: FirebaseFirestore.DocumentData;
+  markerWritten: boolean;
+}> {
   return db.runTransaction(async (tx) => {
     const snap = await tx.get(userRef);
     if (!snap.exists) {
@@ -91,17 +66,21 @@ async function guardAgainstLastAdmin(
       const activeAdmins = await tx.get(
         db.collection('users').where('isAdmin', '==', true).where('status', '==', 'active'),
       );
-      if (activeAdmins.size <= 1) {
+      // A doc already mid-erasure (by a concurrent, still-in-flight call) is
+      // not a REAL alternative admin — it is on its way out too.
+      const eligible = activeAdmins.docs.filter((d) => d.data().erasureStartedAt == null);
+      if (eligible.length <= 1) {
         throw new HttpsError(
           'failed-precondition',
           'You are the last active admin — appoint another admin first.',
           { code: 'admin/last-admin' },
         );
       }
-      tx.update(userRef, { isAdmin: false });
+      tx.update(userRef, { erasureStartedAt: new Date() });
+      return { data, markerWritten: true };
     }
 
-    return data;
+    return { data, markerWritten: false };
   });
 }
 
@@ -138,582 +117,58 @@ async function guardAgainstLastAdmin(
  * `deleteMyAccount` call, for the same reason the erasure itself lives here:
  * a guard wired into only one of the two callables is how the last admin
  * still gets erased through the other one.
+ *
+ * If the guard wrote its `erasureStartedAt` marker and the erasure THEN
+ * throws on any later step, this function clears the marker (the target was
+ * never actually deleted -- an admin left silently demoted with no data
+ * removed is worse than the original race) and raises a
+ * `partial_user_erasure` alert before rethrowing, so a half-erased admin is
+ * loud rather than silent. Neither `deleteUser` nor `deleteMyAccount` gets a
+ * chance to run their own `raisePartialErasureAlert` in this case -- their
+ * shared call to `eraseUserAccount` never returns -- so this is the one place
+ * that can raise it.
  */
 export async function eraseUserAccount(targetUserId: string, actorUid: string) {
   const userRef = db.collection('users').doc(targetUserId);
-  const userData = await guardAgainstLastAdmin(userRef);
-  const role = getUserRole(userData as User);
-  const familyId = getParentProfile(userData as User)?.familyId || null;
-  const email = userData.email || '';
-
-  // 1. Cancel active/pending appointments and anonymize user references
-  const babysitterAppts = await db
-    .collection('appointments')
-    .where('babysitterUserId', '==', targetUserId)
-    .get();
-
-  const familyAppts = familyId
-    ? await db
-        .collection('appointments')
-        .where('familyId', '==', familyId)
-        .get()
-    : { docs: [] as any[] };
-
-  const batch1Ops: BatchOp[] = [];
-  let cancelledCount = 0;
-  /**
-   * Appointments cancelled on the FAMILY side, whose babysitter SURVIVES —
-   * their schedule claim has to come back to them (step 1-bis). The
-   * babysitter-side cancels below need no entry: those claims live on the
-   * erased user's own `schedules/{uid}`, which step 3 deletes wholesale.
-   */
-  const sitClaimsToRelease: { appointmentId: string; babysitterUserId: string; date: string }[] =
-    [];
-  /**
-   * Who is left holding a cancellation (issue #420): cancelled-engagement
-   * counts keyed by the surviving family / provider, collected as the cancel
-   * loops run and fanned out in step 7 — one notification per DISTINCT
-   * counterparty, never one per engagement. The erased member's own family
-   * may land in `sitFamilies` (an appointment matched both query sides); the
-   * notify step resolves families to parents AFTER step 4, so a deleted
-   * family resolves to nobody and the erased member is filtered out of every
-   * recipient list.
-   */
-  const counterpartyTargets = emptyCounterpartyTargets();
-
-  for (const appt of babysitterAppts.docs) {
-    const data = appt.data();
-    const updates: Record<string, any> = {
-      babysitterUserId: 'deleted',
-      // The deleted sitter AUTHORED the post-appointment note (issue
-      // #238); the hard delete erases it immediately rather than leaving
-      // their free text to the redaction cron's 7-day trail (or forever,
-      // on a dateless recurring doc).
-      postAppointmentNote: FieldValue.delete(),
-    };
-    if (data.status === 'pending' || data.status === 'confirmed') {
-      updates.status = 'cancelled';
-      updates.statusReason = 'account_deleted';
-      cancelledCount++;
-      // The family survives the sitter's erasure and must be told (#420).
-      if (typeof data.familyId === 'string' && data.familyId) {
-        counterpartyTargets.sitFamilies.set(
-          data.familyId,
-          (counterpartyTargets.sitFamilies.get(data.familyId) || 0) + 1,
-        );
-      }
-    }
-    batch1Ops.push((b) => b.update(appt.ref, updates));
-  }
-
-  // For family appointments, only anonymize if this is the last parent
-  let isLastParent = false;
-  if (familyId && role === 'parent') {
-    const familyDoc = await db.collection('families').doc(familyId).get();
-    const parentIds: string[] = familyDoc.data()?.parentIds || [];
-    isLastParent = parentIds.length <= 1;
-
-    // Walk every family appointment.
-    //   - Always anonymize `createdByUserId` if the deleted user was the
-    //     creator, regardless of whether they are the last parent. Without
-    //     this, a deleted co-parent's UID lingers on appointments the
-    //     remaining co-parent still owns. (GDPR leak.)
-    //   - Only cancel active appointments if this is the last parent —
-    //     otherwise the family still exists and can honor them.
-    for (const appt of (familyAppts as any).docs) {
-      const data = appt.data();
-      const updates: Record<string, any> = {};
-      if (data.createdByUserId === targetUserId) {
-        updates.createdByUserId = 'deleted';
-      }
-      if (isLastParent && (data.status === 'pending' || data.status === 'confirmed')) {
-        updates.status = 'cancelled';
-        updates.statusReason = 'account_deleted';
-        cancelledCount++;
-        // The babysitter survives the family's erasure and must be told
-        // (#420) — pending as well as confirmed, unlike the claim release
-        // below, which only ever had a claim to release for confirmed ones.
-        // `reopened` starts at 0 regardless of status: it is only ever
-        // incremented once the claim-release loop below actually releases
-        // something, never inferred from `status` here (the wording bug the
-        // review caught — a pending appointment never blocked a slot).
-        if (
-          typeof data.babysitterUserId === 'string' &&
-          data.babysitterUserId &&
-          data.babysitterUserId !== 'deleted' &&
-          data.babysitterUserId !== targetUserId
-        ) {
-          const existing = counterpartyTargets.sitProviders.get(data.babysitterUserId);
-          counterpartyTargets.sitProviders.set(data.babysitterUserId, {
-            cancelled: (existing?.cancelled ?? 0) + 1,
-            reopened: existing?.reopened ?? 0,
-          });
-        }
-        if (
-          data.status === 'confirmed' &&
-          typeof data.date === 'string' &&
-          typeof data.babysitterUserId === 'string' &&
-          data.babysitterUserId !== targetUserId
-        ) {
-          sitClaimsToRelease.push({
-            appointmentId: appt.id,
-            babysitterUserId: data.babysitterUserId,
-            date: data.date,
-          });
-        }
-      }
-      if (isLastParent && data.preAppointmentNote !== undefined) {
-        // The FAMILY authored the pre-appointment note (issue #238; it is
-        // family-level data, not per-parent — any parent may write it).
-        // While a co-parent survives, the note stays theirs to manage;
-        // when the LAST parent goes, the family's free text goes with it.
-        updates.preAppointmentNote = FieldValue.delete();
-      }
-      if (Object.keys(updates).length > 0) {
-        batch1Ops.push((b) => b.update(appt.ref, updates));
-      }
-    }
-  }
-
-  await commitInChunks(batch1Ops);
-
-  // 1-bis. Give the SURVIVING babysitter back the slots the appointments
-  // just cancelled above were holding (issue #408). `respondToRequest`
-  // AND-blocks `schedules/{sitter}/overrides/{date}` and appends a
-  // `sessionBlocks` ledger entry naming the appointment; `cancelAppointment`
-  // gives them back, but this path never did — so erasing a family's last
-  // parent left their babysitters with slots blocked forever by appointments
-  // marked cancelled. Same defect class as item 4 (`admin/deleteAppointment`),
-  // and the study half below would mint it fresh in the sibling app if it
-  // were not fixed here too.
-  //
-  // `createClaimReleaser` is the ONE shared wrapper over `buildRestoredOverride`
-  // — the lossless inverse every cancel path and both retention sweeps use —
-  // so a cross-app STUDY claim on the same date is conserved and only this
-  // appointment's slots reopen. Released AFTER the cancel commits, matching
-  // `cancelAppointment`'s own order: a failed release leaves a blocked slot on
-  // an already-cancelled appointment (benign, and exactly today's behaviour),
-  // whereas releasing first and failing to cancel would reopen a slot on a
-  // still-confirmed appointment — a double-booking.
-  const now = new Date();
-  const releaseClaim = createClaimReleaser(db, now);
-  let sitClaimsReleased = 0;
-  let claimReleaseErrors = 0;
-  for (const claim of sitClaimsToRelease) {
-    // Per-appointment isolation: one poisoned override must not abort an
-    // erasure whose earlier steps have already committed.
-    try {
-      const released = await releaseClaim(
-        claim.babysitterUserId,
-        claim.date,
-        (b: SessionBlockEntry) => b.appointmentId === claim.appointmentId,
-        SIT_PROVENANCE,
-      );
-      if (released) {
-        sitClaimsReleased++;
-        // Only NOW does the counterparty notify (#420) get to say "reopened"
-        // — from the actual release outcome, not from `status === 'confirmed'`
-        // alone (a confirmed appointment with no `blockSchedule` never had a
-        // claim to release either).
-        const entry = counterpartyTargets.sitProviders.get(claim.babysitterUserId);
-        if (entry) entry.reopened += 1;
-      }
-    } catch (err) {
-      claimReleaseErrors++;
-      console.error(
-        `deleteUser: failed to release the sit claim for ${claim.appointmentId}:`,
-        err,
-      );
-    }
-  }
-
-  // 2. Delete all notifications for this user
-  const notifications = await db
-    .collection('notifications')
-    .where('recipientUserId', '==', targetUserId)
-    .get();
-
-  await commitInChunks(notifications.docs.map((doc) => (b) => b.delete(doc.ref)));
-
-  // 3. Delete the schedule document and its overrides subcollection.
-  //
-  // This used to be gated on `role === 'babysitter'` — issue #408 item 1, and
-  // the most serious of the four. `getUserRole` returns the FIRST profile it
-  // finds (babysitter → tutor → parent), so a tutor-only account never
-  // entered this branch and kept `schedules/{uid}` plus every override doc
-  // through a GDPR hard delete: their weekly availability grid, every date
-  // they marked unavailable, and the `sessionBlocks` ledger naming the
-  // sessions that claimed their slots. A dual-role student (tutor AND
-  // babysitter) was covered only by the accident of the lookup order.
-  //
-  // The gate is gone rather than widened to `|| role === 'tutor'`, because
-  // the role was never the right predicate: `schedules/{uid}` is ONE
-  // per-user document shared by both apps (`ensureScheduleDoc`'s own
-  // docblock says so), keyed by the subject's own uid, holding nothing but
-  // their availability. There is no app split to gate on. A user who holds
-  // no provider profile simply has no document and the delete is a no-op —
-  // Firestore's delete on a missing document succeeds.
-  const scheduleRef = db.collection('schedules').doc(targetUserId);
-  const overrides = await scheduleRef.collection('overrides').get();
-  await commitInChunks(overrides.docs.map((doc) => (b) => b.delete(doc.ref)));
-  await scheduleRef.delete();
-  const scheduleOverridesDeleted = overrides.docs.length;
-
-  // 4. If parent and last parent: delete family doc + kids subcollection
-  if (familyId && role === 'parent') {
-    const familyRef = db.collection('families').doc(familyId);
-
-    if (isLastParent) {
-      // Delete kids subcollection
-      const kids = await familyRef.collection('kids').get();
-      await commitInChunks(kids.docs.map((doc) => (b) => b.delete(doc.ref)));
-
-      // Delete family document
-      await familyRef.delete();
-    } else {
-      // Remove this parent from the family's parentIds array
-      const familyDoc = await familyRef.get();
-      const parentIds: string[] = familyDoc.data()?.parentIds || [];
-      await familyRef.update({
-        parentIds: parentIds.filter((id) => id !== targetUserId),
-      });
-    }
-  }
-
-  // 4-bis. Guardian cleanup (governance PR 2).
-  // As a CHILD: their link and the invites addressed to them are personal
-  // data — remove both.
-  // The link is READ BACK before it is deleted, and the supervising family
-  // returned to the caller. Callers need it AFTER the erasure (the self-delete
-  // path tells the guardian their supervised member is gone, #368) and by then
-  // there is nothing left to look up. Capturing it here rather than asking
-  // callers to read it first makes the ordering structural: a caller cannot
-  // get it wrong, because the value only exists as a result of the erasure.
-  const ownLink = (await db.collection('guardianLinks').doc(targetUserId).get()).data();
-  const supervisingFamilyId =
-    ownLink?.status === 'active' ? ((ownLink.familyId as string) ?? null) : null;
-  await db.collection('guardianLinks').doc(targetUserId).delete();
-  if (email) {
-    const ownInvites = await db
-      .collection('kidInvites')
-      .where('kidEmailLower', '==', email.toLowerCase())
-      .get();
-    for (const doc of ownInvites.docs) {
-      await doc.ref.delete();
-    }
-  }
-
-  // As a PARENT: supervision is family-level, so a remaining co-parent
-  // keeps every link untouched — only the deleted parent's uid is
-  // anonymized off the invites they created (mirroring the appointment
-  // createdByUserId anonymization above). When the LAST parent goes, the
-  // family's supervision ends: every ACTIVE link is revoked and the
-  // governedBy mirror removed; an under-15 child must not keep operating
-  // unsupervised, so their account is hard-blocked (status is the ban
-  // gate, matching blockUser semantics) and admin is alerted to resolve.
-  // The dead family's pending invites are cancelled — redeeming one would
-  // mint a link to a family that no longer exists.
-  if (familyId && role === 'parent') {
-    if (!isLastParent) {
-      const createdInvites = await db
-        .collection('kidInvites')
-        .where('createdByParentUid', '==', targetUserId)
-        .get();
-      for (const doc of createdInvites.docs) {
-        await doc.ref.update({ createdByParentUid: 'deleted' });
-      }
-    } else {
-      const familyLinks = await db
-        .collection('guardianLinks')
-        .where('familyId', '==', familyId)
-        .get();
-      // `now` is the single deletion instant declared at step 1-bis: every
-      // timestamp this erasure writes names the same moment.
-      for (const linkDoc of familyLinks.docs) {
-        if (linkDoc.data().status !== 'active') continue;
-        const childUid = linkDoc.data().childUid;
-        await linkDoc.ref.update({
-          status: 'revoked',
-          revokedAt: now,
-          revokedByUid: actorUid,
-        });
-        const childRef = db.collection('users').doc(childUid);
-        const child = (await childRef.get()).data();
-        if (!child) continue;
-        const dob = child.dateOfBirth?.toDate?.() ?? null;
-        // A missing DOB cannot prove 15+, so it is treated as a minor.
-        const isMinor = !dob || ageFromDob(dob) < 15;
-        const childUpdates: Record<string, unknown> = {
-          governedBy: FieldValue.delete(),
-          updatedAt: now,
-        };
-        if (isMinor) {
-          childUpdates.status = 'blocked';
-        }
-        await childRef.update(childUpdates);
-        if (isMinor) {
-          // Issue #421, option 1b: tell the minor themselves, BEFORE their
-          // Auth account is disabled -- the same channel set the #368 mirror
-          // case uses, best-effort so a failing send can never leave the
-          // block half-applied.
-          await notifyBlockedMinorBestEffort(child, childUid, now);
-          try {
-            await adminAuth.updateUser(childUid, { disabled: true });
-          } catch (err: any) {
-            if (err.code !== 'auth/user-not-found') throw err;
-          }
-          await db.collection('adminAlerts').add({
-            type: 'guardian_orphaned_minor',
-            createdAt: now,
-            data: { childUid, familyId, deletedParentUid: targetUserId },
-          });
-        }
-      }
-      const familyInvites = await db
-        .collection('kidInvites')
-        .where('familyId', '==', familyId)
-        .get();
-      for (const doc of familyInvites.docs) {
-        const updates: Record<string, unknown> = {};
-        if (doc.data().status === 'pending') updates.status = 'cancelled';
-        if (doc.data().createdByParentUid === targetUserId) {
-          updates.createdByParentUid = 'deleted';
-        }
-        if (Object.keys(updates).length > 0) {
-          await doc.ref.update(updates);
-        }
-      }
-    }
-  }
-
-  // 4-ter. References / endorsements (issue #295). A doc in the shared
-  // `references` collection is personal data of BOTH parties, and erasure
-  // deletes the WHOLE doc from either side:
-  //   - PROVIDER erased (babysitterUserId / tutorUserId / future doerUserId
-  //     == uid): the doc is ABOUT them — their name is its subject, and sit
-  //     manual docs additionally hold third-party contact details the
-  //     provider entered. Nothing in it survives their erasure.
-  //   - SUBMITTER erased (submittedByUserId == uid): every substantive field
-  //     is submitter-side personal data — submittedByName, refName, the
-  //     refPhone/refWhatsapp/refEmail contacts, kid counts/ages, and the
-  //     free-form family-authored referenceText. Stripping them (the
-  //     appointment-style anonymization) would leave only type/status/
-  //     timestamps: a contentless ghost endorsement with no operational or
-  //     display value, unlike an anonymized appointment which still carries
-  //     scheduling history the surviving party needs. So: full deletion.
-  //   - LAST PARENT erased: the family's endorsements go with the family
-  //     (submittedByFamilyId == familyId), mirroring how the family doc,
-  //     kids and preAppointmentNote are erased — the endorsement text is
-  //     family-authored, and the submitting family no longer exists to
-  //     stand behind it. While a co-parent survives, only the docs the
-  //     deleted parent personally submitted are removed.
-  const refSnaps = await Promise.all([
-    ...REFERENCE_PROVIDER_KEYS.map((key) =>
-      db.collection('references').where(key, '==', targetUserId).get(),
-    ),
-    db.collection('references').where('submittedByUserId', '==', targetUserId).get(),
-    familyId && isLastParent
-      ? db.collection('references').where('submittedByFamilyId', '==', familyId).get()
-      : Promise.resolve({ docs: [] as any[] } as any),
-  ]);
-
-  // Dedupe: a doc can match several keys (e.g. submitter erased as last
-  // parent, so both submittedByUserId and submittedByFamilyId hit).
-  const refDocsToDelete = Array.from(
-    new Map(
-      refSnaps.flatMap((snap: any) => snap.docs).map((doc: any) => [doc.ref.path, doc]),
-    ).values(),
-  ) as FirebaseFirestore.QueryDocumentSnapshot[];
-
-  // Deleting an APPROVED study endorsement must decrement the surviving
-  // tutor's denormalized profiles.tutor.endorsementCount — the counter is
-  // otherwise only moved inside respondToTutorEndorsement's transaction,
-  // whose comment assigns any removal flow the matching decrement. Sit has
-  // no counter (searchBabysitters counts references live). Skip tutors who
-  // are themselves the deletion target: their user doc dies in step 5.
-  const tutorDecrements = new Map<string, number>();
-  for (const doc of refDocsToDelete) {
-    const data = doc.data();
-    if (
-      data.appSource === 'study' &&
-      data.status === 'approved' &&
-      typeof data.tutorUserId === 'string' &&
-      data.tutorUserId !== targetUserId
-    ) {
-      tutorDecrements.set(data.tutorUserId, (tutorDecrements.get(data.tutorUserId) || 0) + 1);
-    }
-  }
-
-  // Chunked like the other four batches (review round 6): a member with
-  // 500+ reference/endorsement docs is far less reachable than the
-  // schedule-overrides case, but it's the same defect class this file just
-  // fixed, and the argument applies verbatim.
-  await commitInChunks(refDocsToDelete.map((doc) => (b) => b.delete(doc.ref)));
-
-  for (const [tutorUid, count] of tutorDecrements) {
-    const tutorRef = db.collection('users').doc(tutorUid);
-    const tutorSnap = await tutorRef.get();
-    const current = tutorSnap.data()?.profiles?.tutor?.endorsementCount;
-    // Guard against a missing tutor doc/profile (increment on update would
-    // otherwise mint a stray negative counter) and clamp at zero.
-    if (tutorSnap.exists && tutorSnap.data()?.profiles?.tutor) {
-      await tutorRef.update({
-        'profiles.tutor.endorsementCount': Math.max(0, (current ?? 0) - count),
-      });
-    }
-  }
-
-  // 4-ter-bis. `searches/{searchId}` (issue #408 item 2). `sendContactRequest`
-  // writes one search doc 1:1 with the appointment it produces (linked by the
-  // appointment's own `searchId`), storing `address`, `latLng`, `kidIds`,
-  // `familyId` and `createdByUserId` — none of which any erasure path has
-  // ever touched, so the address copy survived a GDPR hard delete. Nothing
-  // reads `searches` after creation (every field it carries is already
-  // denormalized onto the appointment — see the retention step's comment),
-  // so there is no anonymize-and-keep case the way appointments get: full
-  // deletion, same disposition and same reasoning as `references` above.
-  // Same last-parent rule as `references`' `submittedByFamilyId`: while a
-  // co-parent survives, only the searches the erased member personally
-  // created are removed.
-  const searchSnaps = await Promise.all([
-    db.collection('searches').where('createdByUserId', '==', targetUserId).get(),
-    familyId && isLastParent
-      ? db.collection('searches').where('familyId', '==', familyId).get()
-      : Promise.resolve({ docs: [] as any[] } as any),
-  ]);
-  const searchDocsToDelete = Array.from(
-    new Map(
-      searchSnaps.flatMap((snap: any) => snap.docs).map((doc: any) => [doc.ref.path, doc]),
-    ).values(),
-  ) as FirebaseFirestore.QueryDocumentSnapshot[];
-  await commitInChunks(searchDocsToDelete.map((doc) => (b) => b.delete(doc.ref)));
-
-  // 4-quater. sync-do (plan §11.4): `doTasks` + `taskOffers` on BOTH sides,
-  // the two uid-keyed Storage prefixes, and the dangling-reference scrub
-  // that keeps a co-parent's surviving task from pointing at objects this
-  // erasure just removed. Runs BEFORE the user doc is deleted so the
-  // familyId/isLastParent decisions above still hold, and it takes the same
-  // last-parent rule the family and endorsement steps take. See
-  // `doGdpr.eraseDoUserData` for the four halves and their reasoning.
-  const doErasure = await eraseDoUserData(targetUserId, familyId, isLastParent);
-
-  // 4-quinquies. sync-study (issue #408 item 1). `deleteUser` never touched
-  // `study-sessions` at all — not to delete, not to anonymize — so an erased
-  // tutor's sessions kept their `tutorName` and an erased family's kept
-  // `familyName`, `parentName`, the `students[]` roster (each child's first
-  // name and age) and the family's home `address`/`latLng`. sit's appointments
-  // have had the anonymize-and-cancel treatment since the first version of
-  // this callable; this is the sibling app's half of the SAME engagement
-  // record, with the fields study denormalizes that sit does not.
-  //
-  // Runs BEFORE the user doc is deleted so the familyId/isLastParent
-  // decisions above still hold, and takes the same last-parent rule the
-  // family, endorsement and sync-do steps take. See
-  // `studyGdpr.eraseStudyUserData` for the per-field reasoning (and for why
-  // the field-by-field pass lands on ANONYMIZE here where the identical pass
-  // landed on DELETE for `references`).
-  const studyErasure = await eraseStudyUserData(targetUserId, familyId, isLastParent, now);
-
-  // 5. Delete the user document from Firestore
-  await userRef.delete();
-
-  // 6. Delete the Firebase Auth account entirely
+  const { data: userData, markerWritten } = await guardAgainstLastAdmin(userRef);
   try {
-    await adminAuth.deleteUser(targetUserId);
-  } catch (err: any) {
-    // Auth account may not exist (e.g. already deleted)
-    if (err.code !== 'auth/user-not-found') {
-      throw err;
-    }
-  }
-
-  // 7. Tell the surviving counterparties (issue #420). Every cancelled
-  // pending/confirmed engagement above left somebody holding a cancellation
-  // they never asked for: the family whose sitter/tutor was erased, or the
-  // provider whose family was. The study half's targets come back out of
-  // `eraseStudyUserData` the same way `supervisingFamilyId` comes out of the
-  // guardian step — the value only exists as a result of the erasure, so the
-  // ordering cannot be got wrong.
-  //
-  // Placed LAST, after the erasure has fully committed, deliberately:
-  //   - it is best-effort messaging, and a failing send must never abort or
-  //     fail an erasure whose earlier steps have already committed (the exact
-  //     failure `commitInChunks`'s docblock describes) — hence the outer
-  //     catch on top of the per-recipient isolation inside;
-  //   - everything it reads belongs to SURVIVORS (their user docs, their
-  //     family docs), which steps 1-6 do not touch — except the erased
-  //     member's own family, which resolving after step 4 correctly finds
-  //     gone;
-  //   - cancel-before-notify means the message can never precede the state
-  //     it describes (the order every cancel path here takes).
-  //
-  // Lives HERE and not in either callable for the same reason the erasure
-  // itself does: both the admin path and `deleteMyAccount` share it, and a
-  // notification wired into one callable is how the two paths drift apart.
-  for (const c of studyErasure.cancelledSessionCounterparties) {
-    if (c.kind === 'family') {
-      counterpartyTargets.studyFamilies.set(
-        c.id,
-        (counterpartyTargets.studyFamilies.get(c.id) || 0) + 1,
-      );
-    } else {
-      const existing = counterpartyTargets.studyTutors.get(c.id);
-      counterpartyTargets.studyTutors.set(c.id, {
-        cancelled: (existing?.cancelled ?? 0) + 1,
-        // `c.reopened` came straight out of `eraseStudyUserData`'s own
-        // `releaseClaim` return value, not from `status` (#420 review).
-        reopened: (existing?.reopened ?? 0) + (c.reopened ? 1 : 0),
-      });
-    }
-  }
-  let counterparties = { found: 0, reached: 0 };
-  let counterpartyNotifyFailed = false;
-  try {
-    counterparties = await notifyErasureCounterparties(
-      targetUserId,
-      counterpartyTargets,
-      `${userData.firstName || ''} ${userData.lastName || ''}`.trim(),
-      now,
-    );
+    return await performErasure(userRef, userData, targetUserId, actorUid);
   } catch (err) {
-    // Only reachable when the fan-out fails before its per-recipient loop can
-    // even count `found` — recorded so the audit entry can tell that apart
-    // from "there was nobody to tell" (the `guardianLookupFailed` pattern).
-    counterpartyNotifyFailed = true;
-    console.error(`deleteUser: counterparty notification failed for ${targetUserId}:`, err);
+    if (markerWritten) {
+      // Best-effort, both independently: an erasure that already threw must
+      // not throw a SECOND, different error out of this catch and bury the
+      // original one.
+      try {
+        await userRef.update({ erasureStartedAt: FieldValue.delete() });
+      } catch (clearErr) {
+        console.error('[erasure] failed to clear the last-admin marker after a failed erasure', {
+          targetUserId,
+          err: clearErr,
+        });
+      }
+      try {
+        await db.collection('adminAlerts').add({
+          type: 'partial_user_erasure',
+          createdAt: new Date(),
+          data: {
+            targetUserId,
+            // Distinguishes this from the ordinary partial-erasure alert
+            // (`raisePartialErasureAlert`), which fires on a SUCCESSFUL
+            // return with some per-item cascade failures -- this one fires
+            // because the erasure never returned at all.
+            reason: 'admin_erasure_threw_after_guard',
+            selfDeleted: actorUid === targetUserId,
+          },
+        });
+      } catch (alertErr) {
+        console.error('[erasure] failed to raise the admin erasure-failure alert', {
+          targetUserId,
+          err: alertErr,
+        });
+      }
+    }
+    throw err;
   }
-
-  return {
-    role,
-    email,
-    firstName: userData.firstName || '',
-    lastName: userData.lastName || '',
-    familyId,
-    cancelledCount,
-    isLastParent,
-    refDocsDeleted: refDocsToDelete.length,
-    // issue #408 item 2 -- the `searches` half of the erasure.
-    searchesDeleted: searchDocsToDelete.length,
-    doErasure,
-    /** The family that supervised this member, captured before the link was deleted. */
-    supervisingFamilyId,
-    // issue #408 item 1 -- the study/schedule half of the erasure. Returned
-    // rather than logged here so the CALLER owns the audit trail, which is the
-    // whole point of the extraction.
-    scheduleOverridesDeleted,
-    sitClaimsReleased,
-    studyErasure,
-    claimReleaseErrors,
-    // Issue #420 — the counterparty fan-out's audit counts, the
-    // `guardiansFound`/`guardiansReached` convention: `found` distinct
-    // recipients the cancelled engagements resolve to, `reached` those a
-    // channel actually delivered to. `found > reached` is the entry to look
-    // at; `counterpartyNotifyFailed` marks a fan-out that failed before it
-    // could count anything at all.
-    counterparties,
-    counterpartyNotifyFailed,
-    now,
-  };
 }
 
 /**

@@ -30,6 +30,7 @@ describe('sit notificationRouting', () => {
         'guardian_action',
         'guardian_searchable',
         'supervised_account_deleted',
+        'account_blocked_last_parent',
       ].sort(),
     );
   });
@@ -58,6 +59,9 @@ describe('sit notificationRouting', () => {
     ['reference_received', '/babysitter/endorsements'],
     ['contact_sharing_request', '/babysitter/families'],
     ['supervision_request', '/babysitter'],
+    // Issue #421: the child's own copy of a last-parent-erasure block, routed
+    // to their account page.
+    ['account_blocked_last_parent', '/babysitter/account'],
     ['family_submitted', null],
     ['guardian_action', null],
     ['guardian_searchable', null],
@@ -91,6 +95,10 @@ describe('sit notificationRouting', () => {
     // deliberately unrouted — the child and their governance page are gone by
     // the time this arrives.
     ['supervised_account_deleted', null],
+    // Issue #421: a child, never a parent, is the recipient — parents never
+    // actually receive this type, but the row must not dead-end if a bug
+    // ever routed it here.
+    ['account_blocked_last_parent', null],
   ] as const)('parent: %s -> %s', (type, route) => {
     expect(notificationRoute(type, {}, 'parent')).toBe(route);
   });
