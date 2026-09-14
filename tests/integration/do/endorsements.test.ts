@@ -303,21 +303,86 @@ describe('sync-do endorsements', () => {
       expect((await getDb().collection('references').get()).size).toBe(1);
     });
 
-    // The dedup is STATUS-BLIND, matching study's exactly
-    // (submitTutorEndorsement.ts:59-64 runs the same three equalities with no
-    // status filter). So a decline is permanent for that (family, doer) pair.
-    // Pinned as a DECISION rather than left to be discovered: changing it
-    // would be a platform behaviour change touching study too.
-    it('is status-blind like study — a family cannot re-endorse after a DECLINE', async () => {
-      const { referenceId } = await callFunction<{ referenceId: string }>(
-        'doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token,
-      );
-      await callFunction('doRespondToEndorsement', { referenceId, action: 'decline' }, doerToken);
-      expect((await getDb().collection('references').doc(referenceId).get()).data()!.status)
-        .toBe('removed');
-      await expect(
-        callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
-      ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
+    // Issue #356 option (b): dedup is on LIVE statuses only, so a decline is
+    // NOT permanent — but a family may not simply resubmit right away. These
+    // pin the whole rule for the do side; submit-tutor-endorsement.test.ts
+    // pins the identical rule for study.
+    describe('resubmission after a decline (issue #356)', () => {
+      async function submitAndDecline(): Promise<string> {
+        const { referenceId } = await callFunction<{ referenceId: string }>(
+          'doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token,
+        );
+        await callFunction('doRespondToEndorsement', { referenceId, action: 'decline' }, doerToken);
+        expect((await getDb().collection('references').doc(referenceId).get()).data()!.status)
+          .toBe('removed');
+        return referenceId;
+      }
+
+      it('rejects a resubmission while the existing endorsement is still PENDING (live)', async () => {
+        await callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token);
+        await expect(
+          callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
+        ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
+      });
+
+      it('rejects a resubmission once the existing endorsement is APPROVED (live)', async () => {
+        const { referenceId } = await callFunction<{ referenceId: string }>(
+          'doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token,
+        );
+        await callFunction('doRespondToEndorsement', { referenceId, action: 'accept' }, doerToken);
+        await expect(
+          callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
+        ).rejects.toMatchObject({ code: 'ALREADY_EXISTS', details: { reason: 'already_endorsed' } });
+      });
+
+      it('rejects a resubmission 10 days after a decline, with the cool-down code and a retryAt', async () => {
+        const referenceId = await submitAndDecline();
+        const declinedAt = new Date(Date.now() - 10 * DAY_MS);
+        await getDb().collection('references').doc(referenceId).update({ updatedAt: declinedAt });
+
+        await expect(
+          callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token),
+        ).rejects.toMatchObject({
+          code: 'FAILED_PRECONDITION',
+          details: { code: 'endorsement/cooldown' },
+        });
+        try {
+          await callFunction('doSubmitEndorsement', { doerUserId: DOER, referenceText: GOOD_TEXT, refName: 'Marie' }, parent1Token);
+          throw new Error('expected rejection');
+        } catch (err) {
+          const retryAt = (err as { details?: { retryAt?: string } }).details?.retryAt;
+          expect(retryAt).toBeTruthy();
+          const expected = new Date(declinedAt.getTime() + 30 * DAY_MS);
+          expect(new Date(retryAt!).getTime()).toBe(expected.getTime());
+        }
+        // Refused — no second doc written.
+        expect((await getDb().collection('references').get()).size).toBe(1);
+      });
+
+      it('accepts a resubmission 40 days after a decline, writing a NEW doc and leaving the old one untouched', async () => {
+        const oldReferenceId = await submitAndDecline();
+        const declinedAt = new Date(Date.now() - 40 * DAY_MS);
+        await getDb().collection('references').doc(oldReferenceId).update({ updatedAt: declinedAt });
+
+        const res = await callFunction<{ referenceId: string }>(
+          'doSubmitEndorsement',
+          { doerUserId: DOER, referenceText: 'A second, better task went just as well.', refName: 'Marie' },
+          parent1Token,
+        );
+        expect(res.referenceId).not.toBe(oldReferenceId);
+
+        const newDoc = (await getDb().collection('references').doc(res.referenceId).get()).data()!;
+        expect(newDoc.status).toBe('private');
+        expect(newDoc.referenceText).toBe('A second, better task went just as well.');
+
+        // The OLD declined doc is untouched — still removed, still carrying
+        // the backdated updatedAt this test set.
+        const oldDoc = (await getDb().collection('references').doc(oldReferenceId).get()).data()!;
+        expect(oldDoc.status).toBe('removed');
+        expect((oldDoc.updatedAt as FirebaseFirestore.Timestamp).toDate().getTime()).toBe(declinedAt.getTime());
+
+        expect((await getDb().collection('references').get()).size).toBe(2);
+      });
     });
   });
 

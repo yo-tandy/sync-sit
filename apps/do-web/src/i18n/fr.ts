@@ -421,6 +421,7 @@ export default {
       errorTooShort: 'Merci d\'écrire au moins {{min}} caractères.',
       errorNameRequired: 'Merci d\'indiquer le nom que les familles verront.',
       errorAlreadyExists: 'Votre famille a déjà recommandé cet(te) étudiant(e).',
+      errorCooldown: 'Cet(te) étudiant(e) a refusé votre dernière demande. Vous pourrez réessayer le {{date}}.',
       errorNoCompletedTask: "Vous pouvez recommander un(e) étudiant(e) une fois qu'une tâche que vous lui avez confiée est terminée.",
       errorPermission: "Vous ne pouvez pas recommander cet(te) étudiant(e).",
       errorInvalid: 'Vérifiez ce que vous avez écrit et réessayez.',

@@ -1109,6 +1109,7 @@ export default {
         'Votre recommandation a été envoyée à {{name}}. Elle apparaîtra sur son profil seulement après qu\'il l\'aura acceptée.',
       errorTooShort: 'Veuillez écrire au moins 10 caractères.',
       errorAlreadyExists: 'Vous avez déjà recommandé ce professeur.',
+      errorCooldown: 'Ce professeur a refusé votre dernière demande. Vous pourrez réessayer le {{date}}.',
       errorPermission: 'Les recommandations nécessitent une demande de contact acceptée avec ce professeur.',
       errorInvalid: 'Cette recommandation ne peut pas être envoyée — veuillez vérifier le texte et réessayer.',
       error: 'Une erreur est survenue. Veuillez réessayer.',

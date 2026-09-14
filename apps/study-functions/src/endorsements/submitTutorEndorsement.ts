@@ -5,7 +5,8 @@ import { getCorsOrigin } from '@ejm/shared-functions/config/cors.js';
 import { writeUserActivity } from '@ejm/shared-functions/admin/writeAuditLog.js';
 import { escapeHtml, sendNotificationEmail, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
-import { getParentProfile, resolveNotifPref } from '@ejm/shared-core';
+import { checkEndorsementResubmission } from '@ejm/shared-functions';
+import { getParentProfile, resolveNotifPref, ENDORSEMENT_COOLDOWN_ERROR_CODE } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile } from '@ejm/study-core';
 import { submitTutorEndorsementSchema } from '../validation/endorsement.js';
@@ -55,15 +56,28 @@ export const submitTutorEndorsement = onCall(
       throw new HttpsError('permission-denied', 'Endorsements require an accepted contact request');
     }
 
-    // ── Dedup: one endorsement per (family, tutor). Equality filters only. ──
-    const dup = await db.collection('references')
-      .where('appSource', '==', 'study')
-      .where('tutorUserId', '==', tutorUserId)
-      .where('submittedByFamilyId', '==', familyId)
-      .limit(1)
-      .get();
-    if (!dup.empty) {
-      throw new HttpsError('already-exists', 'You have already endorsed this tutor');
+    // ── Dedup: LIVE statuses only (issue #356, option (b)) — a family may ask
+    // again after a decline, but not before ENDORSEMENT_RESUBMISSION_COOLDOWN_DAYS
+    // have passed since it. See checkEndorsementResubmission's header for the
+    // query shape (equality filters only, no composite index) and
+    // endorsementResubmissionState (shared-core) for the decision itself,
+    // which doSubmitEndorsement applies identically. ──
+    const resubmission = await checkEndorsementResubmission(db, {
+      appSource: 'study',
+      subjectField: 'tutorUserId',
+      subjectUserId: tutorUserId,
+      familyId,
+    });
+    if (!resubmission.allowed) {
+      if (resubmission.reason === 'live') {
+        throw new HttpsError('already-exists', 'You have already endorsed this tutor');
+      }
+      const retryAt = resubmission.retryAt;
+      throw new HttpsError(
+        'failed-precondition',
+        `This family's last request was declined. You can ask again on ${retryAt.toISOString().slice(0, 10)}.`,
+        { code: ENDORSEMENT_COOLDOWN_ERROR_CODE, retryAt: retryAt.toISOString() },
+      );
     }
 
     // ── Write the endorsement into the shared references collection, keyed by
