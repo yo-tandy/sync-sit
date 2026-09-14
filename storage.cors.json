@@ -1,0 +1,14 @@
+[
+  {
+    "origin": [
+      "https://sync-sit.com",
+      "https://www.sync-sit.com",
+      "https://sync-sit.web.app",
+      "https://sync-sit.firebaseapp.com",
+      "http://localhost:5173"
+    ],
+    "method": ["PUT"],
+    "responseHeader": ["Content-Type", "x-goog-content-length-range"],
+    "maxAgeSeconds": 3600
+  }
+]

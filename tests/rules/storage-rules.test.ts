@@ -568,12 +568,6 @@ describe('family-photos', () => {
     await assertSucceeds(getBytes(fileRef));
   });
 
-  it('allows authenticated writes', async () => {
-    const authed = testEnv.authenticatedContext('user1');
-    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
-    await assertSucceeds(uploadString(fileRef, 'photo', 'raw'));
-  });
-
   it('denies unauthenticated reads', async () => {
     const unauthed = testEnv.unauthenticatedContext();
     const fileRef = ref(unauthed.storage(), 'family-photos/family1/photo.jpg');
@@ -586,79 +580,65 @@ describe('family-photos', () => {
     await assertFails(uploadString(fileRef, 'photo', 'raw'));
   });
 
-  // Issue #287: same open gap as profile-photos before this PR — no
-  // contentType constraint at all. Write scoping (uid/familyId) is NOT
-  // narrowed here (see the storage.rules comment on this match block): no
-  // rule-local source for the caller's familyId exists without a
-  // cross-service firestore.get(), which issue #449 / PR #462's guard test
-  // now blocks. So any authenticated user can still write here (unchanged
-  // by this PR) — only the contentType denylist is new.
-  it('denies an authenticated upload with contentType text/html (admin/user-phishing surface, issue #287)', async () => {
+  // Issue #471 — writes now go through createFamilyPhotoUploadUrl (a
+  // membership-checked signed PUT URL) exclusively. `create, update: if
+  // false` means NO direct client SDK write can ever succeed here, for
+  // ANYONE — this replaces both the #287 contentType-denylist pins (moot:
+  // the rule denies before contentType is even considered) and the #287
+  // gap-pin this test used to carry ("TEMPORARILY allows a non-member...").
+  it('denies a direct authenticated write into the caller\'s OWN family path (issue #471 — no client write path exists anymore)', async () => {
     const authed = testEnv.authenticatedContext('user1');
-    const fileRef = ref(authed.storage(), 'family-photos/family1/evil.html');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
+    await assertFails(uploadString(fileRef, 'photo', 'raw'));
+  });
+
+  it('denies a direct authenticated write with a legitimate image contentType (rule denies before contentType is considered)', async () => {
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
     await assertFails(
-      uploadBytes(fileRef, new TextEncoder().encode('<script>phish()</script>'), {
-        contentType: 'text/html',
-      }),
+      uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'image/jpeg' }),
     );
   });
 
-  it('denies an authenticated upload with contentType image/svg+xml (scriptable, renders live)', async () => {
-    const authed = testEnv.authenticatedContext('user1');
-    const fileRef = ref(authed.storage(), 'family-photos/family1/evil.svg');
-    await assertFails(
-      uploadBytes(fileRef, new TextEncoder().encode('<svg/>'), {
-        contentType: 'image/svg+xml',
-      }),
-    );
-  });
-
-  it('allows real photo content types (image/jpeg, image/heic, empty, application/octet-stream)', async () => {
-    const authed = testEnv.authenticatedContext('user1');
-    await assertSucceeds(
-      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo.jpg'), new Uint8Array([1, 2, 3]), {
-        contentType: 'image/jpeg',
-      }),
-    );
-    await assertSucceeds(
-      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo.heic'), new Uint8Array([1, 2, 3]), {
-        contentType: 'image/heic',
-      }),
-    );
-    await assertSucceeds(
-      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo2.jpg'), new Uint8Array([1, 2, 3]), {
-        contentType: '',
-      }),
-    );
-    await assertSucceeds(
-      uploadBytes(ref(authed.storage(), 'family-photos/family1/photo3.jpg'), new Uint8Array([1, 2, 3]), {
-        contentType: 'application/octet-stream',
-      }),
-    );
-  });
-
-  // Pins the scoping finding itself: a caller with no relationship to
-  // family2 can still write into family2's photo path. This is UNCHANGED
-  // by this PR (see the storage.rules comment) — pinned here so a future
-  // narrowing attempt has a red-to-green target, and so this isn't an
-  // accidental silent gap.
-  it('TEMPORARILY allows a non-member to write into another family\'s photo path (issue #287 scoping finding)', async () => {
+  // The #287 gap-pin, now flipped to green: a non-member's direct write is
+  // DENIED (previously the only pin this test file had for this path was
+  // that it TEMPORARILY succeeded).
+  it('denies a non-member\'s direct write into another family\'s photo path (issue #287 scoping finding, closed by #471)', async () => {
     const authed = testEnv.authenticatedContext('unrelated-user');
     const fileRef = ref(authed.storage(), 'family-photos/family2.jpg');
-    await assertSucceeds(uploadString(fileRef, 'photo', 'raw'));
+    await assertFails(uploadString(fileRef, 'photo', 'raw'));
   });
 
-  // Review round on PR #470: same combined-write/delete trap as
-  // profile-photos above. No client currently calls deleteObject() against
-  // this path, but the rule is split into create/update + delete for
-  // consistency, so pin it the same way.
-  it('allows an authenticated delete (latent path, same fix as profile-photos)', async () => {
+  it('denies an update to an existing object too (create AND update are both if false)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('user1');
+    const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
+    await assertFails(uploadString(fileRef, 'replacement', 'raw'));
+  });
+
+  // Delete stays unscoped (request.auth != null) — see the storage.rules
+  // comment for why: a delete cannot plant attacker content (the surface
+  // #287/#471 close), and FamilySettingsPage's replace-photo flow now
+  // needs a real client-SDK delete of the PREVIOUS uuid-named object
+  // (uploads are no longer an overwrite-in-place of a deterministic path).
+  it('allows an authenticated delete (old-photo cleanup, unscoped by design — see storage.rules)', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
     });
     const authed = testEnv.authenticatedContext('user1');
     const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
     await assertSucceeds(deleteObject(fileRef));
+  });
+
+  it('denies an unauthenticated delete', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
+    });
+    const unauthed = testEnv.unauthenticatedContext();
+    const fileRef = ref(unauthed.storage(), 'family-photos/family1/photo.jpg');
+    await assertFails(deleteObject(fileRef));
   });
 });
 

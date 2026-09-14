@@ -806,6 +806,9 @@ export default {
     saved: 'Family info saved!',
     kidNote: 'About this child (optional)',
     kidNotePlaceholder: 'What would you like babysitters to know about your child?',
+    uploadError: 'Something went wrong while saving. Please try again.',
+    uploadErrorUnauthorized: 'You don\'t have permission to update this family. Try signing out and back in, or contact support if the problem continues.',
+    uploadErrorConnection: 'There was a connection problem. Please try again.',
   },
 
   // Invite

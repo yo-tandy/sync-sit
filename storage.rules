@@ -148,43 +148,54 @@ service firebase.storage {
                    && fileName[0:request.auth.uid.size()] == request.auth.uid;
     }
 
-    // Family photos — authenticated users can upload/read.
+    // Family photos — authenticated users can read; writes are
+    // callable-mediated (issue #471).
     //
-    // Write scoping (issue #287): the only client writer is
-    // apps/web FamilySettingsPage.tsx, which builds the path from the
-    // CALLER'S OWN familyId (`getParentView(userDoc)?.familyId`, read from
-    // the caller's own Firestore user doc at login, not from the route).
-    // That would make `family-photos/{familyId}.{ext}` narrowable to "the
-    // caller's own family" in principle, the same way profile-photos is
-    // narrowed to the caller's own uid — but doing so needs the caller's
-    // familyId AT RULE-EVALUATION TIME, and there is no rule-local source
-    // for it: no custom claim carries familyId onto the ID token (grepped
-    // the repo for setCustomUserClaims — there is none), so the only way to
-    // check it here would be a cross-service `firestore.get()` into
-    // users/{uid}. That construct is exactly what #446 took down production
-    // with (fails closed on an errored call — every parent's write, not
-    // just non-members') and is exactly what PR #462's cross-service guard
-    // test (issue #449) now fails the suite on for any NEW occurrence. So
-    // this rule is intentionally left unscoped by uid/familyId — any
-    // authenticated user can still write here, same as before this PR —
-    // and only the contentType denylist is added. See "Follow-ups" in the
-    // PR description for the safe alternative (a callable-mediated/
-    // signed-upload-URL path, the getVerificationDocument/#153 pattern).
+    // Write scoping — RESOLVED (issue #471, follow-up to #287). #287 found
+    // that `family-photos/{familyId}.{ext}` could in principle be narrowed
+    // to "caller is a member of that family", the same way profile-photos
+    // is narrowed to the caller's own uid, but doing so at RULE-EVALUATION
+    // TIME needs the caller's familyId available in the rule, and there is
+    // no rule-local source for it: no custom claim carries familyId onto
+    // the ID token, and the only remaining route — a cross-service
+    // `firestore.get()` into users/{uid} — is exactly the construct that
+    // took down production in #446 (fails closed on an errored call,
+    // denying every parent's write, not just non-members') and that PR
+    // #462's cross-service guard test (issue #449) now fails the suite on
+    // for any NEW occurrence. So #287 shipped the contentType denylist only
+    // and left writes open to any authenticated user, pinned as a known gap.
     //
-    // Split into create/update vs. delete (same fix as profile-photos
-    // above, review round on PR #470): a combined `write` rule referencing
-    // request.resource.contentType denies every delete, since
-    // request.resource is null on a delete request. No client currently
-    // calls deleteObject() against this path (FamilySettingsPage.tsx's
-    // remove-photo handler only clears local UI state), so this was latent
-    // rather than actively triggered — fixed anyway so the next delete flow
-    // added here doesn't inherit the trap. The delete audience is
-    // unchanged from the pre-PR write audience (request.auth != null),
-    // matching the "left unscoped" decision above.
+    // This PR closes that gap WITHOUT a rule-local familyId check: writes
+    // move behind `createFamilyPhotoUploadUrl` (packages/shared-functions/
+    // src/family/createFamilyPhotoUploadUrl.ts), which checks membership
+    // with the Admin SDK (no rules involved — reads Firestore directly,
+    // mirroring the now-dead canWriteFamilyDocs helper above EXACTLY:
+    // isAdmin(caller) || caller.profiles.parent.familyId === familyId),
+    // validates contentType (isRenderableDocType, re-implemented in TS —
+    // signed-URL uploads never evaluate THESE rules, the signed URL
+    // authenticates as the service account and bypasses them entirely) and
+    // the object's file extension, and returns a short-lived V4 signed PUT
+    // URL. So `create, update` become unconditional denials here: there is
+    // no client write path into this prefix anymore, narrow or otherwise.
+    //
+    // Delete is UNCHANGED (`request.auth != null`, unscoped) — deliberately
+    // not moved server-side. Rationale: (1) a delete cannot plant
+    // attacker-controlled content (the write path this PR closes), so its
+    // residual risk is integrity/availability (an authenticated stranger
+    // could delete another family's photo), not the content-injection
+    // surface #287/#471 exist to close — the same risk-class distinction
+    // storage.rules already draws for verification-documents above
+    // ("integrity risk ... not a disclosure one"); (2) FamilySettingsPage's
+    // replace-photo flow now needs a REAL delete of the previous object
+    // (unlike before this PR, upload paths are `{familyId}/{uuid}.{ext}` —
+    // unique per upload, not an overwrite-in-place of a deterministic
+    // path — so a stale photo would otherwise orphan silently), and the
+    // client-SDK delete this enables is what makes that possible without
+    // new server infrastructure. Moving delete server-side too is tracked
+    // as a follow-up, not required by this issue.
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow create, update: if request.auth != null
-                   && !isRenderableDocType(request.resource.contentType);
+      allow create, update: if false;
       allow delete: if request.auth != null;
     }
 

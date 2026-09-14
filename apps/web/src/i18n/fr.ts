@@ -792,6 +792,9 @@ export default {
     saved: 'Informations de la famille enregistr\u00e9es !',
     kidNote: '\u00c0 propos de cet enfant (optionnel)',
     kidNotePlaceholder: 'Que souhaitez-vous que les babysitters sachent sur votre enfant ?',
+    uploadError: 'Une erreur est survenue lors de l\'enregistrement. Veuillez r\u00e9essayer.',
+    uploadErrorUnauthorized: 'Vous n\'avez pas la permission de modifier cette famille. Essayez de vous d\u00e9connecter puis reconnecter, ou contactez le support si le probl\u00e8me persiste.',
+    uploadErrorConnection: 'Un probl\u00e8me de connexion est survenu. Veuillez r\u00e9essayer.',
   },
 
   invite: {

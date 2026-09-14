@@ -51,6 +51,10 @@ export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
 
+// Callable — family photo uploads (issue #471): the only writer of
+// family-photos/** once storage.rules sets that path's writes to `if false`.
+export { createFamilyPhotoUploadUrl } from './family/createFamilyPhotoUploadUrl.js';
+
 // Callables — guardian (parental governance)
 export { createKidInvite } from './guardian/createKidInvite.js';
 export { cancelKidInvite, resendKidInvite } from './guardian/manageKidInvite.js';
