@@ -34,6 +34,46 @@ export function ageGateErrorCode(err: unknown): AgeGateErrorCode | null {
 }
 
 /**
+ * Extracts the machine-readable error code from a `deleteMyAccount`
+ * rejection (HttpsError details: { code: 'admin/last-admin' }, issue #421).
+ *
+ * ⚠ SERVER SIDE IS NOT ON `main` YET. `guardAgainstLastAdmin` -- the guard
+ * that throws this code, inside `eraseUserAccount`, the ONE erasure body
+ * both `deleteUser` (admin) and `deleteMyAccount` (self-serve) call -- ships
+ * in open PR #490, not this one. This client mapping is the CORRECT
+ * contract for what #490 throws (verified against its diff), but until #490
+ * merges, `deleteMyAccount` cannot actually produce `admin/last-admin` --
+ * the branch below is unreachable, and a sole admin CAN self-delete with no
+ * guard at all. This PR (#493) must merge AFTER #490, not before or
+ * standalone.
+ *
+ * Once merged, `eraseUserAccount` refuses to erase the platform's last
+ * active admin, so a member who is that admin can hit this from the
+ * self-serve dialog too, not only from the admin panel.
+ *
+ *
+ * There is deliberately NO supervised-minor or guardian code here. #368's
+ * owner decision (2026-08-29, see `deleteMyAccount.ts`'s docstring) is that a
+ * supervised minor MAY delete their own account without a guardian veto --
+ * refusing would be a GDPR erasure request denied. The guardian is notified
+ * AFTER the erasure completes, not asked to approve it beforehand, so
+ * `deleteMyAccount` has no error branch a minor's client could ever receive
+ * for being supervised.
+ *
+ * The callable's own two guards (a stale session past the re-auth window;
+ * the wrong confirmation token) throw plain `failed-precondition` /
+ * `invalid-argument` with NO `details.code` at all -- read those off
+ * `callableErrorCode` instead.
+ */
+export type AccountDeleteErrorCode = 'admin/last-admin';
+
+export function accountDeleteErrorCode(err: unknown): AccountDeleteErrorCode | null {
+  const details = (err as { details?: { code?: unknown } } | null)?.details;
+  const code = details?.code;
+  return code === 'admin/last-admin' ? code : null;
+}
+
+/**
  * The Firebase callable error code, with the client SDK's `functions/` prefix
  * stripped, or null when the rejection carries no recognisable code.
  *

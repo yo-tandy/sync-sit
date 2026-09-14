@@ -371,6 +371,24 @@ export default {
     search: 'Recherche',
     endorsements: 'Recommandations',
     favorites: 'Favoris',
+    // #491 -- le pied de page du compte partagé (DeleteAccountSection,
+    // @ejm/shared-ui). Le mot « DELETE » reste en anglais, à dessein : le
+    // callable `deleteMyAccount` compare un jeton fixe, non localisé, pour
+    // ne pas avoir à connaître la langue de l'appelant.
+    deleteMyAccount: 'Supprimer mon compte',
+    deleteDialogTitle: 'Supprimer mon compte ?',
+    deleteDialogBody:
+      'Cette action supprime définitivement votre compte. Votre profil, vos rendez-vous, vos séances de soutien scolaire, vos tâches et vos recommandations sont supprimés de sync/sit, sync/study et sync/do. Cette action est irréversible.',
+    deleteConfirmLabel: 'Saisissez {{word}} pour confirmer',
+    deleteConfirmButton: 'Oui, supprimer mon compte',
+    deleteErrorLastAdmin:
+      'Vous êtes le dernier administrateur. Désignez un autre administrateur avant de supprimer votre compte.',
+    deleteErrorReauth: 'Pour votre sécurité, veuillez vous reconnecter avant de supprimer votre compte.',
+  },
+  accountDeleted: {
+    title: 'Votre compte a été supprimé',
+    body: 'Vos données ont été supprimées de sync/sit, sync/study et sync/do. Merci d\'avoir fait partie de la communauté.',
+    backHome: "Retour à l'accueil",
   },
   appSwitch: {
     account: 'Mon compte',

@@ -373,6 +373,20 @@ export default {
     search: 'Search',
     endorsements: 'Endorsements',
     favorites: 'Favorites',
+    // #491 -- the account hub footer (DeleteAccountSection, @ejm/shared-ui).
+    deleteMyAccount: 'Delete my account',
+    deleteDialogTitle: 'Delete my account?',
+    deleteDialogBody:
+      'This permanently deletes your account. Your profile, appointments, tutoring sessions, tasks, and references are removed from sync/sit, sync/study and sync/do. This cannot be undone.',
+    deleteConfirmLabel: 'Type {{word}} to confirm',
+    deleteConfirmButton: 'Yes, delete my account',
+    deleteErrorLastAdmin: "You're the last admin. Appoint another admin before deleting your account.",
+    deleteErrorReauth: 'For your security, please sign in again before deleting your account.',
+  },
+  accountDeleted: {
+    title: 'Your account has been deleted',
+    body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',
+    backHome: 'Go to the homepage',
   },
   appSwitch: {
     account: 'My account',
