@@ -112,7 +112,7 @@ export async function sendVerificationEmail(
   const { subject, html } = buildVerificationEmail(code, app);
   const { from, fromFallback } = NOTIFICATION_BRANDING[app];
   try {
-    await resend.emails.send({ from, to, subject, html, replyTo });
+    await resend.emails.send({ from, to, subject, html });
   } catch (err: any) {
     // If domain not verified yet, try fallback sender
     if (err.statusCode === 403 || err.message?.includes('domain')) {
