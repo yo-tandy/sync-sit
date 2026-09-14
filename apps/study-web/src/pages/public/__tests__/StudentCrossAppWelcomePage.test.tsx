@@ -55,6 +55,7 @@ vi.mock('@/pages/enrollment/tutor/StepSubjects', () => ({
 
 import { I18nextProvider } from 'react-i18next';
 import { MemoryRouter, Routes, Route } from 'react-router';
+import { CONSENT_VERSION } from '@ejm/shared-core';
 import i18n from '@/i18n';
 import { StudentCrossAppWelcomePage } from '../StudentCrossAppWelcomePage';
 
@@ -157,7 +158,7 @@ describe('StudentCrossAppWelcomePage', () => {
     expect(call?.payload).toEqual({
       crossApp: true,
       subjects: [{ subject: 'math', levels: ['Terminale'], rate: 25 }],
-      consentVersion: '2025-12-01',
+      consentVersion: CONSENT_VERSION,
     });
     expect(h.refreshUserDoc).toHaveBeenCalled();
   });
