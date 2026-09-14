@@ -315,3 +315,31 @@ describe('rejection dialog — the reason is required and reaches the callable t
   });
 });
 
+describe('approve confirmation stays usable regardless of the reject dialog state (hotfix regression pin)', () => {
+  it('opens the approve confirmation with its Confirm button ENABLED when the reject reason was never typed', () => {
+    storeState.pendingVerifications = [
+      {
+        id: 'f1',
+        type: 'ejm_enrollment',
+        status: 'pending',
+        familyName: 'The Smiths',
+        parentName: 'Bob Smith',
+        familyParentNames: ['Bob Smith'],
+        familyKids: [{ firstName: 'Kid', age: 5 }],
+        fileUrl: 'https://storage.googleapis.com/b/o/verification-documents%2Ff.pdf?alt=media',
+        fileName: 'f.pdf',
+        createdAt: '2026-07-01T00:00:00Z',
+      },
+    ];
+    renderPage();
+    const approve = screen
+      .getAllByRole('button', { name: i18n.t('verification.approve') })
+      .find((b) => !b.closest('[role="dialog"]'))!;
+    fireEvent.click(approve);
+    const dialogs = screen.getAllByRole('dialog');
+    const dialog = dialogs[dialogs.length - 1];
+    const confirm = within(dialog).getByRole('button', { name: i18n.t('common.confirm') });
+    expect(confirm).not.toBeDisabled();
+  });
+});
+

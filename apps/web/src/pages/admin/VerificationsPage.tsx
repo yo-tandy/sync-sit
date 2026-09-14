@@ -293,7 +293,7 @@ export function AdminVerificationsPage() {
           <Button variant="outline" onClick={() => setConfirmDialog({ ...confirmDialog, open: false })}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleConfirm} disabled={actionLoading || rejectionReason.trim().length === 0}>
+          <Button onClick={handleConfirm} disabled={actionLoading}>
             {actionLoading ? t('common.saving') : t('common.confirm')}
           </Button>
         </div>
