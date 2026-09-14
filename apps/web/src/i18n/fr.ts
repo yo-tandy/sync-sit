@@ -1257,7 +1257,7 @@ export default {
     approveTitle: 'Approuver la vérification',
     approveConfirm: 'Êtes-vous sûr de vouloir approuver ce document ?',
     rejectTitle: 'Rejeter la vérification',
-    rejectDesc: 'Indiquez un motif de rejet pour ce document.',
+    rejectDesc: 'Un motif est obligatoire. Il est envoyé par e-mail aux parents de la famille (réponse à support@sync-sit.com) : rédigez-le pour eux.',
     rejectionReasonPlaceholder: 'Motif du rejet...',
     enrollmentDesc: 'Téléchargez le document d\'inscription ou de réinscription EJM de votre enfant.',
     enrollmentNote: 'L\'administrateur vérifiera le document par rapport aux informations de votre famille (parents et enfants).',

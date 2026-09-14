@@ -21,7 +21,7 @@ vi.mock('@/stores/verificationStore', () => ({
 }));
 
 import i18n from '@/i18n';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { AdminVerificationsPage } from '../VerificationsPage';
@@ -261,3 +261,57 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     await waitFor(() => expect(downloads).toEqual(['id.pdf']));
   });
 });
+
+describe('rejection dialog — the reason is required and reaches the callable trimmed (hotfix)', () => {
+  function openRejectDialog() {
+    storeState.pendingVerifications = [
+      {
+        id: 'f1',
+        type: 'ejm_enrollment',
+        status: 'pending',
+        familyName: 'The Smiths',
+        parentName: 'Bob Smith',
+        familyParentNames: ['Bob Smith'],
+        familyKids: [{ firstName: 'Kid', age: 5 }],
+        fileUrl: 'https://storage.googleapis.com/b/o/verification-documents%2Ff.pdf?alt=media',
+        fileName: 'f.pdf',
+        createdAt: '2026-07-01T00:00:00Z',
+      },
+    ];
+    renderPage();
+    // Click the ROW's Reject (the one outside any dialog); dialogs render in a
+    // portal that can outlive a previous test, so scope everything else to the
+    // newest dialog.
+    const rowReject = screen
+      .getAllByRole('button', { name: i18n.t('verification.reject') })
+      .find((b) => !b.closest('[role="dialog"]'))!;
+    fireEvent.click(rowReject);
+    const dialogs = screen.getAllByRole('dialog', { name: i18n.t('verification.rejectTitle') });
+    const dialog = dialogs[dialogs.length - 1];
+    return {
+      dialog,
+      textarea: within(dialog).getByLabelText(i18n.t('verification.rejectionReasonPlaceholder')) as HTMLTextAreaElement,
+      confirm: () => within(dialog).getByRole('button', { name: i18n.t('verification.reject') }) as HTMLButtonElement,
+    };
+  }
+
+  it('keeps the Reject button disabled while the reason is empty or whitespace', () => {
+    const { textarea, confirm } = openRejectDialog();
+    expect(confirm()).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: '   ' } });
+    expect(confirm()).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: 'Photo is blurry' } });
+    expect(confirm()).not.toBeDisabled();
+  });
+
+  it('sends the trimmed reason with the rejected decision', async () => {
+    storeState.reviewVerification = vi.fn().mockResolvedValue(undefined);
+    const { textarea, confirm } = openRejectDialog();
+    fireEvent.change(textarea, { target: { value: '  Expired document  ' } });
+    fireEvent.click(confirm());
+    await vi.waitFor(() =>
+      expect(storeState.reviewVerification).toHaveBeenCalledWith(expect.any(String), 'rejected', 'Expired document'),
+    );
+  });
+});
+
