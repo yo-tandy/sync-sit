@@ -112,7 +112,13 @@ export function AccountHubPage() {
 
   const sitSections: AccountSection[] = [
     {
-      title: t('accountHub.title'),
+      // "Account" (#445) -- distinct from `accountHub.myAccount` ("My
+      // account"), which is this section's OWN first row. The section title
+      // used to reuse that same string as the page-level heading; now the
+      // page-level heading is the sticky "Sync/Account" banner (AccountHome)
+      // and this is purely the first of the three section titles the owner
+      // named: Account, Sync/Sit, Sync/Study.
+      title: t('accountHub.neutralSection'),
       rows: [
         {
           label: t('accountHub.myAccount'),
@@ -171,6 +177,10 @@ export function AccountHubPage() {
         ]
       : null;
 
+  // Order is DATA too, and pinned (#445): Account, Sync/Sit, Sync/Study.
+  // `sitSections` already holds [neutral, sit] in that order (this app's
+  // owner named it "Account" then "Sync/Sit"); the study block is always
+  // appended last, whether or not `sitSections` is present.
   const sections: AccountSection[] = [
     ...(sitRole ? sitSections : []),
     {

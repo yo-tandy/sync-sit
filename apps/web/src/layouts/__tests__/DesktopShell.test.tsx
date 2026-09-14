@@ -216,9 +216,12 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     renderLayout(<AccountLayout />, 'account hub', '/account', [
       { path: '/', text: 'roleless home' },
     ]);
-    // TWO landmarks share the switch label here: the md+ header exit row
-    // (#416) and the phone bar. The bar is the `fixed` one, and only ITS
-    // parent is the shell div that must reserve the height.
+    // The desktop header (below) no longer carries its own `<nav>` landmark
+    // sharing this label (#445 review) -- it did before, when it was a
+    // second, separate exit row from the one this test pins. The ONE
+    // remaining landmark with this label is the real phone bar, and it is
+    // the `fixed` one; only ITS parent is the shell div that must reserve
+    // the height.
     const bar = screen
       .getAllByRole('navigation', SWITCH_BAR)
       .find((n) => /\bfixed\b/.test(n.className));
@@ -228,5 +231,116 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     // to '/' — and #385's rule that the current-app tab actually navigates
     // must hold for the hub as well.
     currentAppTabNavigatesHome(bar!, /sync\/sit/, 'roleless home');
+  });
+});
+
+/**
+ * The hub's ONE header (#445 review). It used to be TWO: `AccountHome`
+ * (shared-ui) rendered its own always-visible sticky "Sync/Account" banner,
+ * while this layout separately rendered a `hidden md:block` exit row (Home
+ * link + app-switch menu) -- both full-bleed, both `z-40`, so at `md+` one
+ * painted over the other. There is exactly one header now, owned here, at
+ * every breakpoint.
+ */
+describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 review)', () => {
+  afterEach(cleanup);
+
+  it('titles the header "Sync/Account" regardless of viewport (jsdom has no breakpoints — this proves it is not hidden)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header).toBeInTheDocument();
+    // Not inside a `hidden` wrapper -- unlike the old md-only exit row.
+    expect(header.className).not.toMatch(/\bhidden\b/);
+  });
+
+  it('is sticky, not fixed -- this layout already sits outside PageContainer, so sticky is full-bleed here', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bsticky\b/);
+    expect(header.className).not.toMatch(/\bfixed\b/);
+    expect(header.className).toMatch(/\btop-0\b/);
+  });
+
+  it('is neutral -- bg-ground-admin, never a brand colour', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bbg-ground-admin\b/);
+    expect(header.className).not.toMatch(/bg-brand/);
+  });
+
+  it('keeps the Home-link and app-switch-menu slots, now hidden md:flex EACH instead of the whole header being md:block', () => {
+    // userDoc is mocked null for this whole file, so the Home link itself
+    // does not render here (no sit role -> no portalHref) -- that slot's
+    // OWN visibility class is still assertable regardless of its contents.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const slots = header.querySelectorAll(':scope > nav');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bhidden\b/);
+      expect(slot.className).toMatch(/\bmd:flex\b/);
+    }
+    // The second slot holds the (mocked) app-switch menu item, which always
+    // renders regardless of role.
+    expect(within(header).getByTestId('switch-menu-item')).toBeInTheDocument();
+  });
+
+  it('flanks the title with equal flex-1/basis-0 slots, not a fixed width -- a fixed w-24 clipped "Open sync-study" onto three wrapped lines (screenshot review of #484)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const slots = header.querySelectorAll(':scope > nav');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bflex-1\b/);
+      expect(slot.className).toMatch(/\bbasis-0\b/);
+      expect(slot.className).not.toMatch(/\bw-24\b/);
+    }
+    // The title itself must NOT grow -- it has to stay sized to its own
+    // content so the two equal flex-1 slots do the centring.
+    const title = screen.getByText('Sync/Account');
+    expect(title.className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('centres the title even below md, where both flanks are display:none and it is the only flex child (regression on a1e5f12)', () => {
+    // jsdom applies no layout, so this pins the CLASS that produces centring
+    // at that breakpoint rather than a measured position. At md+ the two
+    // equal flex-1 flanks already consume all the leftover space, making
+    // justify-center inert there -- it is what centres the lone title once
+    // both flanks vanish below md.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(header.className).toMatch(/\bjustify-center\b/);
+  });
+
+  it('restores the desktop exits as real <nav> landmarks with DISTINCT names -- "Home" for the home link, the switch label only on the switcher', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    // Exactly one landmark per name inside the header: two simultaneously
+    // visible navs sharing "Switch app" would be indistinguishable to a
+    // screen-reader user navigating by landmark (review on #484).
+    const switcher = within(header).getAllByRole('navigation', SWITCH_BAR);
+    expect(switcher).toHaveLength(1);
+    expect(within(switcher[0]).getByTestId('switch-menu-item')).toBeInTheDocument();
+    const home = within(header).getAllByRole('navigation', { name: /^home$/i });
+    expect(home).toHaveLength(1);
+    expect(within(home[0]).queryByTestId('switch-menu-item')).toBeNull();
+  });
+
+  it('never wraps the app-switch slot’s content -- whitespace-nowrap on the wrapper, not inside AppSwitchMenuItem itself', () => {
+    // On the wrapper, not the (mocked-here) component: `white-space`
+    // inherits down to the real label without needing AppSwitchMenuItem's
+    // own markup to change, which would also affect its OTHER home --
+    // AppBar's full-width burger menu, where wrapping was never a problem.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    const menuSlot = within(header).getByTestId('switch-menu-item').parentElement!;
+    expect(menuSlot.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
+  it('has no back button and no bell -- title and (at md+) the exit controls only', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Account').closest('header')!;
+    expect(within(header).queryByRole('button', { name: /back|retour/i })).toBeNull();
+    expect(within(header).queryAllByRole('img')).toHaveLength(0);
   });
 });

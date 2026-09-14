@@ -25,6 +25,15 @@ export function createTestI18n(): i18n {
           common: {
             continue: 'Continue',
           },
+          // AccountHome (#445): the intro copy under the sections. Identical
+          // to what all three apps' en.ts carry -- a rename here that isn't
+          // mirrored there (or vice versa) fails this file's own tests
+          // loudly instead of silently falling back to the raw key. (The
+          // "Sync/Account" brand string moved to AccountLayout, apps/web,
+          // on #445 review -- it is no longer this component's key.)
+          accountHub: {
+            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+          },
           welcome: {
             alreadyHaveAccount: 'Already have an account?',
             logIn: 'Log in',
