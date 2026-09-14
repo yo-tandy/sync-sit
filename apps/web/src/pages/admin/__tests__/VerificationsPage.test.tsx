@@ -21,7 +21,7 @@ vi.mock('@/stores/verificationStore', () => ({
 }));
 
 import i18n from '@/i18n';
-import { render, screen, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, within } from '@testing-library/react';
 import { afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router';
 import { AdminVerificationsPage } from '../VerificationsPage';
@@ -261,3 +261,79 @@ describe('AdminVerificationsPage view-document error surfacing', () => {
     await waitFor(() => expect(downloads).toEqual(['id.pdf']));
   });
 });
+
+describe('rejection dialog — the reason is required and reaches the callable trimmed (hotfix)', () => {
+  function openRejectDialog() {
+    storeState.pendingVerifications = [
+      {
+        id: 'f1',
+        type: 'ejm_enrollment',
+        status: 'pending',
+        familyName: 'The Smiths',
+        parentName: 'Bob Smith',
+        familyParentNames: ['Bob Smith'],
+        familyKids: [{ firstName: 'Kid', age: 5 }],
+        fileUrl: 'https://storage.googleapis.com/b/o/verification-documents%2Ff.pdf?alt=media',
+        fileName: 'f.pdf',
+        createdAt: '2026-07-01T00:00:00Z',
+      },
+    ];
+    // Scope to THIS render's container: dialogs render in a portal and earlier
+    // tests' roots can outlive cleanup, so a document-wide query may hit a stale
+    // root whose component state differs from this one.
+    const { container } = renderPage();
+    fireEvent.click(within(container).getByRole('button', { name: i18n.t('verification.reject') }));
+    const dialogs = screen.getAllByRole('dialog', { name: i18n.t('verification.rejectTitle') });
+    const dialog = dialogs[dialogs.length - 1];
+    return {
+      dialog,
+      textarea: within(dialog).getByLabelText(i18n.t('verification.rejectionReasonPlaceholder')) as HTMLTextAreaElement,
+      confirm: () => within(dialog).getByRole('button', { name: i18n.t('verification.reject') }) as HTMLButtonElement,
+    };
+  }
+
+  it('keeps the Reject button disabled while the reason is empty or whitespace', () => {
+    const { textarea, confirm } = openRejectDialog();
+    expect(confirm()).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: '   ' } });
+    expect(confirm()).toBeDisabled();
+    fireEvent.change(textarea, { target: { value: 'Photo is blurry' } });
+    expect(confirm()).not.toBeDisabled();
+  });
+
+  it('sends the trimmed reason with the rejected decision', async () => {
+    storeState.reviewVerification = vi.fn().mockResolvedValue(undefined);
+    const { textarea, confirm } = openRejectDialog();
+    fireEvent.change(textarea, { target: { value: '  Expired document  ' } });
+    fireEvent.click(confirm());
+    await vi.waitFor(() =>
+      expect(storeState.reviewVerification).toHaveBeenCalledWith(expect.any(String), 'rejected', 'Expired document'),
+    );
+  });
+});
+
+describe('approve confirmation stays usable regardless of the reject dialog state (hotfix regression pin)', () => {
+  it('opens the approve confirmation with its Confirm button ENABLED when the reject reason was never typed', () => {
+    storeState.pendingVerifications = [
+      {
+        id: 'f1',
+        type: 'ejm_enrollment',
+        status: 'pending',
+        familyName: 'The Smiths',
+        parentName: 'Bob Smith',
+        familyParentNames: ['Bob Smith'],
+        familyKids: [{ firstName: 'Kid', age: 5 }],
+        fileUrl: 'https://storage.googleapis.com/b/o/verification-documents%2Ff.pdf?alt=media',
+        fileName: 'f.pdf',
+        createdAt: '2026-07-01T00:00:00Z',
+      },
+    ];
+    const { container } = renderPage();
+    fireEvent.click(within(container).getByRole('button', { name: i18n.t('verification.approve') }));
+    const dialogs = screen.getAllByRole('dialog');
+    const dialog = dialogs[dialogs.length - 1];
+    const confirm = within(dialog).getByRole('button', { name: i18n.t('common.confirm') });
+    expect(confirm).not.toBeDisabled();
+  });
+});
+

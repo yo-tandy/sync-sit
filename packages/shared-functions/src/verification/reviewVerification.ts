@@ -3,6 +3,9 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from '../admin/verifyAdmin.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
+import { notifyVerificationRejected } from './notifyVerificationRejected.js';
+
+const MAX_REJECTION_REASON_LENGTH = 1000;
 
 interface ReviewInput {
   verificationId: string;
@@ -19,14 +22,23 @@ export const reviewVerification = onCall(
 
     await verifyAdmin(request.auth.uid);
 
-    const { verificationId, decision, rejectionReason } = request.data as ReviewInput;
+    const { verificationId, decision } = request.data as ReviewInput;
+    // The reason is shown to the parent verbatim (escaped) in the rejection
+    // email, so it is required, trimmed, and bounded.
+    const rejectionReason =
+      typeof (request.data as ReviewInput).rejectionReason === 'string'
+        ? (request.data as ReviewInput).rejectionReason!.trim()
+        : '';
 
     if (!verificationId || !decision) {
       throw new HttpsError('invalid-argument', 'Missing verificationId or decision');
     }
 
-    if (decision === 'rejected' && !rejectionReason) {
+    if (decision === 'rejected' && rejectionReason.length === 0) {
       throw new HttpsError('invalid-argument', 'Rejection reason is required');
+    }
+    if (rejectionReason.length > MAX_REJECTION_REASON_LENGTH) {
+      throw new HttpsError('invalid-argument', `Rejection reason must be ${MAX_REJECTION_REASON_LENGTH} characters or fewer`);
     }
 
     const verificationRef = db.collection('verifications').doc(verificationId);
@@ -199,6 +211,19 @@ export const reviewVerification = onCall(
       details: { verificationId, type: verificationData.type, decision, rejectionReason: rejectionReason || null },
     });
 
-    return { success: true, isFullyVerified };
+    // Tell the family. Transactional (ignores notification preferences) and
+    // best-effort: the decision above is already committed and audited.
+    let notified = 0;
+    if (decision === 'rejected') {
+      const outcome = await notifyVerificationRejected({
+        familyId,
+        uploadedByUserId: verificationData.uploadedByUserId,
+        type: verificationData.type === 'ejm_enrollment' ? 'ejm_enrollment' : 'identity',
+        reason: rejectionReason,
+      });
+      notified = outcome.sent;
+    }
+
+    return { success: true, isFullyVerified, notified };
   }
 );

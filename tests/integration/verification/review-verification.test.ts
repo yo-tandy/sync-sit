@@ -114,6 +114,51 @@ describe('reviewVerification', () => {
       expect(familyDoc.data()!.verification.isEjmFamily).toBe(true);
     });
 
+    it('a whitespace-only rejection reason is refused (the parent email needs a real note)', async () => {
+      const verificationId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await expect(
+        callFunction('reviewVerification', { verificationId, decision: 'rejected', rejectionReason: '   ' }, adminToken),
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+      const verDoc = await getDb().collection('verifications').doc(verificationId).get();
+      expect(verDoc.data()!.status).toBe('pending');
+    });
+
+    it('an over-long rejection reason is refused', async () => {
+      const verificationId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      await expect(
+        callFunction('reviewVerification', { verificationId, decision: 'rejected', rejectionReason: 'x'.repeat(1001) }, adminToken),
+      ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    });
+
+    it('rejecting stores the TRIMMED reason and notifies every parent of the family by email', async () => {
+      const verificationId = await seedVerification({
+        familyId: seed.family2Id,
+        uploadedByUserId: seed.parent3.uid,
+        type: 'identity',
+      });
+      const result = await callFunction<{ success: boolean; notified: number }>(
+        'reviewVerification',
+        { verificationId, decision: 'rejected', rejectionReason: '  Photo is blurry  ' },
+        adminToken,
+      );
+      expect(result.success).toBe(true);
+      const familyDoc = await getDb().collection('families').doc(seed.family2Id).get();
+      const parentIds: string[] = familyDoc.data()!.parentIds ?? [];
+      // Every parent with an email on file gets the notice (the uploader is one of them).
+      expect(result.notified).toBe(parentIds.length);
+      expect(result.notified).toBeGreaterThan(0);
+      const verDoc = await getDb().collection('verifications').doc(verificationId).get();
+      expect(verDoc.data()!.rejectionReason).toBe('Photo is blurry');
+    });
+
     it('admin rejects with reason → status=rejected, reason stored', async () => {
       const verificationId = await seedVerification({
         familyId: seed.family2Id,

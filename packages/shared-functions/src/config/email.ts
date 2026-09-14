@@ -1,6 +1,16 @@
 let resendInstance: any = null;
 
+/**
+ * Test seam: inject a fake Resend client so the exact payload handed to the
+ * provider (sender, reply-to, subject) can be asserted without network. Pass
+ * null to restore the real client resolution. Never used by production code.
+ */
+export function __setResendClientForTests(client: any | null): void {
+  resendInstance = client;
+}
+
 function getResend(): any {
+  if (resendInstance) return resendInstance;
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
     console.warn('RESEND_API_KEY not configured — emails will be logged only');
@@ -383,3 +393,104 @@ export async function sendNotificationEmail(
     return false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Verification rejected — transactional, sent to every parent of the family.
+// Replies go to support, not the noreply sender, so a parent can answer the
+// admin's note directly. Copy is localised on the RECIPIENT's language.
+// ---------------------------------------------------------------------------
+
+export type VerificationDocType = 'identity' | 'ejm_enrollment';
+
+const VERIFICATION_REJECTED_COPY = {
+  en: {
+    label: { identity: 'identity document', ejm_enrollment: 'EJM enrollment proof' },
+    subject: (label: string) => `Your ${label} verification was not approved`,
+    intro: (label: string) => `An administrator reviewed the <strong>${label}</strong> you submitted and could not approve it.`,
+    noteHeading: 'Note from the administrator',
+    next: 'You can upload a new document from your family verification page:',
+    cta: 'Open my verification page',
+    help: 'Questions? Reply to this email — it reaches the Sync/Sit support team.',
+  },
+  fr: {
+    label: { identity: "pièce d'identité", ejm_enrollment: "justificatif d'inscription EJM" },
+    subject: (label: string) => `Votre ${label} n'a pas été validée`,
+    intro: (label: string) => `Un administrateur a examiné la <strong>${label}</strong> que vous avez envoyée et n'a pas pu la valider.`,
+    noteHeading: "Note de l'administrateur",
+    next: 'Vous pouvez envoyer un nouveau document depuis la page de vérification de votre famille :',
+    cta: 'Ouvrir ma page de vérification',
+    help: "Une question ? Répondez à cet e-mail — il arrive directement à l'équipe support Sync/Sit.",
+  },
+} as const;
+
+export interface VerificationRejectedEmailInput {
+  type: VerificationDocType;
+  /** The admin's note, verbatim (escaped here — never trusted as HTML). */
+  reason: string;
+  language?: string;
+}
+
+export function buildVerificationRejectedEmail(input: VerificationRejectedEmailInput): {
+  subject: string;
+  html: string;
+  replyTo: string;
+} {
+  const copy = input.language === 'fr' ? VERIFICATION_REJECTED_COPY.fr : VERIFICATION_REJECTED_COPY.en;
+  const label = copy.label[input.type] ?? copy.label.identity;
+  const { color } = NOTIFICATION_BRANDING.sit;
+  const link = `${SIT_APP_URL}/family/verification`;
+  const body = `
+      <p>${copy.intro(label)}</p>
+      <p style="margin: 20px 0 6px; font-weight: 600;">${copy.noteHeading}</p>
+      <blockquote style="margin: 0 0 20px; padding: 12px 16px; background: #F3F4F6; border-left: 3px solid ${color}; border-radius: 6px; white-space: pre-wrap;">${escapeHtml(input.reason)}</blockquote>
+      <p>${copy.next}</p>
+      <p style="margin: 16px 0 24px;"><a href="${link}" style="display: inline-block; padding: 10px 18px; background: ${color}; color: #ffffff; text-decoration: none; border-radius: 8px;">${copy.cta}</a></p>
+      <p style="color: #6B7280; font-size: 14px;">${copy.help}</p>`;
+  return {
+    subject: copy.subject(label),
+    html: buildNotificationEmailHtml(body, 'sit'),
+    replyTo: SUPPORT_EMAIL,
+  };
+}
+
+/**
+ * Sends the rejection notice. Returns true when the email was handed to the
+ * provider (or, in the emulator, would have been). Never throws — the review
+ * itself must not fail because a notice could not be delivered.
+ */
+export async function sendVerificationRejectedEmail(
+  to: string,
+  input: VerificationRejectedEmailInput,
+): Promise<boolean> {
+  if (!to || !to.includes('@')) {
+    console.warn(`[SKIP-EMAIL] Invalid recipient for verification rejection: ${to}`);
+    return false;
+  }
+  const { subject, html, replyTo } = buildVerificationRejectedEmail(input);
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    console.log(`[DEV] Verification rejected notice to ${to} (replyTo ${replyTo}): ${subject}`);
+    return true;
+  }
+  const resend = getResend();
+  if (!resend) {
+    console.log(`[NO-RESEND] Verification rejected notice to ${to}: ${subject}`);
+    return false;
+  }
+  const { from, fromFallback } = NOTIFICATION_BRANDING.sit;
+  try {
+    const result = await resend.emails.send({ from, to, subject, html, replyTo });
+    if (result.error) {
+      console.warn(`[EMAIL] Primary sender failed: ${result.error.message}, trying fallback`);
+      const fallback = await resend.emails.send({ from: fromFallback, to, subject, html, replyTo });
+      if (fallback.error) {
+        console.error(`[EMAIL] Fallback also failed: ${fallback.error.message}`);
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('[EMAIL] Failed to send verification rejected notice:', err);
+    return false;
+  }
+}
+
