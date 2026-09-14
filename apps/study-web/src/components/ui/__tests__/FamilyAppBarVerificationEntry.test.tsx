@@ -20,7 +20,9 @@ describe('FamilyAppBar verification entry', () => {
   // dashboard banner only shows while unverified (issue #129).
   it('exposes Verification linking /family/verification', () => {
     renderWithProviders(<FamilyAppBar />);
-    fireEvent.click(screen.getAllByRole('button')[0]);
+    // NOT `getAllByRole('button')[0]` (#417): the desktop app switch also
+    // renders buttons in this closed bar under jsdom.
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
     // #119 renders the same list as md+ tabs too — scope to the burger dialog.
     const link = within(screen.getByRole('dialog')).getByRole('link', { name: /Verification/i });
     expect(link).toHaveAttribute('href', '/family/verification');

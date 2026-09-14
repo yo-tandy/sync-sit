@@ -15,7 +15,7 @@ import {
   LogOutIcon,
   NavTabs,
 } from '@ejm/shared-ui';
-import { AppSwitchMenuItem } from './AppSwitchMenuItem';
+import { AppSwitchInlineHost } from './AppSwitchInlineHost';
 
 function MenuIcon({ className }: { className?: string }) {
   return (
@@ -63,7 +63,11 @@ export function FamilyAppBar() {
         <Link to="/family" aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
-        <span className="text-sm font-semibold text-white">Sync/Do</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-white">Sync/Do</span>
+          {/* Desktop app switch (#417, plan Q9), next to the app name. */}
+          <AppSwitchInlineHost homeHref="/family" tone="onBrand" />
+        </div>
         <button
           onClick={() => setMenuOpen(true)}
           className="-m-1.5 flex h-11 w-11 items-center justify-center text-white"
@@ -98,16 +102,9 @@ export function FamilyAppBar() {
 
           <div className="border-t border-gray-100" />
 
-          {/* Below `md` the app-switch BAR (#365) is the entry point, so these
-              rows hide there — two entry points would let a second handoff
-              code be minted around the bar's whole-bar lock. `hidden` is
-              display:none, so they leave the tab order and the a11y tree too.
-              At `md+` the bar is `md:hidden` and these rows are the ONLY
-              switcher, until Q9 is answered (#417). */}
-          <div className="hidden md:block">
-            <AppSwitchMenuItem target="sit" />
-            <AppSwitchMenuItem target="study" />
-          </div>
+          {/* #417 (plan Q9 resolved): the burger rows this used to carry are
+              GONE -- see DoerAppBar's own note on the same change for the
+              full rationale. */}
 
           <div className="px-4 py-3">
             <LanguageSelector />

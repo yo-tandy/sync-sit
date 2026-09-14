@@ -29,6 +29,15 @@ export function createTestI18n(): i18n {
             alreadyHaveAccount: 'Already have an account?',
             logIn: 'Log in',
           },
+          // Identical in all three apps' en.ts (`appSwitch.account` /
+          // `.barLabel` / `.error`) -- AppSwitchBar and AppSwitchInline
+          // (#417) both read only these three keys, never the per-app
+          // `toSit`/`toStudy` ones AppSwitchMenuItem uses.
+          appSwitch: {
+            account: 'My account',
+            barLabel: 'Switch app',
+            error: 'Could not switch apps. Please try again.',
+          },
           // GENDER_OPTIONS (from @ejm/shared-core, added on PR1) hardcodes
           // its labelKeys as `enrollment.genderFemale` etc. -- the SAME keys
           // sit's/study's existing per-role StepProfile already reads. This
