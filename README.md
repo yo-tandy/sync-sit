@@ -325,23 +325,25 @@ bash scripts/fix-cloud-run-permissions.sh
 
 The post-deploy script runs automatically via `firebase.json` postdeploy hooks.
 
-**One-time bucket CORS (required once per project, not part of `firebase deploy`):** family photos are
-uploaded by the browser with a direct `PUT` to `storage.googleapis.com` on a signed URL (issue #471), so the
-default bucket needs the CORS policy in `storage.cors.json`. Apply it once, and again whenever an origin is
-added:
+**One-time bucket CORS (required once per project, not part of `firebase deploy`):** family photos AND
+verification documents are uploaded by the browser with a direct `PUT` to `storage.googleapis.com` on a
+signed URL (issue #471, extended to verification documents by #447 — the latter uploads from BOTH the sit
+and study origins, since both apps' VerificationPage write there), so the default bucket needs the CORS
+policy in `storage.cors.json`. Apply it once, and again whenever an origin is added (#447 added the
+`sync-study*` origins to the existing `sync-sit*` set — **re-apply after merging #447**):
 
 ```bash
 gcloud storage buckets update gs://<project>.appspot.com --cors-file=storage.cors.json
 gcloud storage buckets describe gs://<project>.appspot.com --format="json(cors_config)"   # verify
 ```
 
-Without it every family-photo upload fails in the browser with a CORS error while all tests stay green
-(CORS is enforced by the browser; neither the emulator nor the rules suite can see it).
+Without it every family-photo/verification-document upload fails in the browser with a CORS error while all
+tests stay green (CORS is enforced by the browser; neither the emulator nor the rules suite can see it).
 
 ## Security
 
 - **Firestore rules** — document-level access control with role-based permissions
-- **Storage rules** — verification docs: authenticated writes (10MB cap, renderable-type denylist: html/xhtml/svg/xml), callable-only reads (v4-signed URLs, forced download); profile photos: owner-scoped writes + denylist; family photos: no client writes — a membership-checked callable mints a v4-signed PUT URL bound to content type and a 10MB `x-goog-content-length-range` (#471); delete still `request.auth != null` (tracked: #483)
+- **Storage rules** — verification docs: no client writes — a membership-checked callable (`createVerificationDocumentUploadUrl`) mints a v4-signed PUT URL bound to content type, extension allowlist, and a 10MB `x-goog-content-length-range` (#447, replacing the cross-service `firestore.get()` membership check that caused the #446 outage); deletes denied outright (server-side cleanup only, via the Admin SDK); callable-only reads (v4-signed URLs, forced download) unchanged; profile photos: owner-scoped writes + denylist; family photos: no client writes — the same signed-URL shape (#471), delete still `request.auth != null` unscoped (tracked: #483)
 - **Verification codes** — `crypto.randomInt()` with 5-attempt rate limiting, 10-minute expiry
 - **Input validation** — Zod schemas on all enrollment functions
 - **Immutable fields** — role, status, uid, email protected via Firestore rules

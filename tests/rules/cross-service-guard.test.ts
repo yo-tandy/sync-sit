@@ -55,20 +55,19 @@ interface AcknowledgedCrossServiceRule {
 
 // Starts EMPTY as a design principle: every cross-service construct that
 // ships must be justified here, on purpose, by whoever adds it, never
-// pre-populated for convenience. The one entry below is not scaffolding —
-// it documents the single cross-service construct that already exists in
-// storage.rules today (confirmed by the scan in this PR's description),
-// acknowledged rather than left failing because it is genuinely inert.
-const ACKNOWLEDGED_CROSS_SERVICE_RULES: AcknowledgedCrossServiceRule[] = [
-  {
-    file: 'storage.rules',
-    snippet: 'firestore.get(/databases/(default)/documents/users/$(request.auth.uid))',
-    justification:
-      "callerData() helper (issue #153 family-membership check, lifted by #446). No allow clause in storage.rules calls callerData() or canWriteFamilyDocs() today - the construct is dead code, kept only so restoring the check is a one-line change (see the extensive comment above this function, and the verification-documents block below it). Not reachable from any live rule, so no real request can hit this cross-service call in production right now.",
-    smokeCheck:
-      'N/A while unused. This is the tripwire: if #447 (or anything else) wires callerData()/canWriteFamilyDocs() into an allow clause again, the construct becomes reachable and this entry stops being sufficient - remove it and re-acknowledge with a real production smoke check pointer (issue #449 option 2) before merging that change.',
-  },
-];
+// pre-populated for convenience.
+//
+// Empty again as of issue #447: the one entry this list carried
+// (callerData()'s dead-code `firestore.get()`, acknowledged as inert
+// scaffolding by #449/PR #462) is gone because callerData() and
+// canWriteFamilyDocs() were deleted from storage.rules outright —
+// verification-documents' membership check moved server-side into
+// createVerificationDocumentUploadUrl instead of being restored into a
+// rule, so there was nothing left to keep the helpers FOR. An empty list
+// here is the guard doing its job: it proves no cross-service construct
+// remains in either rules file, not just that the one we knew about is
+// still unreachable.
+const ACKNOWLEDGED_CROSS_SERVICE_RULES: AcknowledgedCrossServiceRule[] = [];
 
 const RULES_FILES: { label: string; path: string }[] = [
   { label: 'storage.rules', path: resolve(import.meta.dirname, '../../storage.rules') },

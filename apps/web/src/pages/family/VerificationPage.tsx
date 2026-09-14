@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref, uploadBytes } from 'firebase/storage';
-import { storage } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { TopNav } from '@/components/ui/TopNav';
@@ -12,9 +12,18 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { getParentProfile } from '@ejm/sit-core';
-import { uploadErrorKey } from '@ejm/shared-core';
+import { uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
+import { putToSignedUrl, type SignedUploadResponse } from '@ejm/shared-ui';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+interface CreateVerificationDocumentUploadUrlRequest {
+  familyId: string;
+  kind: 'identity' | 'enrollment';
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+const MAX_FILE_SIZE = MAX_VERIFICATION_DOCUMENT_BYTES;
 
 function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' {
   switch (status) {
@@ -70,11 +79,23 @@ export function VerificationPage() {
     fetchStatus();
   }, []);
 
+  // Uploads (issue #447): verification-documents writes now go through this
+  // membership-checked signed-URL callable exclusively — storage.rules denies
+  // every direct client write to verification-documents/**. See
+  // packages/shared-functions/src/verification/createVerificationDocumentUploadUrl.ts.
   const handleUpload = async (file: File, type: 'identity' | 'ejm_enrollment', metadata?: Record<string, string>) => {
     if (!familyId) return;
-    const path = `verification-documents/${familyId}/${Date.now()}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
+    const kind = type === 'identity' ? 'identity' : 'enrollment';
+    const contentType = file.type || 'application/octet-stream';
+    const fn = httpsCallable<CreateVerificationDocumentUploadUrlRequest, SignedUploadResponse>(
+      functions,
+      'createVerificationDocumentUploadUrl',
+    );
+    const { data } = await fn({ familyId, kind, contentType, fileName: file.name, sizeBytes: file.size });
+    // The callable binds BOTH headers into the V4 signature — see
+    // putToSignedUrl's doc comment (@ejm/shared-ui) for why both must ride
+    // on the PUT.
+    const path = await putToSignedUrl(data, file, contentType, MAX_VERIFICATION_DOCUMENT_BYTES);
     // Do NOT getDownloadURL here: storage.rules deny reads on
     // verification-documents (reads go through the getVerificationDocument
     // callable), so the metadata read behind getDownloadURL is rejected and
