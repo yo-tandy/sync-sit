@@ -5,7 +5,11 @@
       "https://www.sync-sit.com",
       "https://sync-sit.web.app",
       "https://sync-sit.firebaseapp.com",
-      "http://localhost:5173"
+      "http://localhost:5173",
+      "https://sync-study.com",
+      "https://sync-study-app.web.app",
+      "https://sync-study-app.firebaseapp.com",
+      "http://localhost:5174"
     ],
     "method": ["PUT"],
     "responseHeader": ["Content-Type", "x-goog-content-length-range"],

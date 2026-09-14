@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 
 // The page drives the shared verification callables through the real
-// verificationStore. Callables are dispatched by name through h.callable;
-// storage is mocked because the upload paths are not what these tests pin.
+// verificationStore, PLUS its own direct createVerificationDocumentUploadUrl
+// call (issue #447) — callables are dispatched by name through h.callable;
+// the signed PUT itself goes through the global `fetch`, stubbed per-test
+// below (mirrors FamilySettingsPage.test.tsx's pattern for the #471
+// family-photo upload).
 const h = vi.hoisted(() => ({
   callable: vi.fn(),
-  uploadBytes: vi.fn<(ref: { path: string }, data: unknown) => Promise<void>>(() =>
-    Promise.resolve(),
-  ),
 }));
 
 vi.mock('@/config/firebase', () => ({
@@ -30,15 +30,11 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload?: unknown) => h.callable(name, payload),
 }));
 
-vi.mock('firebase/storage', () => ({
-  ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: [ref: { path: string }, data: unknown]) => h.uploadBytes(...args),
-  getDownloadURL: () => Promise.resolve('https://should-never-be-called'),
-}));
-
 import i18n from '@/i18n';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { VerificationPage } from '../VerificationPage';
+
+const fetchMock = vi.fn();
 
 const VERIFIED_EJM = {
   identityStatus: 'approved',
@@ -54,6 +50,11 @@ function defaultCallable(name: string, payload?: unknown) {
   if (name === 'getVerificationStatus') return Promise.resolve({ data: statusResponse });
   if (name === 'lookupCommunityCode') {
     return Promise.resolve({ data: { familyName: 'Levi', firstName: 'Noa', lastName: 'Levi', familyId: 'fam2' } });
+  }
+  if (name === 'createVerificationDocumentUploadUrl') {
+    return Promise.resolve({
+      data: { url: 'https://signed.example.com/put', path: 'verification-documents/fam1/identity-uuid.pdf' },
+    });
   }
   return Promise.resolve({ data: {} });
 }
@@ -83,9 +84,15 @@ beforeEach(() => {
     lookupLoading: false,
     approving: false,
   });
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response);
+  vi.stubGlobal('fetch', fetchMock);
 });
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 // Issue #218 — both halves of the fix as the family actually sees them.
 describe('family VerificationPage — stale community requests (#218)', () => {
@@ -153,9 +160,84 @@ describe('family VerificationPage — stale community requests (#218)', () => {
   });
 });
 
+// Issue #447 — uploads go through createVerificationDocumentUploadUrl (a
+// membership-checked signed-URL callable), then a PUT to the returned URL,
+// exactly like FamilySettingsPage's family-photo flow (issue #471).
+describe('family VerificationPage — signed-URL upload (#447)', () => {
+  const NOT_SUBMITTED = {
+    identityStatus: 'not_submitted',
+    enrollmentStatus: 'not_submitted',
+    isFullyVerified: false,
+    isEjmFamily: false,
+  };
+
+  it('calls the callable with familyId/kind/contentType/fileName/sizeBytes, then PUTs with the bound headers', async () => {
+    statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
+    const { container } = renderPage();
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'createVerificationDocumentUploadUrl',
+        {
+          familyId: 'fam1',
+          kind: 'identity',
+          contentType: 'application/pdf',
+          fileName: 'id.pdf',
+          sizeBytes: file.size,
+        },
+      ),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://signed.example.com/put',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/pdf',
+          'x-goog-content-length-range': '0,10485760',
+        },
+      }),
+    );
+    await waitFor(() => expect(h.callable).toHaveBeenCalledWith('submitVerification', expect.anything()));
+    const [, payload] = h.callable.mock.calls.find((c) => c[0] === 'submitVerification') as [
+      string,
+      { fileUrl: string },
+    ];
+    expect(payload.fileUrl).toBe(
+      'https://firebasestorage.googleapis.com/v0/b/sync-sit.appspot.com/o/verification-documents%2Ffam1%2Fidentity-uuid.pdf',
+    );
+  });
+
+  it('sends kind: enrollment from the enrollment tab', async () => {
+    statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
+    const { container } = renderPage();
+    await screen.findAllByText('Not Submitted');
+
+    fireEvent.click(screen.getByRole('button', { name: /Enrollment/ }));
+    const file = new File(['doc-bytes'], 'cert.pdf', { type: 'application/pdf' });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'createVerificationDocumentUploadUrl',
+        expect.objectContaining({ kind: 'enrollment' }),
+      ),
+    );
+  });
+});
+
 // Issue #448 — the upload catch was bare: no logging, one generic message
 // for every failure. These pin that the raw error is now logged and that
-// the actionable storage/unauthorized code gets its own, non-technical copy.
+// actionable codes each get their own, non-technical copy — both halves of
+// this flow (the callable AND the signed PUT) can fail, and #447 replaced
+// the old direct-uploadBytes failure mode with these two.
 describe('family VerificationPage — upload error surfacing (#448)', () => {
   const NOT_SUBMITTED = {
     identityStatus: 'not_submitted',
@@ -164,11 +246,13 @@ describe('family VerificationPage — upload error surfacing (#448)', () => {
     isEjmFamily: false,
   };
 
-  it('logs the raw error and shows the permission-denied copy for storage/unauthorized', async () => {
+  it('logs the raw error and shows the permission-denied copy when the callable rejects with functions/permission-denied', async () => {
     statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const deniedError = Object.assign(new Error('denied'), { code: 'storage/unauthorized' });
-    h.uploadBytes.mockRejectedValueOnce(deniedError);
+    const deniedError = Object.assign(new Error('denied'), { code: 'functions/permission-denied' });
+    h.callable.mockImplementation((name: string, payload?: unknown) =>
+      name === 'createVerificationDocumentUploadUrl' ? Promise.reject(deniedError) : defaultCallable(name, payload),
+    );
 
     const { container } = renderPage();
     await screen.findAllByText('Not Submitted');
@@ -185,10 +269,30 @@ describe('family VerificationPage — upload error surfacing (#448)', () => {
     consoleError.mockRestore();
   });
 
+  it('shows the connection-problem copy when the signed PUT itself fails', async () => {
+    statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetchMock.mockResolvedValue({ ok: false, status: 403 } as Response);
+
+    const { container } = renderPage();
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(await screen.findByText('There was a connection problem. Please try again.')).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', expect.objectContaining({ code: 'upload/network' }));
+    consoleError.mockRestore();
+  });
+
   it('falls back to the generic copy when the rejection carries no code', async () => {
     statusResponse = { verification: { ...NOT_SUBMITTED }, documents: [] };
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    h.uploadBytes.mockRejectedValueOnce(new Error('boom'));
+    h.callable.mockImplementation((name: string, payload?: unknown) =>
+      name === 'submitVerification' ? Promise.reject(new Error('boom')) : defaultCallable(name, payload),
+    );
 
     const { container } = renderPage();
     await screen.findAllByText('Not Submitted');

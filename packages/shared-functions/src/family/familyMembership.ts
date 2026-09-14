@@ -3,11 +3,12 @@ import { isAdmin, getParentProfile, type User } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 
 /**
- * Family-membership gate shared by every family-photo callable
- * (`createFamilyPhotoUploadUrl`, `deleteFamilyPhoto` — issue #483 pulled
- * this out of `createFamilyPhotoUploadUrl`, where it started as an inline
- * block, so the two callables share ONE implementation instead of two
- * copies that could silently drift apart).
+ * Family-membership gate shared by every callable that writes into (or
+ * deletes from) a family-scoped Storage prefix: `createFamilyPhotoUploadUrl`,
+ * `deleteFamilyPhoto` (issue #483 pulled this out of the former, where it
+ * started as an inline block) and `createVerificationDocumentUploadUrl`
+ * (issue #447) — ONE implementation instead of copies that could silently
+ * drift apart.
  *
  * Mirrors `storage.rules`' (currently-unreachable, dead-code)
  * `canWriteFamilyDocs(callerData(), familyId)` EXACTLY: `isAdmin(caller)
