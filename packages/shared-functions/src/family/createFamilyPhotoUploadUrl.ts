@@ -1,16 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getStorage } from 'firebase-admin/storage';
-import {
-  isAdmin,
-  getParentProfile,
-  isRenderableDocType,
-  MAX_FAMILY_PHOTO_BYTES,
-  type User,
-} from '@ejm/shared-core';
-import { db } from '../config/firebase.js';
+import { isRenderableDocType, MAX_FAMILY_PHOTO_BYTES } from '@ejm/shared-core';
 import { getCorsOrigin } from '../config/cors.js';
 import { createSignedUploadUrl } from '../storage/signedUploadUrl.js';
+import { assertFamilyMembership } from './assertFamilyMembership.js';
 
 export { MAX_FAMILY_PHOTO_BYTES };
 
@@ -46,16 +40,19 @@ function extensionFromFileName(fileName: string): string {
  * Mirrors `getVerificationDocument`'s shape (auth → Admin-SDK authorization
  * → short-lived V4 signed URL) in the write direction, and its own
  * predecessor `canWriteFamilyDocs(callerData(), familyId)` in storage.rules
- * EXACTLY: `isAdmin(caller) || getParentProfile(caller)?.familyId ===
- * familyId` — same admin break-glass disjunct, same single field compared.
+ * EXACTLY via `assertFamilyMembership` (`isAdmin(caller) ||
+ * getParentProfile(caller)?.familyId === familyId` — same admin break-glass
+ * disjunct, same single field compared).
  *
  * Deliberately generic on the family model rather than sit-specific: the
  * membership fields it reads (`profiles.parent.familyId`, `isAdmin`) live
  * in `@ejm/shared-core`, not `@ejm/sit-core` — study-web's FamilySettingsPage
  * has no photo plumbing yet, but nothing here assumes sit. The signing
- * helper (`createSignedUploadUrl`) is factored out of this file for the
- * same reason issue #471 calls out: #447's verification-document upload
- * needs the identical v4-signed-PUT shape and should not re-derive it.
+ * helper (`createSignedUploadUrl`) and the membership check
+ * (`assertFamilyMembership`) are both factored out of this file for the
+ * same reason issue #471 called out: #447's verification-document upload
+ * needed the identical v4-signed-PUT shape and membership gate, and now
+ * reuses both rather than re-deriving them.
  */
 export const createFamilyPhotoUploadUrl = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
@@ -109,18 +106,11 @@ export const createFamilyPhotoUploadUrl = onCall(
       throw new HttpsError('invalid-argument', 'Unsupported file extension');
     }
 
-    // Membership check — mirrors storage.rules' (currently-unreachable,
-    // pending this callable) canWriteFamilyDocs(callerData(), familyId)
-    // exactly: admin, or the caller's OWN profiles.parent.familyId.
-    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
-    const caller = callerDoc.data() as User | undefined;
-    if (!caller) {
-      throw new HttpsError('permission-denied', 'User not found');
-    }
-    const isMember = isAdmin(caller) || getParentProfile(caller)?.familyId === familyId;
-    if (!isMember) {
-      throw new HttpsError('permission-denied', 'You are not a member of this family');
-    }
+    // Membership check — mirrors storage.rules' (now-removed)
+    // canWriteFamilyDocs(callerData(), familyId) exactly: admin, or the
+    // caller's OWN profiles.parent.familyId. Shared with
+    // createVerificationDocumentUploadUrl (issue #447).
+    await assertFamilyMembership(request.auth.uid, familyId);
 
     const path = `family-photos/${familyId}/${randomUUID()}.${ext}`;
 

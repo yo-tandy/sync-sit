@@ -50,6 +50,11 @@ export { generateCommunityCode } from './verification/generateCommunityCode.js';
 export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
+// Callable — verification-document uploads (issue #447): the only writer of
+// verification-documents/** once storage.rules sets that path's writes to
+// `if false`. Shares its membership check with createFamilyPhotoUploadUrl
+// below via family/assertFamilyMembership.js.
+export { createVerificationDocumentUploadUrl } from './verification/createVerificationDocumentUploadUrl.js';
 
 // Callable — family photo uploads (issue #471): the only writer of
 // family-photos/** once storage.rules sets that path's writes to `if false`.

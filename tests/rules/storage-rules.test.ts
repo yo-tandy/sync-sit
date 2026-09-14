@@ -19,41 +19,8 @@ import {
   deleteObject,
   updateMetadata,
 } from 'firebase/storage';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 let testEnv: RulesTestEnvironment;
-let crossServiceEnv: RulesTestEnvironment;
-
-// storage.rules does a cross-service firestore.get() on the caller's user doc
-// (verification-documents family-membership check, issue #153). The Storage
-// emulator resolves that lookup against the project the EMULATOR SUITE was
-// started with (firebase-tools files.js passes its startup projectId to the
-// rules runtime), NOT against this test env's projectId — so the user docs
-// must be seeded into the Firestore emulator under that project. emulators:exec
-// exports it as GCLOUD_PROJECT (demo-test in CI and the lane scripts).
-const CROSS_SERVICE_PROJECT = process.env.GCLOUD_PROJECT ?? 'demo-test';
-
-// Uids/familyIds are suite-prefixed: they land in the shared demo-test
-// Firestore namespace (fileParallelism is off, so no races, but leftovers must
-// never collide with other suites' seed data). Every uid a test may seed is
-// listed here so cleanup can run defensively in beforeAll (self-healing after
-// an aborted prior run) and unconditionally in afterAll. Add new uids here.
-const SUITE_UIDS = ['sr-parent1', 'sr-parent2', 'sr-admin1', 'sr-sitter1', 'sr-tutor1', 'sr-ghost1'];
-
-let testEnvs: RulesTestEnvironment[] = [];
-
-/** Delete this suite's user docs from BOTH namespaces seedUser writes to
- * (deleteDoc on a missing doc is a no-op). NEVER clearFirestore() on
- * crossServiceEnv — it shares the integration tests' project. */
-async function deleteSuiteDocs() {
-  for (const env of testEnvs) {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      for (const uid of SUITE_UIDS) {
-        await deleteDoc(doc(ctx.firestore(), 'users', uid));
-      }
-    });
-  }
-}
 
 beforeAll(async () => {
   const rulesPath = resolve(import.meta.dirname, '../../storage.rules');
@@ -66,348 +33,101 @@ beforeAll(async () => {
     // this, a lane-2 run connects to the DEV stack's storage on 9199 and
     // clearStorage() wipes it.
     storage: { rules, host: '127.0.0.1', port: Number(process.env.TEST_STORAGE_PORT ?? '9199') },
-    // Firestore config so seedUser can also seed this env's own namespace —
-    // a hedge against the emulator's cross-service project resolution (see
-    // seedUser). Lane-aware port, same as tests/rules/firestore-rules.test.ts.
-    firestore: { host: '127.0.0.1', port: Number(process.env.TEST_FIRESTORE_PORT ?? '8080') },
   });
-
-  // Separate env purely for seeding the cross-service user docs (see above).
-  crossServiceEnv = await initializeTestEnvironment({
-    projectId: CROSS_SERVICE_PROJECT,
-    firestore: { host: '127.0.0.1', port: Number(process.env.TEST_FIRESTORE_PORT ?? '8080') },
-  });
-
-  testEnvs = [testEnv, crossServiceEnv];
-
-  // Self-heal: an aborted prior run (crash, Ctrl-C, timeout) never reached
-  // afterAll, so its sr-* docs may still sit in the shared namespace.
-  await deleteSuiteDocs();
 });
 
 afterAll(async () => {
-  try {
-    await deleteSuiteDocs();
-  } finally {
-    // Cleanup must run even if the emulator is already gone.
-    for (const env of testEnvs) {
-      await env.cleanup();
-    }
-  }
+  await testEnv.cleanup();
 });
 
 beforeEach(async () => {
   await testEnv.clearStorage();
 });
 
-/** Seed a users/{uid} doc (Plan D shape) with rules disabled — into BOTH
- * Firestore namespaces. firebase-tools currently resolves the storage rules'
- * firestore.get() against the emulator suite's startup project
- * (CROSS_SERVICE_PROJECT); seeding this env's own project too means the suite
- * keeps passing if a future firebase-tools resolves against the bucket's
- * project instead. Negative pins stay meaningful either way: the docs exist in
- * both namespaces, so a denial is a rules decision, not doc-not-found. */
-async function seedUser(uid: string, data: Record<string, unknown>) {
-  if (!SUITE_UIDS.includes(uid)) {
-    throw new Error(`seedUser: add '${uid}' to SUITE_UIDS so cleanup covers it`);
-  }
-  for (const env of testEnvs) {
-    await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users', uid), data);
-    });
-  }
-}
-
 describe('verification-documents', () => {
   it('denies unauthenticated reads (reads go through cloud function)', async () => {
     const unauthed = testEnv.unauthenticatedContext();
-    const fileRef = ref(unauthed.storage(), 'verification-documents/sr-family1/doc.pdf');
+    const fileRef = ref(unauthed.storage(), 'verification-documents/family1/doc.pdf');
     await assertFails(getBytes(fileRef));
   });
 
   it('denies authenticated reads directly (must go through cloud function)', async () => {
     // Seed a file via admin context
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const seedRef = ref(ctx.storage(), 'verification-documents/sr-family1/doc.pdf');
+      const seedRef = ref(ctx.storage(), 'verification-documents/family1/doc.pdf');
       await uploadString(seedRef, 'seed', 'raw');
     });
 
     const authed = testEnv.authenticatedContext('user1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/doc.pdf');
     await assertFails(getBytes(fileRef));
-  });
-
-  it('allows a member of the owning family to write into their family path', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    // Same path shape the web clients build: {familyId}/{Date.now()}-{name}
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/1724700000000-id.pdf');
-    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
-  });
-
-  it('allows a family member to overwrite an existing file in their family path', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const seedRef = ref(ctx.storage(), 'verification-documents/sr-family1/doc.pdf');
-      await uploadString(seedRef, 'seed', 'raw');
-    });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertSucceeds(uploadString(fileRef, 'updated', 'raw'));
-  });
-
-  it('allows an upload with a normal explicit content type (application/pdf)', async () => {
-    // Clients pass the browser-detected File.type through uploadBytes; the
-    // rule only denies the narrow renderable-type denylist (issue #281).
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/1724700000000-scan.pdf');
-    await assertSucceeds(
-      uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' }),
-    );
-  });
-
-  it('allows image and octet-stream content types (denylist must not become an allowlist)', async () => {
-    // application/octet-stream is what browsers report for valid PDFs on some
-    // OS/browser combos — the reason issue #281 rejects an allowlist. It must
-    // keep passing, along with ordinary image uploads.
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    await assertSucceeds(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/id.jpg'),
-        new Uint8Array([1, 2, 3]),
-        { contentType: 'image/jpeg' },
-      ),
-    );
-    await assertSucceeds(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/blob.pdf'),
-        new Uint8Array([1, 2, 3]),
-        { contentType: 'application/octet-stream' },
-      ),
-    );
-  });
-
-  it('denies a text/html upload even from the owning family (admin-phishing surface, issue #281)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/evil.html');
-    await assertFails(
-      uploadBytes(fileRef, new TextEncoder().encode('<script>phish()</script>'), {
-        contentType: 'text/html',
-      }),
-    );
-  });
-
-  it('denies application/xhtml+xml and XML types (render live via XHTML / XSLT)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil.xhtml'),
-        new Uint8Array([1]),
-        { contentType: 'application/xhtml+xml' },
-      ),
-    );
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil.xml'),
-        new Uint8Array([1]),
-        { contentType: 'text/xml' },
-      ),
-    );
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil2.xml'),
-        new Uint8Array([1]),
-        { contentType: 'application/xml' },
-      ),
-    );
-  });
-
-  it('denies an image/svg+xml upload (scriptable, renders live like HTML)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/evil.svg');
-    await assertFails(
-      uploadBytes(fileRef, new TextEncoder().encode('<svg/>'), {
-        contentType: 'image/svg+xml',
-      }),
-    );
-  });
-
-  it('denies case/parameter variants of the denylisted types (no exact-string bypass)', async () => {
-    // A raw-SDK attacker controls the contentType string byte-for-byte;
-    // browsers treat media types case-insensitively and honor parameters,
-    // so 'Text/HTML' and 'text/html; charset=utf-8' render exactly like
-    // the canonical spelling.
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil2.html'),
-        new Uint8Array([1]),
-        { contentType: 'Text/HTML' },
-      ),
-    );
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil3.html'),
-        new Uint8Array([1]),
-        { contentType: 'text/html; charset=utf-8' },
-      ),
-    );
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil4.svg'),
-        new Uint8Array([1]),
-        { contentType: 'IMAGE/SVG+XML' },
-      ),
-    );
-    // Leading whitespace: HTTP header parsing strips optional whitespace, so
-    // ' text/html' still renders — the rule trims before matching.
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil5.html'),
-        new Uint8Array([1]),
-        { contentType: ' text/html' },
-      ),
-    );
-    // Embedded newline: RE2's '.' does not span '\n' without (?s), so this
-    // spelling would slip an un-flagged prefix match.
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/evil6.html'),
-        new Uint8Array([1]),
-        { contentType: 'text/html\nx' },
-      ),
-    );
-  });
-
-  it('denies flipping contentType to a renderable type via updateMetadata (update path)', async () => {
-    // Every other deny pin goes through uploadBytes (the create path); the
-    // cheapest bypass of a write-time type check would be uploading a clean
-    // PDF and then flipping the stored type with a metadata-only update.
-    // Metadata updates evaluate under `allow create, update` with
-    // request.resource.contentType carrying the INCOMING type, so the same
-    // denylist applies — this pins that a rules refactor can't quietly
-    // split the paths.
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/meta.pdf');
-    await assertSucceeds(
-      uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' }),
-    );
-    await assertFails(updateMetadata(fileRef, { contentType: 'text/html' }));
-  });
-
-  it('denies arbitrary *+xml types via the suffix match (Firefox renders any *+xml as XML)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    await assertFails(
-      uploadBytes(
-        ref(authed.storage(), 'verification-documents/sr-family1/feed.xml'),
-        new Uint8Array([1]),
-        { contentType: 'application/rss+xml' },
-      ),
-    );
-  });
-
-  it('allows an admin to write into any family path', async () => {
-    // Admin docs have no `profiles` — the rule must not error on that shape.
-    await seedUser('sr-admin1', { isAdmin: true });
-    const authed = testEnv.authenticatedContext('sr-admin1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
-  });
-
-  // ── TEMPORARY: the issue #153 family-membership check is removed ──
-  //
-  // These four cases asserted DENIAL until the interim fix for the production
-  // upload outage. The check they pinned (`canWriteFamilyDocs(callerData(),
-  // familyId)`) is a cross-service `firestore.get()` that FAILS in production —
-  // rules fail closed on an errored call, so it 403'd every real parent, not
-  // just non-members. See the block comment in storage.rules for the full
-  // ruled-out list and the timeline.
-  //
-  // They now assert the widening is REAL and DELIBERATE rather than silently
-  // deleting the coverage: each caller below is one that production genuinely
-  // accepts today, so if the membership check comes back (via the signed-URL
-  // callable in the follow-up issue, which flips this path to
-  // `allow write: if false`) these flip to assertFails and this whole block
-  // gets reverted along with the rule. A reviewer reading a bare deletion
-  // could not tell the coverage was traded away on purpose; this can.
-  //
-  // What still holds the line meanwhile, pinned by the tests below this block:
-  // unauthenticated writes, the >10MB cap, the renderable-contentType
-  // denylist, deletes, and ALL reads (admin/owner only, via the
-  // getVerificationDocument callable) — so the residual exposure is write-only
-  // integrity, not disclosure.
-  it('TEMPORARILY allows a parent to write into ANOTHER family\'s path (#153 check removed)', async () => {
-    await seedUser('sr-parent2', { profiles: { parent: { familyId: 'sr-family2' } } });
-    const authed = testEnv.authenticatedContext('sr-parent2');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
-  });
-
-  it('TEMPORARILY allows a babysitter (no parent profile) to write into a family path', async () => {
-    await seedUser('sr-sitter1', { profiles: { babysitter: { firstName: 'B' } } });
-    const authed = testEnv.authenticatedContext('sr-sitter1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
-  });
-
-  it('TEMPORARILY allows a tutor to write into a family path AND under their own uid', async () => {
-    // PR #152 removed the last tutor-side uploader, so nothing legitimate
-    // writes these paths as a tutor — this is tolerated exposure, not intent.
-    await seedUser('sr-tutor1', { profiles: { tutor: { firstName: 'T' } } });
-    const authed = testEnv.authenticatedContext('sr-tutor1');
-    await assertSucceeds(
-      uploadString(ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf'), 'x', 'raw'),
-    );
-    await assertSucceeds(
-      uploadString(ref(authed.storage(), 'verification-documents/sr-tutor1/doc.pdf'), 'x', 'raw'),
-    );
-  });
-
-  it('TEMPORARILY allows an authenticated user with no user doc', async () => {
-    // The sharpest signal that the cross-service lookup is gone: this used to
-    // be denied BY the errored get() on a missing doc, not by a membership
-    // comparison. Nothing reads Firestore from these rules anymore.
-    const authed = testEnv.authenticatedContext('sr-ghost1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
-    await assertSucceeds(uploadString(fileRef, 'contents', 'raw'));
   });
 
   it('denies unauthenticated writes', async () => {
     const unauthed = testEnv.unauthenticatedContext();
-    const fileRef = ref(unauthed.storage(), 'verification-documents/sr-family1/doc.pdf');
+    const fileRef = ref(unauthed.storage(), 'verification-documents/family1/doc.pdf');
     await assertFails(uploadString(fileRef, 'contents', 'raw'));
   });
 
-  it('denies an oversized upload (> 10MB) even from the owning family', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/big.pdf');
-    await assertFails(uploadBytes(fileRef, new Uint8Array(10 * 1024 * 1024 + 1)));
+  // Issue #447 — writes now go through createVerificationDocumentUploadUrl
+  // (a membership-checked signed PUT URL) exclusively, the same shape
+  // family-photos uses (issue #471). `create, update: if false` means NO
+  // direct client SDK write can ever succeed here, for ANYONE — this
+  // replaces both the old contentType/size-denylist pins (moot: the rule
+  // denies before request.resource is even considered) and the four
+  // "TEMPORARILY allows ..." gap-pins issue #446's interim fix carried.
+  it('denies a direct authenticated write into the caller\'s OWN family path (issue #447 — no client write path exists anymore)', async () => {
+    const authed = testEnv.authenticatedContext('parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/1724700000000-id.pdf');
+    await assertFails(uploadString(fileRef, 'contents', 'raw'));
   });
 
-  it('allows an upload of exactly 10MB (the client-side limit is inclusive)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/max.pdf');
-    await assertSucceeds(uploadBytes(fileRef, new Uint8Array(10 * 1024 * 1024)));
+  it('denies a direct authenticated write with a normal explicit content type (application/pdf)', async () => {
+    const authed = testEnv.authenticatedContext('parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/1724700000000-scan.pdf');
+    await assertFails(
+      uploadBytes(fileRef, new Uint8Array([1, 2, 3]), { contentType: 'application/pdf' }),
+    );
+  });
+
+  it('denies an admin\'s direct write too (admin break-glass now lives in the callable, not the rule)', async () => {
+    const authed = testEnv.authenticatedContext('admin1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/doc.pdf');
+    await assertFails(uploadString(fileRef, 'contents', 'raw'));
+  });
+
+  it('denies a direct write from a caller with no user doc at all (no Firestore lookup happens anymore)', async () => {
+    const authed = testEnv.authenticatedContext('ghost1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/doc.pdf');
+    await assertFails(uploadString(fileRef, 'contents', 'raw'));
+  });
+
+  it('denies overwriting an existing file in the same path too', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const seedRef = ref(ctx.storage(), 'verification-documents/family1/doc.pdf');
+      await uploadString(seedRef, 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/doc.pdf');
+    await assertFails(uploadString(fileRef, 'updated', 'raw'));
+  });
+
+  it('denies flipping contentType via updateMetadata too (update is if false, same as create)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'verification-documents/family1/meta.pdf'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/meta.pdf');
+    await assertFails(updateMetadata(fileRef, { contentType: 'application/pdf' }));
   });
 
   it('denies deletes even by the owning family (no client deletes; Admin SDK bypasses rules)', async () => {
-    await seedUser('sr-parent1', { profiles: { parent: { familyId: 'sr-family1' } } });
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const seedRef = ref(ctx.storage(), 'verification-documents/sr-family1/doc.pdf');
+      const seedRef = ref(ctx.storage(), 'verification-documents/family1/doc.pdf');
       await uploadString(seedRef, 'seed', 'raw');
     });
-    const authed = testEnv.authenticatedContext('sr-parent1');
-    const fileRef = ref(authed.storage(), 'verification-documents/sr-family1/doc.pdf');
+    const authed = testEnv.authenticatedContext('parent1');
+    const fileRef = ref(authed.storage(), 'verification-documents/family1/doc.pdf');
     await assertFails(deleteObject(fileRef));
   });
 });
