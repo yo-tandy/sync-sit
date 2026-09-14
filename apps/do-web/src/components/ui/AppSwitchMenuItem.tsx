@@ -62,7 +62,8 @@ export function AppSwitchMenuItem({ target }: { target: 'sit' | 'study' }) {
         `${appUrl}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay busy: the browser is navigating away.
-    } catch {
+    } catch (err) {
+      console.error('[appSwitch] mint handoff code failed', err);
       setFailed(true);
       setBusy(false);
     }

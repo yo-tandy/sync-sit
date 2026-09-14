@@ -78,7 +78,8 @@ export function MyOffersPage() {
       await httpsCallable(functions, 'doWithdrawOffer')({ offerId: withdrawTarget.offerId });
       setWithdrawTarget(null);
       toast(t('doer.myOffers.statusWithdrawn'));
-    } catch {
+    } catch (err) {
+      console.error('[offers] withdraw offer failed', err);
       setWithdrawError(true);
     } finally {
       setBusy(false);

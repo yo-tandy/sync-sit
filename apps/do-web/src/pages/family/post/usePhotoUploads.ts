@@ -147,7 +147,8 @@ export function usePhotoUploads({ uid, photos, onChange }: UsePhotoUploadsArgs):
     onChange((prev) => [...prev, { photoId, state: 'uploading', url: null }]);
     try {
       await uploadBytes(storageRef(storage, `do-uploads/${uid}/${photoId}`), file);
-    } catch {
+    } catch (err) {
+      console.error('[photoUpload] upload failed', err);
       if (!unmountedRef.current) {
         onChange((prev) => prev.filter((p) => p.photoId !== photoId));
       }

@@ -35,6 +35,7 @@ export function useTaskPhotoUrls(
         try {
           const res = await getUrl({ taskId, photoId });
           return [photoId, res.data.url] as const;
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: per-photo signed-URL fetch; a missing entry just doesn't render
         } catch {
           return null;
         }

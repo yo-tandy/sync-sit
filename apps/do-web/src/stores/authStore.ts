@@ -84,6 +84,7 @@ function readStoredEpoch(uid: string): number | null {
     if (raw === null) return null;
     const parsed = Number(raw);
     return Number.isFinite(parsed) ? parsed : null;
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: session-epoch cache read from localStorage
   } catch {
     return null;
   }
@@ -92,6 +93,7 @@ function readStoredEpoch(uid: string): number | null {
 function writeStoredEpoch(uid: string, millis: number): void {
   try {
     localStorage.setItem(SESSION_EPOCH_KEY + uid, String(millis));
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: session-epoch cache write to localStorage
   } catch {
     // Storage unavailable (private mode): the in-memory capture still works
     // for this tab; the token-revocation backstop covers reloads.
@@ -101,6 +103,7 @@ function writeStoredEpoch(uid: string, millis: number): void {
 function clearStoredEpoch(uid: string): void {
   try {
     localStorage.removeItem(SESSION_EPOCH_KEY + uid);
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: session-epoch cache clear from localStorage
   } catch {
     // ignore
   }
@@ -151,6 +154,7 @@ async function forceLocalSignOut(uid: string): Promise<void> {
   clearStoredEpoch(uid);
   try {
     await signOut(auth);
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: local state below is cleared regardless of SDK sign-out result
   } catch {
     // Even if the SDK sign-out throws, clear local state below.
   }

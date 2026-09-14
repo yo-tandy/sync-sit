@@ -65,6 +65,7 @@ if (import.meta.env.DEV) {
     connectFirestoreEmulator(db, emulator.host, emulator.firestorePort);
     connectFunctionsEmulator(functions, emulator.host, emulator.functionsPort);
     connectStorageEmulator(storage, emulator.host, emulator.storagePort);
+  // eslint-disable-next-line no-restricted-syntax -- dev-only: emulator already connected on hot reload
   } catch {
     // Already connected
   }
