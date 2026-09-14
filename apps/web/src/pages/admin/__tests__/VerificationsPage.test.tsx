@@ -278,14 +278,11 @@ describe('rejection dialog — the reason is required and reaches the callable t
         createdAt: '2026-07-01T00:00:00Z',
       },
     ];
-    renderPage();
-    // Click the ROW's Reject (the one outside any dialog); dialogs render in a
-    // portal that can outlive a previous test, so scope everything else to the
-    // newest dialog.
-    const rowReject = screen
-      .getAllByRole('button', { name: i18n.t('verification.reject') })
-      .find((b) => !b.closest('[role="dialog"]'))!;
-    fireEvent.click(rowReject);
+    // Scope to THIS render's container: dialogs render in a portal and earlier
+    // tests' roots can outlive cleanup, so a document-wide query may hit a stale
+    // root whose component state differs from this one.
+    const { container } = renderPage();
+    fireEvent.click(within(container).getByRole('button', { name: i18n.t('verification.reject') }));
     const dialogs = screen.getAllByRole('dialog', { name: i18n.t('verification.rejectTitle') });
     const dialog = dialogs[dialogs.length - 1];
     return {
@@ -331,11 +328,8 @@ describe('approve confirmation stays usable regardless of the reject dialog stat
         createdAt: '2026-07-01T00:00:00Z',
       },
     ];
-    renderPage();
-    const approve = screen
-      .getAllByRole('button', { name: i18n.t('verification.approve') })
-      .find((b) => !b.closest('[role="dialog"]'))!;
-    fireEvent.click(approve);
+    const { container } = renderPage();
+    fireEvent.click(within(container).getByRole('button', { name: i18n.t('verification.approve') }));
     const dialogs = screen.getAllByRole('dialog');
     const dialog = dialogs[dialogs.length - 1];
     const confirm = within(dialog).getByRole('button', { name: i18n.t('common.confirm') });
