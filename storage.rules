@@ -148,8 +148,8 @@ service firebase.storage {
                    && fileName[0:request.auth.uid.size()] == request.auth.uid;
     }
 
-    // Family photos — authenticated users can read; writes are
-    // callable-mediated (issue #471).
+    // Family photos — authenticated users can read; writes AND deletes are
+    // callable-mediated (issues #471, #483).
     //
     // Write scoping — RESOLVED (issue #471, follow-up to #287). #287 found
     // that `family-photos/{familyId}.{ext}` could in principle be narrowed
@@ -178,25 +178,38 @@ service firebase.storage {
     // URL. So `create, update` become unconditional denials here: there is
     // no client write path into this prefix anymore, narrow or otherwise.
     //
-    // Delete is UNCHANGED (`request.auth != null`, unscoped) — deliberately
-    // not moved server-side. Rationale: (1) a delete cannot plant
-    // attacker-controlled content (the write path this PR closes), so its
-    // residual risk is integrity/availability (an authenticated stranger
-    // could delete another family's photo), not the content-injection
-    // surface #287/#471 exist to close — the same risk-class distinction
-    // storage.rules already draws for verification-documents above
-    // ("integrity risk ... not a disclosure one"); (2) FamilySettingsPage's
-    // replace-photo flow now needs a REAL delete of the previous object
-    // (unlike before this PR, upload paths are `{familyId}/{uuid}.{ext}` —
-    // unique per upload, not an overwrite-in-place of a deterministic
-    // path — so a stale photo would otherwise orphan silently), and the
-    // client-SDK delete this enables is what makes that possible without
-    // new server infrastructure. Moving delete server-side too is tracked
-    // as a follow-up, not required by this issue.
+    // Delete — CLOSED (issue #483, follow-up to #471/#482). #482 left
+    // `delete` unscoped (`request.auth != null`) here, reasoning that a
+    // delete cannot plant attacker-controlled content, so its residual
+    // risk was integrity/availability only (an authenticated stranger — a
+    // babysitter, an unrelated family — could delete another family's
+    // photo), not the content-injection surface #287/#471 exist to close.
+    // That risk-class distinction still holds, but an unscoped delete is
+    // still a live griefing/availability vector worth closing, and the
+    // same constraint that forced writes behind a callable applies to
+    // deletes too: no rule-local source for the caller's familyId exists
+    // without either a custom claim (none exists) or the cross-service
+    // `firestore.get()` that took down production in #446 and that PR
+    // #462's guard (issue #449) now fails CI on for any new occurrence.
+    //
+    // So deletes move behind `deleteFamilyPhoto` (packages/shared-functions/
+    // src/family/deleteFamilyPhoto.ts), which checks membership with the
+    // Admin SDK — sharing `assertFamilyMember` (packages/shared-functions/
+    // src/family/familyMembership.ts) with `createFamilyPhotoUploadUrl`
+    // above, ONE implementation of `isAdmin(caller) ||
+    // caller.profiles.parent.familyId === familyId` — validates the object
+    // path is a direct child of `family-photos/{familyId}/` (no traversal,
+    // no other family's path), deletes idempotently via the Admin SDK, and
+    // clears the family doc's `photoUrl` if it pointed at the deleted
+    // object. FamilySettingsPage's replace/remove cleanup of the PREVIOUS
+    // photo object now goes through this callable instead of a direct
+    // client-SDK `deleteObject`. So `delete` becomes an unconditional
+    // denial here too: there is no client write OR delete path into this
+    // prefix anymore, narrow or otherwise.
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
       allow create, update: if false;
-      allow delete: if request.auth != null;
+      allow delete: if false;
     }
 
     // ── sync-do task photos (plan §7.4) — the two-path pipeline ──

@@ -1,16 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getStorage } from 'firebase-admin/storage';
-import {
-  isAdmin,
-  getParentProfile,
-  isRenderableDocType,
-  MAX_FAMILY_PHOTO_BYTES,
-  type User,
-} from '@ejm/shared-core';
-import { db } from '../config/firebase.js';
+import { isRenderableDocType, MAX_FAMILY_PHOTO_BYTES } from '@ejm/shared-core';
 import { getCorsOrigin } from '../config/cors.js';
 import { createSignedUploadUrl } from '../storage/signedUploadUrl.js';
+import { assertFamilyMember } from './familyMembership.js';
 
 export { MAX_FAMILY_PHOTO_BYTES };
 
@@ -109,18 +103,11 @@ export const createFamilyPhotoUploadUrl = onCall(
       throw new HttpsError('invalid-argument', 'Unsupported file extension');
     }
 
-    // Membership check — mirrors storage.rules' (currently-unreachable,
-    // pending this callable) canWriteFamilyDocs(callerData(), familyId)
-    // exactly: admin, or the caller's OWN profiles.parent.familyId.
-    const callerDoc = await db.collection('users').doc(request.auth.uid).get();
-    const caller = callerDoc.data() as User | undefined;
-    if (!caller) {
-      throw new HttpsError('permission-denied', 'User not found');
-    }
-    const isMember = isAdmin(caller) || getParentProfile(caller)?.familyId === familyId;
-    if (!isMember) {
-      throw new HttpsError('permission-denied', 'You are not a member of this family');
-    }
+    // Membership check — shared with deleteFamilyPhoto (issue #483) via
+    // assertFamilyMember, which mirrors storage.rules'
+    // canWriteFamilyDocs(callerData(), familyId) exactly: admin, or the
+    // caller's OWN profiles.parent.familyId.
+    await assertFamilyMember(request.auth.uid, familyId);
 
     const path = `family-photos/${familyId}/${randomUUID()}.${ext}`;
 

@@ -21,13 +21,17 @@ const h = vi.hoisted(() => ({
     Promise.resolve({ id: 'newkid' }),
   ),
   deleteDoc: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
-  // createFamilyPhotoUploadUrl (issue #471) — the callable the page now
-  // calls before PUTting to the returned signed URL.
-  httpsCallable: vi.fn<(data: unknown) => Promise<{ data: { url: string; path: string } }>>(() =>
-    Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
+  // createFamilyPhotoUploadUrl (issue #471) and deleteFamilyPhoto (issue
+  // #483) — both callables the page now calls; keyed by function NAME
+  // since deleteFamilyPhoto's response shape differs from the upload
+  // callable's (see httpsCallable mock below, which passes the name
+  // through instead of discarding it).
+  httpsCallable: vi.fn<(name: string, data: unknown) => Promise<{ data: unknown }>>((name) =>
+    name === 'deleteFamilyPhoto'
+      ? Promise.resolve({ data: { success: true } })
+      : Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
   ),
   getDownloadURL: vi.fn(() => Promise.resolve('https://example.com/photo.jpg')),
-  deleteObject: vi.fn<(ref: { path: string }) => Promise<void>>(() => Promise.resolve()),
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, storage: {}, functions: {} }));
@@ -47,11 +51,10 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('firebase/storage', () => ({
   ref: (_storage: unknown, path: string) => ({ path }),
   getDownloadURL: () => h.getDownloadURL(),
-  deleteObject: (...args: [ref: { path: string }]) => h.deleteObject(...args),
 }));
 
 vi.mock('firebase/functions', () => ({
-  httpsCallable: () => (data: unknown) => h.httpsCallable(data),
+  httpsCallable: (_functions: unknown, name: string) => (data: unknown) => h.httpsCallable(name, data),
 }));
 
 vi.mock('@/stores/authStore', () => ({
@@ -137,12 +140,12 @@ function reset() {
   h.deleteDoc.mockImplementation(() => Promise.resolve());
   h.httpsCallable.mockClear();
   h.getDownloadURL.mockClear();
-  h.deleteObject.mockClear();
-  h.httpsCallable.mockImplementation(() =>
-    Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
+  h.httpsCallable.mockImplementation((name: string) =>
+    name === 'deleteFamilyPhoto'
+      ? Promise.resolve({ data: { success: true } })
+      : Promise.resolve({ data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' } }),
   );
   h.getDownloadURL.mockImplementation(() => Promise.resolve('https://example.com/photo.jpg'));
-  h.deleteObject.mockImplementation(() => Promise.resolve());
   fetchMock.mockReset();
   fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response);
   vi.stubGlobal('fetch', fetchMock);
@@ -276,6 +279,7 @@ describe('family FamilySettingsPage', () => {
 
     await waitFor(() =>
       expect(h.httpsCallable).toHaveBeenCalledWith(
+        'createFamilyPhotoUploadUrl',
         expect.objectContaining({
           familyId: 'fam1',
           contentType: 'image/jpeg',
@@ -306,7 +310,7 @@ describe('family FamilySettingsPage', () => {
     );
   });
 
-  it('deletes the PREVIOUS photo object once the family doc is updated (old-photo cleanup)', async () => {
+  it('deletes the PREVIOUS photo object via deleteFamilyPhoto once the family doc is updated (old-photo cleanup, issue #483)', async () => {
     h.familyData = {
       familyName: 'Cohen',
       photoUrl:
@@ -318,8 +322,9 @@ describe('family FamilySettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(h.deleteObject).toHaveBeenCalledWith(
-        expect.objectContaining({ path: 'family-photos/fam1/old-uuid.jpg' }),
+      expect(h.httpsCallable).toHaveBeenCalledWith(
+        'deleteFamilyPhoto',
+        expect.objectContaining({ familyId: 'fam1', objectPath: 'family-photos/fam1/old-uuid.jpg' }),
       ),
     );
   });
@@ -335,11 +340,10 @@ describe('family FamilySettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
-    expect(h.deleteObject).not.toHaveBeenCalled();
     expect(h.httpsCallable).not.toHaveBeenCalled();
   });
 
-  it('removing the photo clears photoUrl and deletes the old object, without calling the upload callable', async () => {
+  it('removing the photo clears photoUrl and deletes the old object via deleteFamilyPhoto, without calling the upload callable', async () => {
     h.familyData = {
       familyName: 'Cohen',
       photoUrl:
@@ -356,9 +360,12 @@ describe('family FamilySettingsPage', () => {
         expect.objectContaining({ photoUrl: null }),
       ),
     );
-    expect(h.httpsCallable).not.toHaveBeenCalled();
-    expect(h.deleteObject).toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'family-photos/fam1/old-uuid.jpg' }),
+    expect(h.httpsCallable).not.toHaveBeenCalledWith('createFamilyPhotoUploadUrl', expect.anything());
+    await waitFor(() =>
+      expect(h.httpsCallable).toHaveBeenCalledWith(
+        'deleteFamilyPhoto',
+        expect.objectContaining({ familyId: 'fam1', objectPath: 'family-photos/fam1/old-uuid.jpg' }),
+      ),
     );
   });
 
@@ -408,7 +415,7 @@ describe('family FamilySettingsPage', () => {
     );
   });
 
-  it('best-effort deletes the just-uploaded object if updateDoc fails after a successful upload (orphan cleanup, issue #482 review)', async () => {
+  it('best-effort deletes the just-uploaded object via deleteFamilyPhoto if updateDoc fails after a successful upload (orphan cleanup, issue #482 review / #483)', async () => {
     h.updateDoc.mockImplementation(() => Promise.reject(new Error('network blip')));
     renderPage();
     await screen.findByLabelText(/family name/i);
@@ -416,8 +423,9 @@ describe('family FamilySettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(h.deleteObject).toHaveBeenCalledWith(
-        expect.objectContaining({ path: 'family-photos/fam1/uuid.jpg' }),
+      expect(h.httpsCallable).toHaveBeenCalledWith(
+        'deleteFamilyPhoto',
+        expect.objectContaining({ familyId: 'fam1', objectPath: 'family-photos/fam1/uuid.jpg' }),
       ),
     );
     expect(screen.getByText('familySettings.uploadError')).toBeInTheDocument();
@@ -440,8 +448,44 @@ describe('family FamilySettingsPage', () => {
     );
     // The family doc already points at family-photos/fam1/uuid.jpg — deleting
     // it here would orphan the family's OWN current photo.
-    expect(h.deleteObject).not.toHaveBeenCalledWith(
-      expect.objectContaining({ path: 'family-photos/fam1/uuid.jpg' }),
+    expect(h.httpsCallable).not.toHaveBeenCalledWith(
+      'deleteFamilyPhoto',
+      expect.objectContaining({ objectPath: 'family-photos/fam1/uuid.jpg' }),
     );
+  });
+
+  it('a failed old-photo deleteFamilyPhoto call is logged, not surfaced, and never blocks the save (issue #483, #463 idiom)', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.familyData = {
+      familyName: 'Cohen',
+      photoUrl:
+        'https://firebasestorage.googleapis.com/v0/b/demo.appspot.com/o/family-photos%2Ffam1%2Fold-uuid.jpg?alt=media&token=abc',
+    };
+    h.httpsCallable.mockImplementation((name: string) => {
+      if (name === 'deleteFamilyPhoto') return Promise.reject(new Error('permission-denied'));
+      return Promise.resolve({
+        data: { url: 'https://signed.example.com/put', path: 'family-photos/fam1/uuid.jpg' },
+      });
+    });
+    renderPage();
+    await screen.findByLabelText(/family name/i);
+    await selectPhoto();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    // The save itself succeeds — deleteFamilyPhoto is fire-and-forget best
+    // effort, called AFTER updateDoc already committed the new photoUrl.
+    await waitFor(() =>
+      expect(h.updateDoc).toHaveBeenCalledWith(
+        expect.objectContaining({ path: 'families/fam1' }),
+        expect.objectContaining({ photoUrl: 'https://example.com/photo.jpg' }),
+      ),
+    );
+    await waitFor(() =>
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[family] photo delete failed',
+        expect.any(Error),
+      ),
+    );
+    expect(screen.queryByText('familySettings.uploadError')).not.toBeInTheDocument();
   });
 });

@@ -618,18 +618,30 @@ describe('family-photos', () => {
     await assertFails(uploadString(fileRef, 'replacement', 'raw'));
   });
 
-  // Delete stays unscoped (request.auth != null) — see the storage.rules
-  // comment for why: a delete cannot plant attacker content (the surface
-  // #287/#471 close), and FamilySettingsPage's replace-photo flow now
-  // needs a real client-SDK delete of the PREVIOUS uuid-named object
-  // (uploads are no longer an overwrite-in-place of a deterministic path).
-  it('allows an authenticated delete (old-photo cleanup, unscoped by design — see storage.rules)', async () => {
+  // Issue #483 — deletes now go through deleteFamilyPhoto (a
+  // membership-checked Admin-SDK delete) exclusively, closing the gap
+  // #482 deliberately left open ("delete stays unscoped — see the
+  // storage.rules comment for why"). `delete: if false` means NO direct
+  // client SDK delete can ever succeed here, for ANYONE — member or not.
+  it("denies a direct authenticated delete into the caller's OWN family path (issue #483 — no client delete path exists anymore)", async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await uploadString(ref(ctx.storage(), 'family-photos/family1/photo.jpg'), 'seed', 'raw');
     });
     const authed = testEnv.authenticatedContext('user1');
     const fileRef = ref(authed.storage(), 'family-photos/family1/photo.jpg');
-    await assertSucceeds(deleteObject(fileRef));
+    await assertFails(deleteObject(fileRef));
+  });
+
+  // The #470/#482 gap-pin, now flipped to green: a non-member's direct
+  // delete is DENIED (previously the only pin this test file had for
+  // delete was that it succeeded, unscoped, for anyone authenticated).
+  it("denies a non-member's direct delete of another family's photo path (issue #483 closes the #482 gap)", async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await uploadString(ref(ctx.storage(), 'family-photos/family2/photo.jpg'), 'seed', 'raw');
+    });
+    const authed = testEnv.authenticatedContext('unrelated-user');
+    const fileRef = ref(authed.storage(), 'family-photos/family2/photo.jpg');
+    await assertFails(deleteObject(fileRef));
   });
 
   it('denies an unauthenticated delete', async () => {

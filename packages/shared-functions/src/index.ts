@@ -51,9 +51,12 @@ export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
 
-// Callable — family photo uploads (issue #471): the only writer of
-// family-photos/** once storage.rules sets that path's writes to `if false`.
+// Callables — family photo uploads/deletes (issues #471, #483): the only
+// writer/deleter of family-photos/** once storage.rules sets that path's
+// writes AND deletes to `if false`. Share assertFamilyMember
+// (./family/familyMembership.js) for the membership check.
 export { createFamilyPhotoUploadUrl } from './family/createFamilyPhotoUploadUrl.js';
+export { deleteFamilyPhoto } from './family/deleteFamilyPhoto.js';
 
 // Callables — guardian (parental governance)
 export { createKidInvite } from './guardian/createKidInvite.js';

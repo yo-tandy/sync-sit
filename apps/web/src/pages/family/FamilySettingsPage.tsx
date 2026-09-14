@@ -11,7 +11,7 @@ import {
   deleteDoc,
   serverTimestamp,
 } from 'firebase/firestore';
-import { ref, getDownloadURL, deleteObject } from 'firebase/storage';
+import { ref, getDownloadURL } from 'firebase/storage';
 import { httpsCallable } from 'firebase/functions';
 import { db, storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -84,6 +84,33 @@ async function uploadFamilyPhoto(familyId: string, file: File): Promise<string> 
     });
   }
   return data.path;
+}
+
+interface DeleteFamilyPhotoRequest {
+  familyId: string;
+  objectPath: string;
+}
+
+/**
+ * Best-effort delete of a family-photo object via the `deleteFamilyPhoto`
+ * callable (issue #483). Client-SDK `deleteObject` no longer works at all
+ * here — storage.rules denies every direct client delete of
+ * `family-photos/**`, the same way it already denied writes (issue #471)
+ * — so both cleanup call sites in `handleSave` below go through this.
+ *
+ * Never allowed to block or fail the save: fire-and-forget, with the
+ * error logged (#463 idiom — a bare `.catch(() => {})` leaves an #446-
+ * shaped failure with zero trace) and otherwise ignored, same as the
+ * direct `deleteObject` calls this replaces.
+ */
+function deleteFamilyPhotoObject(familyId: string, objectPath: string): void {
+  const fn = httpsCallable<DeleteFamilyPhotoRequest, { success: boolean }>(
+    functions,
+    'deleteFamilyPhoto',
+  );
+  fn({ familyId, objectPath }).catch((err) => {
+    console.error('[family] photo delete failed', err);
+  });
 }
 
 /** Recovers the storage object path from a getDownloadURL() result, the
@@ -248,14 +275,15 @@ export function FamilySettingsPage() {
       familyDocUpdated = true;
 
       // Delete the previous photo object now that the family doc points
-      // elsewhere (or nowhere) — best-effort, same swallow-the-error
-      // pattern as family/AccountPage.tsx's profile-photo cleanup. Only
-      // when the photo actually changed: an untouched photoPreview equals
+      // elsewhere (or nowhere) — best-effort, via the deleteFamilyPhoto
+      // callable (issue #483; direct client-SDK deleteObject no longer
+      // works at all — storage.rules denies it). Only when the photo
+      // actually changed: an untouched photoPreview equals
       // originalPhotoUrlRef.current, and originalPath === newPath (both
       // null) in that case, so this would already no-op — the explicit
       // photoChanged guard just makes that intent visible.
       if (photoChanged && originalPath && originalPath !== newPath) {
-        deleteObject(ref(storage, originalPath)).catch(() => {});
+        deleteFamilyPhotoObject(familyId, originalPath);
       }
       originalPhotoUrlRef.current = photoUrl;
 
@@ -299,12 +327,11 @@ export function FamilySettingsPage() {
       // Orphan cleanup (issue #482 review): the upload succeeded (newPath
       // is set) but updateDoc never committed it to the family doc — the
       // object is unreachable from anywhere in the app, so best-effort
-      // delete it rather than leave it billed forever. Swallowed the same
-      // way family/AccountPage.tsx's photo cleanup is: this is cost
-      // hygiene, not correctness — a failure here must not mask the real
-      // error already being surfaced below.
+      // delete it via deleteFamilyPhoto (issue #483) rather than leave it
+      // billed forever. This is cost hygiene, not correctness — a failure
+      // here must not mask the real error already being surfaced below.
       if (newPath && !familyDocUpdated) {
-        deleteObject(ref(storage, newPath)).catch(() => {});
+        deleteFamilyPhotoObject(familyId, newPath);
       }
       // The existing (only) error slot on this page, reused for the photo
       // upload path (issue #471) via the same uploadErrorKey mapping
