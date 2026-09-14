@@ -26,6 +26,7 @@ export function SharePage() {
         text: shareText,
         url: window.location.origin,
       });
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: native share cancelled or unsupported
     } catch {
       // User cancelled or not supported
     }
@@ -34,6 +35,7 @@ export function SharePage() {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(shareText);
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: clipboard write unsupported/denied; textarea fallback below handles it
     } catch {
       const textarea = document.createElement('textarea');
       textarea.value = shareText;

@@ -52,7 +52,8 @@ export function FamiliesPage() {
     try {
       const fn = httpsCallable(functions, 'respondToContactSharing');
       await fn({ requestId, action });
-    } catch {
+    } catch (err) {
+      console.error('[families] respond to contact sharing failed', err);
       // silent
     } finally {
       setToggling(null);

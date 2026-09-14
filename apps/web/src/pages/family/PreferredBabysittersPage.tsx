@@ -89,6 +89,7 @@ export function PreferredBabysittersPage() {
               whatsapp: d.whatsapp || undefined,
             });
           }
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: per-preferred-babysitter info read; unreadable rows are skipped
         } catch {
           // Skip if can't read (permissions)
         }
@@ -117,7 +118,8 @@ export function PreferredBabysittersPage() {
         const result = await fn({ query: q });
         setSearchResults(result.data.results || []);
         setHasSearched(true);
-      } catch {
+      } catch (err) {
+        console.error('[search] babysitter lookup failed', err);
         // silent
       } finally {
         setSearching(false);

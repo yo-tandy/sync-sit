@@ -94,6 +94,7 @@ export function RequestDetailPage() {
         >(functions, 'getParentContacts');
         const result = await fn({ appointmentId: id });
         setParentContacts(result.data.contacts || []);
+      // eslint-disable-next-line no-restricted-syntax -- best-effort: parent contacts callable unavailable for this appointment state
       } catch { /* function unavailable */ }
     }
     loadParents();
@@ -119,6 +120,7 @@ export function RequestDetailPage() {
           )
         );
         setIsReturningFamily(snap.size > 0);
+      // eslint-disable-next-line no-restricted-syntax -- best-effort: returning-family lookup only tweaks copy, never blocks the page
       } catch { /* ignore */ }
     }
     checkReturning();
@@ -200,7 +202,8 @@ export function RequestDetailPage() {
     try {
       await callSetNote('');
       setNoteRemoveOpen(false);
-    } catch {
+    } catch (err) {
+      console.error('[request] remove note failed', err);
       // Erasure-specific copy: the author's question here is "is the note
       // gone?" — "couldn't save" would answer the wrong one.
       setNoteError(t('request.notes.removeError'));

@@ -58,7 +58,8 @@ export function AdminConfigurationPage() {
               .map(([k, v]) => [k, String(v)]),
           ),
         );
-      } catch {
+      } catch (err) {
+        console.error('[admin.config] load config failed', err);
         if (!cancelled) setError(t('admin.config.loadError'));
       } finally {
         if (!cancelled) setLoading(false);
@@ -110,7 +111,8 @@ export function AdminConfigurationPage() {
         return next;
       });
       toast(t('admin.config.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[admin.config] save config failed', err);
       setError(t('admin.config.saveError'));
     } finally {
       setSaving(false);

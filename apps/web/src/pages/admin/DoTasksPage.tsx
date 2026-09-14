@@ -128,7 +128,8 @@ export function AdminDoTasksPage() {
       const rows = await fetchDoTaskOffers(task.id);
       if (offersRequestRef.current !== generation) return;
       setOffers(rows);
-    } catch {
+    } catch (err) {
+      console.error('[admin.doTasks] load offers failed', err);
       if (offersRequestRef.current !== generation) return;
       setOffersError(true);
     } finally {
@@ -152,7 +153,8 @@ export function AdminDoTasksPage() {
       if (expandedId === deleteTarget.id) setExpandedId(null);
       setDeleteTarget(null);
       loadTasks();
-    } catch {
+    } catch (err) {
+      console.error('[admin.doTasks] delete task failed', err);
       setDeleteError(true);
     } finally {
       setDeleting(false);

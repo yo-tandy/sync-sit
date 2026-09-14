@@ -66,7 +66,8 @@ export function JoinFamilyPage() {
         const result = await validateInvite({ token: token! });
         setFamilyName(result.data.familyName || 'your family');
         setLoading(false);
-      } catch {
+      } catch (err) {
+        console.error('[enrollment] validate invite token failed', err);
         setInvalidToken(true);
         setLoading(false);
       }
@@ -147,7 +148,8 @@ export function JoinFamilyPage() {
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
       await verifyEmail({ email, app: 'sit' });
-    } catch {
+    } catch (err) {
+      console.error('[enrollment] resend verification code failed', err);
       // silent
     }
   };

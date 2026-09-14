@@ -58,7 +58,9 @@ export function SubmittedEndorsementsPage() {
         status: 'removed',
         updatedAt: serverTimestamp(),
       });
-    } catch { /* silent */ }
+    } catch (err) {
+      console.error('[endorsements] delete reference failed', err);
+    }
     setDeleteTarget(null);
   };
 
@@ -83,6 +85,7 @@ export function SubmittedEndorsementsPage() {
             const d = snap.data();
             return [uid, formatBabysitterName(d.firstName || '', d.lastName || '')] as [string, string];
           }
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: babysitter-name enrichment for a submitted reference
         } catch { /* skip */ }
         return null;
       })
@@ -131,7 +134,9 @@ export function SubmittedEndorsementsPage() {
           if (results.length >= 10) break;
         }
         setSearchResults(results);
-      } catch { /* silent */ }
+      } catch (err) {
+        console.error('[endorsements] babysitter search failed', err);
+      }
       finally { setSearching(false); }
     }, 400);
     return () => clearTimeout(timer);

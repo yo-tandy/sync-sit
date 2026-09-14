@@ -71,7 +71,8 @@ function PushStatusCard({ uid }: { uid?: string }) {
     try {
       const token = await requestPushPermission(uid);
       setStatus(token ? 'granted' : Notification.permission);
-    } catch {
+    } catch (err) {
+      console.error('[account] push permission request failed', err);
       setStatus(Notification.permission);
     } finally {
       setEnabling(false);
@@ -276,7 +277,8 @@ export function BabysitterAccountPage() {
       setPhotoPreview(null);
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] remove photo failed', err);
       // Honest failure (parity with study): the photo is still live on the
       // public search results — a silent no-op left the user believing it
       // was removed.
@@ -381,7 +383,8 @@ export function BabysitterAccountPage() {
       await resetPassword(babysitter.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -408,7 +411,8 @@ export function BabysitterAccountPage() {
           updatedAt: serverTimestamp(),
         });
         await refreshUserDoc();
-      } catch {
+      } catch (err) {
+        console.error('[account] save notification prefs failed', err);
         // silent
       }
     },

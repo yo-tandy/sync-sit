@@ -290,6 +290,7 @@ export function EndorsementsPage() {
         try {
           const snap = await getDoc(doc(db, 'families', r.submittedByFamilyId!));
           if (snap.exists()) return [r.submittedByFamilyId!, snap.data().familyName || ''] as [string, string];
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: family-name enrichment for a submitted reference
         } catch { /* skip */ }
         return null;
       })

@@ -161,8 +161,10 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       });
       await refreshUserDoc();
       onComplete();
-    } catch {
-      // silent
+    } catch (err: unknown) {
+      console.error('[enrollment] save preferences (skip) failed', err);
+      const message = err instanceof Error ? err.message : 'Failed to save';
+      setError(message);
     } finally {
       setSaving(false);
     }
