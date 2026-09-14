@@ -31,6 +31,7 @@ describe('study notificationRouting', () => {
         'guardian_action',
         'guardian_searchable',
         'supervised_account_deleted',
+        'account_blocked_last_parent',
       ].sort(),
     );
   });
@@ -63,6 +64,9 @@ describe('study notificationRouting', () => {
     ['study_account_deleted', '/tutor/sessions'],
     ['tutor_endorsement_received', '/tutor/endorsements'],
     ['supervision_request', '/tutor'],
+    // Issue #421: the child's own copy of a last-parent-erasure block, routed
+    // to their account page.
+    ['account_blocked_last_parent', '/tutor/account'],
     ['guardian_action', null],
     ['guardian_searchable', null],
     ['supervision_revoked', null], // kid-side copy: nothing left to act on
@@ -99,6 +103,10 @@ describe('study notificationRouting', () => {
     // deliberately unrouted — the child and their governance page are gone by
     // the time this arrives.
     ['supervised_account_deleted', null],
+    // Issue #421: a child, never a parent, is the recipient — parents never
+    // actually receive this type, but the row must not dead-end if a bug
+    // ever routed it here.
+    ['account_blocked_last_parent', null],
   ] as const)('parent: %s -> %s', (type, route) => {
     expect(notificationRoute(type, {}, 'parent')).toBe(route);
   });

@@ -10,7 +10,10 @@
  *
  * Writer-verified type inventory (apps/study-functions +
  * packages/shared-functions): every study_* type plus the tutor_endorsement_*
- * trio. `guardian_orphaned_minor`, `guardian_conflicting_claim` and
+ * trio. `account_blocked_last_parent` is written by `notifyBlockedMinor`
+ * (`packages/shared-functions/src/guardian/notifyBlockedMinor.ts`, issue
+ * #421 option 1b) — to the blocked CHILD, not a guardian.
+ * `guardian_orphaned_minor`, `guardian_conflicting_claim` and
  * `guardian_claim_identity_mismatch` are EXCLUDED: they are `adminAlerts`
  * docs, never notifications.
  *
@@ -62,6 +65,15 @@ const GUARDIAN_TYPES = [
   // are all gone by the time this arrives, so /family/governance/{uid} would
   // be a dead deep link and /family/governance shows nothing about them.
   'supervised_account_deleted',
+  // The CHILD's own copy of a last-parent erasure blocking them (issue
+  // #421, option 1b). Written to the blocked minor themselves, not to a
+  // guardian — the mirror image of `supervised_account_deleted` above.
+  // Unlike that type, this one's recipient and their account survive: the
+  // copy says "paused until a guardian re-links you", so the account page
+  // is where they'd confirm that happened once they regain access. Routed
+  // in the tutor branch below; a recipient with no study provider profile
+  // has no page to land on and stays mark-read-only.
+  'account_blocked_last_parent',
 ] as const;
 
 /** The types this app's bell counts and its /notifications pages list. */
@@ -108,6 +120,9 @@ export function notificationRoute(
     if (type === 'tutor_endorsement_received') return '/tutor/endorsements';
     // The dashboard hosts the SupervisionRequestCard (accept/decline).
     if (type === 'supervision_request') return '/tutor';
+    // Issue #421: the child's own account page is where they'd see they've
+    // been re-linked and unblocked.
+    if (type === 'account_blocked_last_parent') return '/tutor/account';
     return null;
   }
 

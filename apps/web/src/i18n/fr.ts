@@ -942,6 +942,11 @@ export default {
     confirmUnblock: 'Êtes-vous sûr de vouloir débloquer cet utilisateur ?',
     confirmDelete: 'Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.',
     confirmDeleteAppointment: 'Êtes-vous sûr de vouloir annuler ce rendez-vous ? Les deux parties seront notifiées.',
+    // Issue #421 : le dernier administrateur actif ne peut pas être supprimé
+    // — nommez un autre administrateur d'abord.
+    lastAdminError:
+      "C'est le dernier administrateur. Nommez un autre administrateur avant de supprimer ce compte.",
+    actionFailed: "Cette action a échoué. Veuillez réessayer.",
     confirmResetPassword: 'Envoyer un email de réinitialisation du mot de passe à cet utilisateur ?',
     userBlocked: 'Utilisateur bloqué avec succès',
     userUnblocked: 'Utilisateur débloqué avec succès',
