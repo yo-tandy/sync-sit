@@ -187,7 +187,8 @@ export function RecurringConflictPreview({ session }: { session: StudySessionDoc
         });
 
         setResult({ rows, availableCount: rows.filter((r) => r.status === 'available').length });
-      } catch {
+      } catch (err) {
+        console.error('[schedule] recurring conflict preview failed', err);
         if (!cancelled) setResult({ rows: [], availableCount: 0 });
       }
     })();

@@ -340,7 +340,8 @@ export function SessionsPage() {
       });
       prevActiveIdsRef.current = activeIds;
       setSessions(rows);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] load sessions failed', err);
       // A THROW is a load failure — surface it honestly rather than
       // conflating it with the family having no sessions (the empty state).
       if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
@@ -542,7 +543,8 @@ export function SessionsPage() {
         (rs ?? []).map((x) => (x.sessionId === s.sessionId ? { ...x, status: 'declined' } : x)),
       );
       setDeclineTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] decline proposal failed', err);
       setRespondError(t('family.sessions.proposalError'));
     } finally {
       setRespondingId(null);
@@ -662,7 +664,8 @@ export function SessionsPage() {
         );
       }
       setCancelTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] cancel session failed', err);
       setCancelError(t('family.sessions.actionError'));
     } finally {
       setCancelKey(null);
@@ -768,7 +771,8 @@ export function SessionsPage() {
       });
       patchLocalNote(session, instance, undefined);
       setNoteRemoveTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] remove note failed', err);
       // Erasure-specific copy: the author's question here is "is the note
       // gone?" — "couldn't save" would answer the wrong one (round 4).
       setNoteError(t('family.sessions.notes.removeError'));

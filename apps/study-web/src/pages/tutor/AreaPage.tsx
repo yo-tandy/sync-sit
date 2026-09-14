@@ -194,7 +194,8 @@ export function AreaPage() {
       await refreshUserDoc();
       setSuccess(true);
       flashAfter(() => setSuccess(false), 3000);
-    } catch {
+    } catch (err) {
+      console.error('[area] save area preferences failed', err);
       setError(t('common.error'));
     } finally {
       setSaving(false);

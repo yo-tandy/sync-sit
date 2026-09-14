@@ -130,6 +130,7 @@ export function TutorCard({ result }: { result: TutorSearchResult }) {
         // Concatenated in source order, so study's own entries lead.
         setEndorsements(settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
         if (settled.every((r) => r.status === 'fulfilled')) setEndorsementsComplete(true);
+      // eslint-disable-next-line no-restricted-syntax -- defensive only: allSettled above never rejects; kept as a backstop
       } catch {
         // Belt-and-braces only: allSettled never rejects, and
         // endorsementSources/toCrossAppEndorsement are total. This is NOT the

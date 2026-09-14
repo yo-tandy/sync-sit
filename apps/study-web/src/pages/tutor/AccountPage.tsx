@@ -222,6 +222,7 @@ export function AccountPage() {
       await navigator.clipboard.writeText(personalCode);
       setCodeCopied(true);
       flashAfter(() => setCodeCopied(false), 2000);
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: clipboard denied (permissions/non-secure context); the code stays visible on screen either way
     } catch {
       // Clipboard can be denied (permissions, non-secure context) — the code
       // is on screen either way, so a silent no-op beats an error banner.
@@ -305,7 +306,8 @@ export function AccountPage() {
       setPhotoPreview(null);
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] remove photo failed', err);
       setPhotoError(t('account.photoRemoveFailed'));
     }
   };
@@ -340,7 +342,8 @@ export function AccountPage() {
       }
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] save photo failed', err);
       // Inline error where the user is looking, and an honest preview: the
       // picked image did NOT save, so fall back to what is actually stored.
       // Bump the token so a still-pending reader can't repaint the failure.
@@ -400,7 +403,8 @@ export function AccountPage() {
       });
       await refreshUserDoc();
       toast(t('tutor.account.aboutMe.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[account] save about-me failed', err);
       setAboutMeError(t('common.error'));
     } finally {
       setAboutMeSaving(false);
@@ -415,7 +419,8 @@ export function AccountPage() {
       await resetPassword(userDoc.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -462,7 +467,8 @@ export function AccountPage() {
     setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
       await savePrefs(category, channel, next);
-    } catch {
+    } catch (err) {
+      console.error('[account] save notification prefs failed', err);
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));

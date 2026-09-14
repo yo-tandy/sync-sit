@@ -114,7 +114,8 @@ export function SubmittedEndorsementsPage() {
         updatedAt: serverTimestamp(),
       });
       setEditTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[endorsements] save edit failed', err);
       setActionError(true);
     } finally {
       setSaving(false);
@@ -134,7 +135,8 @@ export function SubmittedEndorsementsPage() {
         updatedAt: serverTimestamp(),
       });
       setWithdrawTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[endorsements] withdraw reference failed', err);
       setActionError(true);
     } finally {
       setSaving(false);

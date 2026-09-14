@@ -44,6 +44,7 @@ export function InstallAppBanner() {
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: dismiss already applied optimistically for this session
     } catch {
       // silent — user already doesn't see it for this session
     } finally {

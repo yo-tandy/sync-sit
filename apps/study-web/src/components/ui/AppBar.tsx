@@ -85,6 +85,7 @@ export function AppBar() {
         },
         () => setPendingEndorsements(0),
       );
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: pending-endorsement badge just stays hidden
     } catch {
       /* leave the badge hidden */
     }

@@ -303,7 +303,8 @@ export function SessionsPage() {
       });
       prevActiveIdsRef.current = activeIds;
       setSessions(rows);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] load sessions failed', err);
       // A THROW is a load failure — surface it, don't conflate it with the
       // tutor having no sessions (the empty state).
       if (mountedRef.current && runId === runIdRef.current) setLoadError(true);
@@ -383,7 +384,8 @@ export function SessionsPage() {
       setSessions((prev) =>
         prev ? prev.map((x) => (x.sessionId === sessionId ? { ...x, modified: false } : x)) : prev,
       );
-    } catch {
+    } catch (err) {
+      console.error('[sessions] acknowledge modification failed', err);
       // A silent failure reads as "the tap didn't register" and invites the
       // same no-op tap again (PR #244 round 3) -- say it failed.
       setAckError(sessionId);
@@ -439,7 +441,8 @@ export function SessionsPage() {
         );
       }
       setCancelTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] cancel session failed', err);
       setCancelError(t('tutor.sessions.actionError'));
     } finally {
       setCancelKey(null);
@@ -546,7 +549,8 @@ export function SessionsPage() {
       });
       patchLocalNote(session, instance, undefined);
       setNoteRemoveTarget(null);
-    } catch {
+    } catch (err) {
+      console.error('[sessions] remove note failed', err);
       // Erasure-specific copy: the author's question here is "is the note
       // gone?" — "couldn't save" would answer the wrong one (round 4).
       setNoteError(t('tutor.sessions.notes.removeError'));

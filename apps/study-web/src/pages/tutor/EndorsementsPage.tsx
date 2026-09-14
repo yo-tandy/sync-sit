@@ -91,7 +91,8 @@ export function EndorsementsPage() {
       setEndorsements((es) =>
         (es ?? []).map((r) => (r.referenceId === e.referenceId ? { ...r, status: next } : r)),
       );
-    } catch {
+    } catch (err) {
+      console.error('[endorsements] respond to endorsement failed', err);
       setError(t('tutor.endorsements.actionError'));
     } finally {
       setActingId(null);

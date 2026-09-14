@@ -275,6 +275,7 @@ export function TutorEnrollment() {
           const unsub = useAuthStore.subscribe(check);
           check(useAuthStore.getState());
         });
+      // eslint-disable-next-line no-restricted-syntax -- swallowed by design: the auth-store wait below already handles the timeout case
       } catch {
         // Swallowed by design — see above.
       }
