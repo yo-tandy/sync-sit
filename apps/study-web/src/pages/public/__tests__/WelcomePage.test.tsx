@@ -47,7 +47,11 @@ describe('WelcomePage (study)', () => {
 
     const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
     expect(hrefs).toContain('/login');
-    expect(hrefs).toContain('/signup');
+    // issue #435 milestone, PR5: study's own role question is retired — the
+    // CTA now points straight at sit's cross-origin /enroll, carrying the
+    // current language (set to 'en' by the beforeAll above), not /signup.
+    expect(hrefs).toContain('https://sync-sit.com/enroll?lang=en');
+    expect(hrefs).not.toContain('/signup');
     expect(hrefs).toContain('/about');
     expect(hrefs).toContain('/privacy');
     expect(hrefs).toContain('/terms');

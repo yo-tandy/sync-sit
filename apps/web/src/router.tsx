@@ -17,7 +17,7 @@ import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPage';
 
 import { SharePage } from '@/pages/public/SharePage';
-import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
+import { SignUpRedirectPage } from '@/pages/public/SignUpRedirectPage';
 import { EnrollLandingPage } from '@/pages/public/EnrollLandingPage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
@@ -79,7 +79,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
-      { path: '/signup', element: <SignUpRolePage /> },
+      // issue #435 milestone, PR5: /signup is retired — it now just forwards
+      // to /enroll (query string preserved) for old bookmarks/stale links.
+      { path: '/signup', element: <SignUpRedirectPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
@@ -90,7 +92,8 @@ export const router = createBrowserRouter([
       { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
       { path: '/install', element: <AddToHomescreenPage /> },
       // issue #435 milestone, PR4: the new unified cross-app entry point.
-      // /signup (above) keeps working unchanged — PR5 retires it.
+      // PR5 retired /signup (above) in its favor — /enroll is now the
+      // primary sign-up entry point site-wide.
       { path: '/enroll', element: <EnrollLandingPage /> },
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },

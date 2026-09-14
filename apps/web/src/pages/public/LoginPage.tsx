@@ -20,6 +20,9 @@ export function LoginPage() {
       loading={loading}
       error={error}
       clearError={clearError}
+      // /signup is retired as a first-class entry point (issue #435
+      // milestone, PR5) — /enroll is the unified landing page now.
+      signUpTo="/enroll"
     />
   );
 }

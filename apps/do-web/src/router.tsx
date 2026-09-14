@@ -12,7 +12,7 @@ import { FamilyLayout } from '@/layouts/FamilyLayout';
 import {
   WelcomePage,
   LoginPage,
-  SignUpRolePage,
+  SignUpRedirectPage,
   ForgotPasswordPage,
   AboutPage,
   ReportProblemPage,
@@ -43,7 +43,11 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
-      { path: '/signup', element: <SignUpRolePage /> },
+      // issue #435 milestone, PR5: /signup no longer asks the role question
+      // itself — it forwards cross-origin to sit's unified /enroll landing
+      // page. /enroll/doer below is unchanged and still reachable directly
+      // on this origin (see SignUpRedirectPage's "Open questions" doc).
+      { path: '/signup', element: <SignUpRedirectPage /> },
       { path: '/enroll/doer', element: <DoerEnrollment /> },
       // Parent enrollment stays a placeholder until the family UI PR
       // (plan §13 PR7; see ComingSoonPage).

@@ -35,3 +35,25 @@ describe('dropped success interstitial (issue #242)', () => {
     expect((matches[0].element as React.ReactElement).type).toBe(Navigate);
   });
 });
+
+describe('retired sign-up role question (issue #435 milestone, PR5)', () => {
+  it('keeps /signup mounted, wired to SignUpRedirectPage — not a Navigate (the target is cross-origin, see SignUpRedirectPage.test.tsx for the actual window.location.assign behavior)', () => {
+    const routes = router.routes[0]?.children ?? router.routes;
+    const route = routes.find((r) => r.path === '/signup');
+    expect(route).toBeTruthy();
+    expect((route!.element as React.ReactElement).type).not.toBe(Navigate);
+  });
+
+  it('has no SignUpRolePage export anymore (the lazy entry is gone)', async () => {
+    const lazyPages = await import('@/lazyPages');
+    expect('SignUpRolePage' in lazyPages).toBe(false);
+    expect('SignUpRedirectPage' in lazyPages).toBe(true);
+  });
+
+  it('keeps the direct continuation routes reachable — PR4 lands there, and a sit babysitter\'s crossApp add-role flow resumes into /enroll/tutor', () => {
+    const routes = router.routes[0]?.children ?? router.routes;
+    expect(routes.some((r) => r.path === '/enroll/tutor')).toBe(true);
+    expect(routes.some((r) => r.path === '/enroll/parent')).toBe(true);
+    expect(routes.some((r) => r.path === '/tutor/welcome-crossapp')).toBe(true);
+  });
+});

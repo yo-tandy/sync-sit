@@ -104,3 +104,24 @@ describe('pre-namespace paths still resolve (issue #296 — PR9 mail is already 
     await expect(resolves('/no-such-page')).resolves.toBe('/');
   });
 });
+
+describe('retired sign-up role question (issue #435 milestone, PR5)', () => {
+  // Pages are stubbed blank here (this file's route-table-only convention),
+  // so SignUpRedirectPage's real window.location.assign effect never runs —
+  // see SignUpRedirectPage.test.tsx for that behavior. This only pins the
+  // route WIRING: the path still resolves (no 404/catch-all), and the direct
+  // continuation route stays reachable.
+  it('keeps /signup mounted', async () => {
+    await expect(resolves('/signup')).resolves.toBe('/signup');
+  });
+
+  it('keeps /enroll/doer reachable directly — sync-do\'s only functional enrollment (decision 20)', async () => {
+    await expect(resolves('/enroll/doer')).resolves.toBe('/enroll/doer');
+  });
+
+  it('has no SignUpRolePage export anymore (the lazy entry is gone)', async () => {
+    const lazyPages = await import('@/lazyPages');
+    expect('SignUpRolePage' in lazyPages).toBe(false);
+    expect('SignUpRedirectPage' in lazyPages).toBe(true);
+  });
+});

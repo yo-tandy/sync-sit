@@ -47,9 +47,10 @@ const ROLES: SignUpRoleOption[] = [
  * wiring: `UnifiedLandingPage` (shared-ui, PR3) is presentational, this
  * just supplies apps/web's role hrefs.
  *
- * The classic `/signup` (sit-only role question) keeps working unchanged
- * (issue #435 milestone, PR5 retires it) — this is a NEW, additional entry
- * point, not a replacement of that route.
+ * PR5 retired the classic `/signup` (sit-only role question) in this
+ * page's favor: `/signup` now just redirects here, apps/web's own in-app
+ * links point here directly, and study/do's own `/signup` redirect
+ * cross-origin to this same URL (`sync-sit.com/enroll`).
  */
 export function EnrollLandingPage() {
   return <UnifiedLandingPage roles={ROLES} marks={MARKS} />;
