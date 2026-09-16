@@ -19,6 +19,7 @@ import {
 } from './endorsementAccess.js';
 import { notifyDoSafely, sendDoNotificationSafely } from './notify.js';
 import { buildEndorsementReceived } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doSubmitEndorsement` (plan decision 12 as revised, §9.1, §13 PR11): a
@@ -43,7 +44,7 @@ import { buildEndorsementReceived } from './notifyContent.js';
  * disjunct the doer cannot read the doc this callable just wrote about them.
  */
 export const doSubmitEndorsement = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

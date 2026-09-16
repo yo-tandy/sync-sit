@@ -9,13 +9,14 @@ import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
 import { registerVerificationSend, registerBypassSend } from './sendRateLimit.js';
 import { EJM_CODE_STAMP } from './verificationCodeClass.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * Send a 6-digit verification code to an EJM email address.
  * Stores the code in Firestore for later verification.
  */
 export const verifyEjmEmail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     // `app` is an untrusted display-only hint (which app's copy the
     // account-exists email uses) — normalized inside the silent path.

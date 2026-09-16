@@ -5,6 +5,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { escapeHtml } from '../config/email.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface RespondData {
   accept: boolean;
@@ -18,7 +19,7 @@ interface RespondData {
  * later re-ask stays possible.
  */
 export const respondToSupervisionRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

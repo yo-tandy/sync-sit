@@ -30,6 +30,7 @@ import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { bookSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
 import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 const SLOT_MINUTES = 15;
 const SLOTS_PER_DAY = 96;
@@ -53,7 +54,7 @@ const DAY_LABELS: Record<DayOfWeek, string> = {
  * The per-subject rate is snapshotted server-side from the live offering here.
  */
 export const bookSession = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

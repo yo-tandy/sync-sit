@@ -16,6 +16,7 @@ import type { WeeklyGrid } from '../availability/computeDateAvailability.js';
 import { cancelSessionInstanceSchema } from '../validation/session.js';
 import { buildRestoredOverride, type RestoreResult } from './sessionOverride.js';
 import { isLateCancellation } from './lateCancellation.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 type CancelStatusReason = 'cancelled_by_tutor' | 'cancelled_by_family';
 
@@ -48,7 +49,7 @@ function applyRestore(
  * resurrect this date.
  */
 export const cancelSessionInstance = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

@@ -14,6 +14,7 @@ import {
   buildTaskMarkedDoneForFamily,
   fallbackDoerName,
 } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doMarkTaskDone` (plan §8, §6.5): either side marks an ASSIGNED task done.
@@ -27,7 +28,7 @@ import {
  *   whether or not the student marked first.
  */
 export const doMarkTaskDone = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

@@ -6,6 +6,7 @@ import { sendPushNotification } from '../config/push.js';
 import { resolveNotifPref } from '@ejm/shared-core';
 import { parisDateString, parisWallTimeToUtc } from './parisTime.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 export interface SendRemindersStats {
   remindersSent: number;
@@ -169,8 +170,7 @@ export const sendReminders = onSchedule(
   {
     schedule: 'every 1 hours',
     region: 'europe-west1',
-    timeZone: 'Europe/Paris',
-  },
+    timeZone: 'Europe/Paris', secrets: [RESEND_API_KEY] },
   async () => {
     await runSendReminders(db, new Date());
   },

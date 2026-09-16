@@ -7,6 +7,7 @@ import {
   isActiveGuardianOf,
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 interface RespondInput {
   requestId: string;
@@ -19,7 +20,7 @@ interface RespondInput {
  * making the babysitter's contact info visible to that family in search results.
  */
 export const respondToContactSharing = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

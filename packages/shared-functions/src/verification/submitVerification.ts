@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface SubmitVerificationInput {
   type: 'identity' | 'ejm_enrollment';
@@ -18,7 +19,7 @@ interface SubmitVerificationInput {
 }
 
 export const submitVerification = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

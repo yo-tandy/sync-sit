@@ -7,6 +7,7 @@ import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
 import { raisePartialErasureAlert } from './partialErasureAlert.js';
 import { performErasure } from './performErasure.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -218,7 +219,7 @@ export async function eraseUserAccount(targetUserId: string, actorUid: string) {
  * of the extraction: one answer to "what does deleting a member remove".
  */
 export const deleteUser = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

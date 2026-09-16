@@ -8,6 +8,7 @@ import {
   ORIGINAL_AUTH_TIME_CLAIM,
   effectiveAuthTimeSeconds,
 } from '../auth/effectiveAuthTime.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /** Handoff codes live 60 seconds — long enough for one redirect, nothing else. */
 const APP_HANDOFF_TTL_MS = 60_000;
@@ -34,7 +35,7 @@ function invalidHandoff(): HttpsError {
  * its sha256, same token hygiene as kidInvites.
  */
 export const createAppHandoffCode = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -69,7 +70,7 @@ export const createAppHandoffCode = onCall(
  * Unauthenticated by design — the code is the capability.
  */
 export const redeemAppHandoffCode = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     const parsed = redeemInputSchema.safeParse(request.data);
     if (!parsed.success) {

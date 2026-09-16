@@ -24,6 +24,7 @@ import {
 } from '../availability/computeDateAvailability.js';
 import { generateInstances, type PerDateClaimInputs } from '../sessions/generateInstances.js';
 import { dropWithinNotice } from '../sessions/recurringWindow.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 export interface ExtendRecurringStats {
   seriesProcessed: number;
@@ -285,6 +286,7 @@ export const extendRecurring = onSchedule(
     schedule: '0 4 * * 1',
     region: 'europe-west1',
     timeZone: 'Europe/Paris',
+    secrets: [RESEND_API_KEY],
   },
   async () => {
     const stats = await runExtendRecurring(db, new Date());

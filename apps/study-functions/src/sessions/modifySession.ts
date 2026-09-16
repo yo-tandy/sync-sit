@@ -32,6 +32,7 @@ import {
   buildRestoredOverride,
   type RestoreResult,
 } from './sessionOverride.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 
 /** Apply a restoration result to an override ref inside the transaction (cancelSession idiom). */
@@ -73,7 +74,7 @@ function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreRe
  * only ANDs slots false, which is always safe.
  */
 export const modifySession = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

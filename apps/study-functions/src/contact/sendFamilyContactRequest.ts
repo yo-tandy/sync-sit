@@ -12,6 +12,7 @@ import {
   latestDeclineMs,
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 // Cross-search ceiling (issue #233), the twin of sit's board-contact cap
 // (contactPublishedSearch.ts); both read the admin-configurable
@@ -50,7 +51,7 @@ import {
  * its demand.
  */
 export const sendFamilyContactRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
