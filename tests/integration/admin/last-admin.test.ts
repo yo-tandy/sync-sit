@@ -172,16 +172,20 @@ describe('last-admin governance', () => {
       expect(authUser.disabled).toBe(false);
     });
 
-    it('the sole active admin cannot block the only OTHER admin either', async () => {
-      // The lockout does not require self-targeting: two admins, one blocks
-      // the other, and the guard must still count the survivors.
+    it('an admin who is themselves mid-erasure cannot block the only OTHER eligible admin', async () => {
+      // Caller and target differ, and the caller is NOT a survivor: a live
+      // `erasureStartedAt` marker (a concurrent erasure of the caller, still
+      // in flight) excludes them from the count exactly as it does for
+      // erasure, so the target is the last eligible admin and blocking them
+      // must be refused -- even though two docs are `active`.
       const second = await createAdmin();
-      await getDb().collection('users').doc(seed.admin.uid).update({ status: 'blocked' });
-      const token = await getIdToken(second.uid);
+      await getDb().collection('users').doc(seed.admin.uid).update({ erasureStartedAt: new Date() });
+      const token = await getIdToken(seed.admin.uid);
 
       await expect(
         callFunction('blockUser', { targetUserId: second.uid }, token),
       ).rejects.toMatchObject({ details: { code: 'admin/last-admin' } });
+      expect((await getDb().collection('users').doc(second.uid).get()).data()?.status).toBe('active');
     });
 
     it('succeeds once a second active admin exists', async () => {
