@@ -1,11 +1,11 @@
 import { Link, Outlet } from 'react-router';
-import { useTranslation } from 'react-i18next';
 import { useDocumentGround } from '@ejm/shared-ui';
 import { getSitRole } from '@ejm/sit-core';
+import { useTranslation } from 'react-i18next';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { AuthGuard } from './AuthGuard';
 import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
-import { AppSwitchMenuItem } from '@/components/ui/AppSwitchMenuItem';
+import { AppSwitchInlineHost } from '@/components/ui/AppSwitchInlineHost';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -39,22 +39,30 @@ import { useAuthStore } from '@/stores/authStore';
  * so this is now it, at every breakpoint: `sticky top-0 z-40 h-12`,
  * full-bleed because this layout sits OUTSIDE `PageContainer` (the width cap
  * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred via TWO
- * mechanisms, not one: at `md+` the two flanking `<nav>`s are equal
+ * mechanisms, not one: at `md+` the two flanking slots are equal
  * `flex-1 basis-0` (not a fixed width: a `w-24` box clipped
  * `AppSwitchMenuItem`'s label onto three wrapped lines, caught on a
  * screenshot review of #484) and consume all the leftover space themselves;
  * below `md` both are `display:none`, so the header's OWN `justify-center`
  * is what centres the lone title (a regression caught on review of a1e5f12
- * -- without it, one flex child left-aligns by default). The Home link and
- * app-switch menu are UNCHANGED in substance, just now `hidden md:flex` on
- * their own `<nav>` each instead of `hidden md:block` on the whole header --
- * still the only exit at `>=md`, since `AppSwitchBar` stays `md:hidden`
- * (plan Q9 is still open on where the switch belongs at desktop). Both carry
- * the SAME `aria-label` the phone bar uses -- safe, since that bar is
- * `md:hidden` and so never in the accessibility tree at the same widths
- * these two are. Neutral `bg-ground-admin`, the same token stamped on
- * `<html>` below -- never a brand colour -- and no bell, no menu beyond the
- * app switch: this layout owns no app's chrome.
+ * -- without it, one flex child left-aligns by default). The Home link
+ * keeps its own `hidden md:flex` `<nav>`; the right flank is a plain `<div>`
+ * (not a `<nav>`) holding `AppSwitchInlineHost` (#417, plan Q9 answered):
+ * the inline switcher renders its OWN `<nav aria-label=appSwitch.barLabel>`,
+ * and nesting that inside an identically-labelled nav would give a
+ * screen-reader user two "Switch app" landmarks for one control. Still the
+ * only exit at `>=md`, since `AppSwitchBar` stays `md:hidden` -- that bar
+ * carries the same label but is never in the accessibility tree at the
+ * widths the inline switcher is. Neutral `bg-ground-admin`, the same token
+ * stamped on `<html>` below -- never a brand colour -- and no bell, no menu
+ * beyond the app switch: this layout owns no app's chrome.
+ *
+ * DESKTOP EXIT rationale (#416 review, updated #417/Q9): the exits live
+ * here, in this layout only, rather than by unhiding the shared bar for all
+ * six shells or by adding a back arrow -- a back arrow would frame the hub
+ * as sitting underneath the portal you came from, which is exactly what
+ * this layout exists to deny. Same destinations the phone bar offers, laid
+ * out for desktop, and still neutral: grays only, no `--color-brand-*`.
  */
 export function AccountLayout() {
   const { t } = useTranslation();
@@ -102,13 +110,12 @@ export function AccountLayout() {
               the shrink-0 title between them still centres on the FULL
               header width; the slots themselves absorb whatever space the
               title doesn't need. Both are empty (display:none) below `md`.
-              EACH ITS OWN `<nav>` (not a plain `<div>`): these are real
-              desktop navigation controls and deserve the landmark back.
-              Distinct labels: the left nav holds only the Home link, so it
-              is named "Home"; only the right nav, which holds the actual
-              switcher, carries the app-switch label. The phone
-              `AppSwitchBar` also carries that label but is `md:hidden`, so
-              at no single breakpoint do two landmarks share a name. */}
+              The left flank is its own `<nav>` named "Home" (it holds only
+              the Home link); the right flank is a plain `<div>` because the
+              inline switcher inside it brings its own "Switch app" landmark
+              (#417). The phone `AppSwitchBar` also carries that label but
+              is `md:hidden`, so at no single breakpoint do two landmarks
+              share a name. */}
           <nav
             aria-label={t('menu.home')}
             className="hidden flex-1 basis-0 items-center justify-start md:flex"
@@ -125,17 +132,14 @@ export function AccountLayout() {
           <span className="shrink-0 text-center text-sm font-semibold text-gray-900">
             {t('accountHub.brandTitle')}
           </span>
-          {/* whitespace-nowrap lives on THIS wrapper, not inside
-              `AppSwitchMenuItem` itself -- that component is also rendered
-              full-width inside `AppBar`'s burger menu (phone width, plenty
-              of room), and `white-space` inherits down to its label without
-              needing to touch that shared component's own markup. */}
-          <nav
-            aria-label={t('appSwitch.barLabel')}
-            className="hidden flex-1 basis-0 items-center justify-end whitespace-nowrap md:flex"
-          >
-            <AppSwitchMenuItem />
-          </nav>
+          {/* Plain div, NOT a `<nav>`: `AppSwitchInlineHost` renders its own
+              landmark (aria-label appSwitch.barLabel), and a nav nested in an
+              identically-labelled nav is two landmarks for one control
+              (#417). whitespace-nowrap stays on THIS wrapper so the pill
+              labels never wrap inside the flank at the narrow end of `md`. */}
+          <div className="hidden flex-1 basis-0 items-center justify-end whitespace-nowrap md:flex">
+            <AppSwitchInlineHost accountHref="/account" homeHref={portalHref ?? '/'} />
+          </div>
         </header>
         <PageContainer>
           <Outlet />

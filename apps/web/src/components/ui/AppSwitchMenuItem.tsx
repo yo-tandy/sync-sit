@@ -19,13 +19,13 @@ const studyMark = { sm: studySm, md: studyMd };
  * entry disables with a spinner until the mint resolves; nothing navigates
  * on failure.
  *
- * Hidden below `md` by AppBar for the parent and babysitter portals since
- * #365, because there the app-switch bar is the entry point and a second one
- * would let a code be minted around the bar's whole-bar lock. At `md+` the
- * bar is `md:hidden` and this is the only switcher there is, until Q9 is
- * answered (#417). ADMIN keeps it at every width: AdminLayout renders no
- * AppSwitchBarHost, so hiding it there would leave admins with no switcher
- * on a phone at all.
+ * ADMIN ONLY now (#417, plan Q9 resolved): the parent and babysitter portals
+ * dropped this from their burgers entirely once `AppSwitchInline` (in
+ * `AppBar`'s top strip) covered `md+` -- the app-switch bar already covered
+ * below `md`, so there was no width left for this row to carry. AdminLayout
+ * renders no `AppSwitchBarHost`, so this row stays admin's only switcher
+ * below `md`; it is `md:hidden` in AppBar now, since AdminLayout's SideNav
+ * head renders `AppSwitchInline` for `md+`.
  */
 export function AppSwitchMenuItem() {
   const { t, i18n } = useTranslation();

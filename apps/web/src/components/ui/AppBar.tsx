@@ -24,7 +24,15 @@ import { NavTabs } from './NavTabs';
 import { NotificationBell } from './NotificationBell';
 import { SupervisionChip } from './SupervisionChip';
 import { AppSwitchMenuItem } from './AppSwitchMenuItem';
+import { AppSwitchInlineHost } from './AppSwitchInlineHost';
 import type { UserRole } from '@ejm/sit-core';
+
+/**
+ * The account hub is one route for every non-admin portal (#367) -- the
+ * inline switcher's "My account" entry always resolves here, mirroring the
+ * constant every `AppSwitchBarHost` call site in this app already passes.
+ */
+const ACCOUNT_HREF = '/account';
 
 function MenuIcon({ className }: { className?: string }) {
   return (
@@ -93,7 +101,16 @@ export function AppBar({ role }: { role: UserRole }) {
         <Link to={homePath} aria-label={t('menu.home')} className="-m-1.5 flex h-11 w-11 items-center justify-center text-white">
           <HomeIcon className="h-5 w-5" />
         </Link>
-        <span className="text-sm font-semibold text-white">{role === 'admin' ? 'Sync/Sit - Admin Panel' : 'Sync/Sit'}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-semibold text-white">{role === 'admin' ? 'Sync/Sit - Admin Panel' : 'Sync/Sit'}</span>
+          {/* Desktop app switch (#417, plan Q9) -- next to the app name it
+              switches away from. ADMIN is the exception: its md+ entry point
+              is the sidebar head (AdminLayout), not this bar, so admin
+              renders neither this nor a second inline switcher here. */}
+          {role !== 'admin' && (
+            <AppSwitchInlineHost accountHref={ACCOUNT_HREF} homeHref={homePath} tone="onBrand" />
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {role === 'babysitter' && userDoc?.governedBy && (
             <SupervisionChip
@@ -166,18 +183,22 @@ export function AppBar({ role }: { role: UserRole }) {
               section 3" is not -- noted so the next reader isn't surprised
               (PR #343 round 4). */}
           <MenuItem icon={<ShareIcon className="h-5 w-5" />} label={t('share.title')} to="/share" onNavigate={() => setMenuOpen(false)} />
-          {/* Below `md` the app-switch BAR (#365) is the entry point, so this
-              row hides there — two entry points would let a second handoff
-              code be minted around the bar's whole-bar lock. `hidden` is
-              display:none, so it leaves the tab order and the a11y tree too.
-              At `md+` the bar is `md:hidden` and this row is the ONLY
-              switcher, until Q9 is answered (#417).
-              ADMIN is the exception at every width: AdminLayout renders no
-              AppSwitchBarHost, so hiding this would leave a phone admin with
-              no switcher at all. */}
-          <div className={role === 'admin' ? undefined : 'hidden md:block'}>
-            <AppSwitchMenuItem />
-          </div>
+          {/* ADMIN ONLY (#417, plan Q9 resolved). For parent/babysitter this
+              row is now FULLY superseded rather than hidden at one
+              breakpoint: below `md` the app-switch BAR (#365) is the entry
+              point, and at `md+` `AppSwitchInlineHost` above is -- there is
+              no width left where the burger needs to carry it.
+              ADMIN remains the exception: AdminLayout renders no
+              AppSwitchBarHost, so below `md` (where its sidebar -- and the
+              inline switcher in its head -- is `hidden`) this burger row is
+              still the only switcher admin has. `md:hidden` now, the
+              opposite of before: at `md+` AdminLayout's sidebar head covers
+              it, so carrying both would be two entry points at once. */}
+          {role === 'admin' && (
+            <div className="md:hidden">
+              <AppSwitchMenuItem />
+            </div>
+          )}
           {role !== 'admin' && (
             <div className="px-4 py-3">
               <LanguageSelector />
