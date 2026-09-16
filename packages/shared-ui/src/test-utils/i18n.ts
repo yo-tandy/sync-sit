@@ -24,6 +24,9 @@ export function createTestI18n(): i18n {
         translation: {
           common: {
             continue: 'Continue',
+            cancel: 'Cancel',
+            signOut: 'Sign out',
+            error: 'Something went wrong. Please try again.',
           },
           // AccountHome (#445): the intro copy under the sections. Identical
           // to what all three apps' en.ts carry -- a rename here that isn't
@@ -31,9 +34,6 @@ export function createTestI18n(): i18n {
           // loudly instead of silently falling back to the raw key. (The
           // "Sync/Account" brand string moved to AccountLayout, apps/web,
           // on #445 review -- it is no longer this component's key.)
-          accountHub: {
-            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
-          },
           welcome: {
             alreadyHaveAccount: 'Already have an account?',
             logIn: 'Log in',
@@ -46,6 +46,27 @@ export function createTestI18n(): i18n {
             account: 'My account',
             barLabel: 'Switch app',
             error: 'Could not switch apps. Please try again.',
+          },
+          // #491 -- the exact English copy this PR adds identically to all
+          // three apps' `en.ts` (today just apps/web; study/do get it when
+          // they route `AccountHome`).
+          accountHub: {
+            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+            deleteMyAccount: 'Delete my account',
+            deleteDialogTitle: 'Delete my account?',
+            deleteDialogBody:
+              'This permanently deletes your account. Your profile, appointments, tutoring sessions, tasks, and references are removed from sync/sit, sync/study and sync/do. This cannot be undone.',
+            deleteConfirmLabel: 'Type {{word}} to confirm',
+            deleteConfirmButton: 'Yes, delete my account',
+            deleteErrorLastAdmin:
+              "You're the last admin. Appoint another admin before deleting your account.",
+            deleteErrorReauth:
+              'For your security, please sign in again before deleting your account.',
+          },
+          accountDeleted: {
+            title: 'Your account has been deleted',
+            body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',
+            backHome: 'Go to the homepage',
           },
           // GENDER_OPTIONS (from @ejm/shared-core, added on PR1) hardcodes
           // its labelKeys as `enrollment.genderFemale` etc. -- the SAME keys
