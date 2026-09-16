@@ -34,9 +34,6 @@ export function createTestI18n(): i18n {
           // loudly instead of silently falling back to the raw key. (The
           // "Sync/Account" brand string moved to AccountLayout, apps/web,
           // on #445 review -- it is no longer this component's key.)
-          accountHub: {
-            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
-          },
           welcome: {
             alreadyHaveAccount: 'Already have an account?',
             logIn: 'Log in',
@@ -54,6 +51,7 @@ export function createTestI18n(): i18n {
           // three apps' `en.ts` (today just apps/web; study/do get it when
           // they route `AccountHome`).
           accountHub: {
+            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
             deleteMyAccount: 'Delete my account',
             deleteDialogTitle: 'Delete my account?',
             deleteDialogBody:
