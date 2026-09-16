@@ -112,6 +112,7 @@ export default {
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
     roleExclusiveBabysitter: "Le babysitting est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme babysitter.",
+    roleExclusiveParent: "Les comptes famille sont réservés aux parents — un compte élève (babysitter ou tuteur) ne peut pas s'inscrire comme parent.",
   },
 
   welcomeCross: {
@@ -204,6 +205,11 @@ export default {
     completeSignUp: "Terminer l'inscription",
     creatingAccount: 'Cr\u00e9ation du compte...',
     yourFamily: 'Votre famille',
+    // Assistant parent partagé (issue #440) : clés lues par le StepFamilyInfo partagé.
+    parentLastName: 'Nom',
+    familyAddressLabel: 'Adresse *',
+    petsHint: 'ex. Chat, petit chien',
+    completeSignup: "Terminer l'inscription",
     yourFamilyDesc: 'Parlez-nous de votre famille.',
     familyName: 'Nom de famille *',
     pets: 'Animaux',

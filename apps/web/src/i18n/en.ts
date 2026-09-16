@@ -115,6 +115,7 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveBabysitter: "Babysitting is for EJM students — parent accounts can't enroll as babysitters.",
+    roleExclusiveParent: "Family accounts are for parents — student accounts (babysitter or tutor) can't enroll as a parent.",
   },
 
   welcomeCross: {
@@ -204,6 +205,11 @@ export default {
     completeSignUp: 'Complete sign up',
     creatingAccount: 'Creating account...',
     yourFamily: 'Your family',
+    // Shared parent wizard (issue #440): keys the shared StepFamilyInfo reads.
+    parentLastName: 'Last name',
+    familyAddressLabel: 'Address *',
+    petsHint: 'e.g. Cat, small dog',
+    completeSignup: 'Complete sign-up',
     yourFamilyDesc: 'Tell us about your family.',
     familyName: 'Family name *',
     pets: 'Pets',

@@ -47,7 +47,7 @@ export function JoinFamilyPage() {
   // held, so a submit racing the config read arms at 60 against a longer
   // server window. The sync effect below extends (never shortens) a
   // running countdown when the configured value lands -- same guard as
-  // StepVerify / StepParentVerify.
+  // the shared StepVerify (the parent wizard uses it too since issue #440).
   const armedWithRef = useRef(resendCooldownS);
 
   useEffect(() => {
