@@ -19,8 +19,20 @@ interface ExportUserDataInput {
  * `searches` docs behind their contact requests (both sides: created and
  * family-owned), their sync-do tasks/offers with the photo paths those tasks
  * reference, their study sessions (both sides, with each series' `instances`
- * inlined) and their availability schedule with its overrides.
+ * inlined), their availability schedule with its overrides, and the contact
+ * requests they are a party to (`contactSharingRequests` on sit,
+ * `studyContactRequests` on study -- both sides again).
  */
+
+/** One row per distinct doc across several query results, first hit wins. */
+function uniqueRows(snaps: Array<{ docs: any[] }>): Array<Record<string, unknown>> {
+  return Array.from(
+    new Map(
+      snaps.flatMap((snap) => snap.docs).map((doc: any) => [doc.id, { id: doc.id, ...doc.data() }]),
+    ).values(),
+  );
+}
+
 export const exportUserData = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },
   async (request) => {
@@ -185,6 +197,37 @@ export const exportUserData = onCall(
       ).values(),
     );
 
+    // Contact requests (issue #408, the ledger's two leftovers). Both
+    // collections carry the other party's name next to this member's --
+    // `contactSharingRequests` (sit: a parent adding a babysitter to their
+    // favourites) holds `parentName`/`familyName`/`parentUserId`/
+    // `babysitterUserId`; `studyContactRequests` (study: parent<->tutor)
+    // holds `parentName`/`familyName`/`tutorName`/`message` and up to three
+    // uid keys (`tutorUserId`, `parentUserId`, `createdByUserId` -- the last
+    // two differ on the tutor-initiated shape, where `parentUserId` is only
+    // filled at accept). `nameFanOut` already sweeps both for identity
+    // corrections, so the platform knew they carry personal data; neither
+    // had ever reached a subject-access request. Same three sides as
+    // `searches` above: the counterparty side by uid, the member's own side,
+    // and -- for a parent -- everything keyed to their family.
+    const familyQuery = (col: string) =>
+      familyId
+        ? db.collection(col).where('familyId', '==', familyId).get()
+        : Promise.resolve({ docs: [] } as any);
+    const [contactSharingRequests, studyContactRequests] = await Promise.all([
+      Promise.all([
+        db.collection('contactSharingRequests').where('babysitterUserId', '==', targetUserId).get(),
+        db.collection('contactSharingRequests').where('parentUserId', '==', targetUserId).get(),
+        familyQuery('contactSharingRequests'),
+      ]).then(uniqueRows),
+      Promise.all([
+        db.collection('studyContactRequests').where('tutorUserId', '==', targetUserId).get(),
+        db.collection('studyContactRequests').where('parentUserId', '==', targetUserId).get(),
+        db.collection('studyContactRequests').where('createdByUserId', '==', targetUserId).get(),
+        familyQuery('studyContactRequests'),
+      ]).then(uniqueRows),
+    ]);
+
     // sync-do (plan §11.4): `doTasks` + `taskOffers`, both sides — the
     // family's tasks and the doer's offers — plus the `do-photos` object
     // paths those tasks reference. See `doGdpr.collectDoUserData` for which
@@ -224,6 +267,8 @@ export const exportUserData = onCall(
       kidInvites,
       references,
       searches,
+      contactSharingRequests,
+      studyContactRequests,
       doTasks: doData.tasks,
       taskOffers: doData.offers,
       doPhotoPaths: doData.photoPaths,
