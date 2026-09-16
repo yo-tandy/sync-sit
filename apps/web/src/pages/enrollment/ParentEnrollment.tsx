@@ -78,7 +78,7 @@ const INITIAL_DATA: ParentFormData = {
 };
 
 export function ParentEnrollment() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [step, setStep] = useState(0);
   const [formData, setFormData] = useState<ParentFormData>(INITIAL_DATA);
   const [loading, setLoading] = useState(false);
@@ -203,6 +203,11 @@ export function ParentEnrollment() {
         // optional strings.
         ...(formData.address?.postcode ? { postcode: formData.address.postcode } : {}),
         ...(formData.address?.city ? { city: formData.address.city } : {}),
+        // The UI language the parent enrolled in, persisted on the user doc
+        // so server email copy follows it (issue #440 audit; mirrors
+        // StudentEnrollment). The add-profile path strips it below: that
+        // account already has a language.
+        language: i18n.language?.startsWith('fr') ? 'fr' : 'en',
       };
 
       if (isAddProfile) {
@@ -210,8 +215,8 @@ export function ParentEnrollment() {
         // keys (email/verificationCode/password) so the backend takes the
         // add-profile branch on the existing account, then refresh and navigate
         // without a new sign-in.
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-omit of credential keys
-        const { email, verificationCode, password, ...familyPayload } = basePayload;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- rest-omit of credential keys + language (existing account keeps its own)
+        const { email, verificationCode, password, language, ...familyPayload } = basePayload;
         await enrollFamily(familyPayload);
         await refreshUserDoc();
         navigate('/family');

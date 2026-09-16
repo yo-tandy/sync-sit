@@ -41,6 +41,9 @@ interface EnrollFamilyInput {
   // Consent-document version the consent step presented (issue #178) — every
   // app now sends the shared CONSENT_VERSION (issue #415 decision 2).
   consentVersion?: string;
+  // UI language the wizard ran in — persisted on the new user doc so server
+  // email copy follows it (issue #440 audit). New-account path only.
+  language?: 'en' | 'fr';
 }
 
 // How long the post-signup wait gives the auth store to settle into a state
@@ -84,7 +87,7 @@ const INITIAL_FAMILY: FamilyFormData = {
 };
 
 export function ParentEnrollment() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
 
@@ -257,7 +260,15 @@ export function ParentEnrollment() {
         return;
       }
 
-      await enrollFamilyFn({ email, verificationCode, password, ...family });
+      await enrollFamilyFn({
+        email,
+        verificationCode,
+        password,
+        ...family,
+        // New-account path only: an add-profile caller's user doc already
+        // carries its own language.
+        language: i18n.language?.startsWith('fr') ? 'fr' : 'en',
+      });
 
       // The account was created server-side (adminAuth) — sign the new
       // parent in NOW so completion lands in their portal (mirrors the tutor

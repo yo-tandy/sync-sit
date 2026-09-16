@@ -288,6 +288,26 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     expect(enroll.payload).toMatchObject({ address: '10 Rue Cler, 75007 Paris' });
   });
 
+  it('sends the UI language the wizard ran in (issue #440 audit)', async () => {
+    await i18n.changeLanguage('fr');
+    try {
+      renderFlow();
+      await reachFamilyStep();
+      fireEvent.click(screen.getByText('family-fill'));
+      fireEvent.click(screen.getByText('family-submit'));
+      const enroll = await vi.waitFor(() => {
+        const c = h.calls.find((x) => x.name === 'enrollFamily');
+        expect(c).toBeTruthy();
+        return c!;
+      });
+      // Persisted on the new user doc so server email copy follows it —
+      // until this pin every parent doc was hardcoded 'en'.
+      expect(enroll.payload).toMatchObject({ language: 'fr' });
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('add-profile: payload keeps postcode/city and OMITS the credential keys', async () => {
     // Authed user without a parent profile: the wizard jumps straight to the
     // family step and the rest-omit strips email/verificationCode/password —
@@ -318,6 +338,9 @@ describe('ParentEnrollment enrollFamily payload (issue #176)', () => {
     expect(enroll.payload).not.toHaveProperty('email');
     expect(enroll.payload).not.toHaveProperty('verificationCode');
     expect(enroll.payload).not.toHaveProperty('password');
+    // The existing account keeps its own language — never overwritten by
+    // the add-profile wizard's UI language (issue #440 audit).
+    expect(enroll.payload).not.toHaveProperty('language');
 
     // Add-profile refreshes the doc in place and lands in the portal without
     // a new sign-in — and the mount effect must not hijack the success
