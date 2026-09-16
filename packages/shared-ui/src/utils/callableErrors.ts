@@ -58,22 +58,17 @@ export function endorsementCooldownDetails(err: unknown): EndorsementCooldownDet
 
 /**
  * Extracts the machine-readable error code from a `deleteMyAccount`
- * rejection (HttpsError details: { code: 'admin/last-admin' }, issue #421).
+ * rejection (HttpsError details: { code: 'admin/last-admin' }, issue #421,
+ * shipped in #490).
  *
- * ⚠ SERVER SIDE IS NOT ON `main` YET. `guardAgainstLastAdmin` -- the guard
- * that throws this code, inside `eraseUserAccount`, the ONE erasure body
- * both `deleteUser` (admin) and `deleteMyAccount` (self-serve) call -- ships
- * in open PR #490, not this one. This client mapping is the CORRECT
- * contract for what #490 throws (verified against its diff), but until #490
- * merges, `deleteMyAccount` cannot actually produce `admin/last-admin` --
- * the branch below is unreachable, and a sole admin CAN self-delete with no
- * guard at all. This PR (#493) must merge AFTER #490, not before or
- * standalone.
- *
- * Once merged, `eraseUserAccount` refuses to erase the platform's last
- * active admin, so a member who is that admin can hit this from the
- * self-serve dialog too, not only from the admin panel.
- *
+ * `guardAgainstLastAdmin` -- inside `eraseUserAccount`, the ONE erasure body
+ * both `deleteUser` (admin) and `deleteMyAccount` (self-serve) call
+ * (`packages/shared-functions/src/admin/deleteUser.ts`) -- refuses to erase
+ * the platform's last active admin. So a member who IS that admin can hit
+ * this from the self-serve dialog too, not only from the admin panel. The
+ * client mapping here must never outlive that server guard:
+ * `scripts/__tests__/self-serve-delete-requires-last-admin-guard.test.ts`
+ * pins its presence.
  *
  * There is deliberately NO supervised-minor or guardian code here. #368's
  * owner decision (2026-08-29, see `deleteMyAccount.ts`'s docstring) is that a

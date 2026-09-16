@@ -3,20 +3,20 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * Merge-order interlock for PR #493 (self-serve "Delete my account" UI)
- * against PR #490 (#421: the last-admin erasure guard).
+ * Contract pin between the self-serve "Delete my account" UI (#493) and the
+ * last-admin erasure guard (#421, shipped in #490).
  *
  * #493 makes `deleteMyAccount` reachable from the account hub for every
  * signed-in member — including the platform's sole admin. The server-side
  * refusal for that case (`guardAgainstLastAdmin`, throwing
  * `failed-precondition` with `details.code === 'admin/last-admin'`) lives in
- * `packages/shared-functions/src/admin/deleteUser.ts` and lands with #490.
- * Until it is on the branch this test runs against, this pin FAILS, which
- * keeps #493's CI red — a mechanism, not a prose warning. Once #490 has
- * merged it turns green and stays as a contract pin: the client mapping in
- * `accountDeleteErrorCode` must never outlive the server guard.
+ * `packages/shared-functions/src/admin/deleteUser.ts`. This started life as
+ * a merge-order interlock — red on #493's branch until #490 landed on
+ * `main`, a mechanism rather than a prose warning — and stays on as the
+ * pin that the client mapping in `accountDeleteErrorCode` never outlives
+ * the server guard it maps.
  */
-describe('self-serve deletion ships only with the last-admin guard (#490 → #493 interlock)', () => {
+describe('self-serve deletion ships only with the last-admin guard (#490 ↔ #493 contract)', () => {
   const src = readFileSync(
     resolve(__dirname, '../../packages/shared-functions/src/admin/deleteUser.ts'),
     'utf8',
