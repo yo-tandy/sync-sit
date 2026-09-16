@@ -57,6 +57,9 @@ export {
   // Family photo uploads (issue #471) — signed-URL callable, same
   // Admin-SDK-membership-check shape as getVerificationDocument above.
   createFamilyPhotoUploadUrl,
+  // Family photo deletion (issue #483) — membership-checked delete;
+  // shares its membership gate with createFamilyPhotoUploadUrl above.
+  deleteFamilyPhoto,
   // Admin
   getAdminDashboard,
   listUsers,
