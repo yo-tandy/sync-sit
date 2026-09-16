@@ -23,6 +23,11 @@ function tutorDoc(overrides: {
   enrollmentComplete: boolean;
   /** Merged over the default tutor profile — coverage/prefs variations. */
   profile?: Record<string, unknown>;
+  /**
+   * Root `address` (#442/#474), only set when explicitly provided — omitted
+   * keeps existing call sites byte-identical to before issue #439.
+   */
+  address?: { fullAddress: string; street: string; city: string; postcode: string; lat: number; lng: number } | null;
 }): Record<string, unknown> {
   return {
     uid: overrides.uid,
@@ -31,6 +36,7 @@ function tutorDoc(overrides: {
     firstName: 'Temp',
     lastName: 'Tutor',
     language: 'fr',
+    ...(overrides.address !== undefined ? { address: overrides.address } : {}),
     profiles: {
       tutor: {
         enrollmentComplete: overrides.enrollmentComplete,
@@ -769,5 +775,139 @@ describe('searchTutors', () => {
     } catch (err) {
       expect((err as { code?: string }).code).toBe('INVALID_ARGUMENT');
     }
+  });
+});
+
+// Issue #439: rank search results by the tutor's root `address` (#442/#474)
+// as a LAST tie-break — after every existing sort key, never gating.
+describe('searchTutors distance tie-break & projection (issue #439)', () => {
+  let seed: SeedData;
+  let parentToken: string;
+
+  const TUTOR_RESULT_KEYS = new Set([
+    'uid', 'firstName', 'lastName', 'photoUrl', 'languages', 'aboutMe', 'classLevel',
+    'subject', 'level', 'rate', 'levels', 'sessionLengthsMin', 'locationPrefs',
+    'distance', 'addressDistance', 'endorsementCount', 'cancellationNoticeHours',
+    'requestStatus', 'contactEmail', 'contactPhone', 'whatsapp',
+  ]);
+
+  function makeAddress(lat: number, lng: number) {
+    return { fullAddress: 'Test address', street: 'Test street', city: 'Paris', postcode: '75016', lat, lng };
+  }
+
+  async function withTempTutors(docs: Record<string, unknown>[], fn: () => Promise<void>) {
+    const uids = docs.map((d) => d.uid as string);
+    await Promise.all(docs.map((d) => getDb().collection('users').doc(d.uid as string).set(d)));
+    try {
+      await fn();
+    } finally {
+      await Promise.all(uids.map((uid) => getDb().collection('users').doc(uid).delete()));
+    }
+  }
+
+  interface Row {
+    uid: string;
+    distance: number | null;
+    addressDistance: number | null;
+  }
+
+  async function search(latLng = PARIS_CENTER): Promise<Row[]> {
+    const result = await callFunction<{ results: Row[] }>(
+      'searchTutors',
+      { subject: 'math', level: '6e', latLng },
+      parentToken,
+    );
+    return result.results;
+  }
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('sorts by home-address distance ONLY as a tie-break when every existing key ties', async () => {
+    const NEAR = 'temp-tutor-addr-near';
+    const FAR = 'temp-tutor-addr-far';
+    await withTempTutors(
+      [
+        // Identical areaLatLng (=> identical area `distance`) and no
+        // endorsements (=> identical endorsementCount 0) — the only
+        // difference is the home address, ~5.6km apart.
+        tutorDoc({
+          uid: FAR, status: 'active', searchable: true, enrollmentComplete: true,
+          address: makeAddress(48.8566, 2.3000),
+        }),
+        tutorDoc({
+          uid: NEAR, status: 'active', searchable: true, enrollmentComplete: true,
+          address: makeAddress(48.8566, 2.3522),
+        }),
+      ],
+      async () => {
+        const results = await search();
+        const near = results.find((r) => r.uid === NEAR)!;
+        const far = results.find((r) => r.uid === FAR)!;
+        expect(near).toBeDefined();
+        expect(far).toBeDefined();
+        expect(near.distance).toBe(far.distance);
+        expect(near.addressDistance).toBeLessThan(far.addressDistance!);
+        expect(results.indexOf(near)).toBeLessThan(results.indexOf(far));
+      },
+    );
+  });
+
+  it('sorts a tutor with no address LAST among tied tutors, never excluding it', async () => {
+    const WITH_ADDRESS = 'temp-tutor-addr-present';
+    const NO_ADDRESS = 'temp-tutor-addr-absent';
+    await withTempTutors(
+      [
+        tutorDoc({
+          uid: WITH_ADDRESS, status: 'active', searchable: true, enrollmentComplete: true,
+          address: makeAddress(48.8566, 2.3522),
+        }),
+        tutorDoc({
+          uid: NO_ADDRESS, status: 'active', searchable: true, enrollmentComplete: true,
+          address: null,
+        }),
+      ],
+      async () => {
+        const results = await search();
+        const withAddr = results.find((r) => r.uid === WITH_ADDRESS)!;
+        const noAddr = results.find((r) => r.uid === NO_ADDRESS)!;
+        expect(withAddr).toBeDefined();
+        expect(noAddr).toBeDefined();
+        expect(noAddr.addressDistance).toBeNull();
+        expect(results.indexOf(withAddr)).toBeLessThan(results.indexOf(noAddr));
+      },
+    );
+  });
+
+  it('projects addressDistance but NEVER address, lat, or lng', async () => {
+    const uid = 'temp-tutor-projection';
+    await withTempTutors(
+      [
+        tutorDoc({
+          uid, status: 'active', searchable: true, enrollmentComplete: true,
+          address: makeAddress(48.8566, 2.3522),
+        }),
+      ],
+      async () => {
+        const results = await search();
+        const row = results.find((r) => r.uid === uid) as unknown as Record<string, unknown>;
+        expect(row).toBeDefined();
+        expect(typeof row.addressDistance).toBe('number');
+        expect(row.address).toBeUndefined();
+        expect(row.lat).toBeUndefined();
+        expect(row.lng).toBeUndefined();
+        // Full key-set pin: a future field leak (e.g. `address`) fails here.
+        for (const key of Object.keys(row)) {
+          expect(TUTOR_RESULT_KEYS.has(key)).toBe(true);
+        }
+      },
+    );
   });
 });
