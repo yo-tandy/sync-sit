@@ -12,6 +12,7 @@ import { resolveEffectiveLocations } from '@ejm/study-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 const SLOT_MINUTES = 15;
 
@@ -31,7 +32,7 @@ const SLOT_MINUTES = 15;
  * by the family at accept. No override, no instances: a proposal is a proposal.
  */
 export const proposeSession = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

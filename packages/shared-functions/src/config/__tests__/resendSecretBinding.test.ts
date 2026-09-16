@@ -21,6 +21,14 @@ import { join, dirname, resolve, relative } from 'path';
  * Deliberately a source-graph test, not a runtime one: the binding only has an
  * effect at DEPLOY time, so there is no runtime behaviour to assert. The thing
  * that can drift is the declaration, and that is what this reads.
+ *
+ * FILE-GRANULAR, on purpose. Importing anything from a file that owns the
+ * mailer counts as reaching it — `config/push.ts` pulls three URL constants
+ * from `config/email.ts` and so every push-sending function is in the set
+ * too, mail or no mail. The two failure modes are not symmetric: over-binding
+ * mounts a secret a function never reads; under-binding is #497 again. So
+ * the walk errs coarse, and the fix for a false positive is to bind, not to
+ * teach the walk about symbols.
  */
 
 const ROOTS = [
@@ -54,23 +62,104 @@ const MAIL =
 /** Defines something Firebase actually deploys (and so can carry `secrets`). */
 const DEPLOYED = /\b(onCall|onSchedule|onDocument\w+|onObjectFinalized|onRequest)\s*\(/;
 
+/** Where `@ejm/shared-functions/<sub>.js` and the bare barrel resolve to. */
+const SHARED_SRC = 'packages/shared-functions/src';
+
+function toTs(p: string): string {
+  return p.replace(/\.js$/, '.ts');
+}
+
+const IDENT = /^[A-Za-z_$][\w$]*$/;
+
+/** Names inside an import/export `{ … }` clause: comments stripped, `type` and `as` handled. */
+function namesIn(clause: string, side: 'local' | 'exported'): string[] {
+  return clause
+    .replace(/\/\/[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split(',')
+    .map((raw) => {
+      const parts = raw.trim().replace(/^type\s+/, '').split(/\s+as\s+/);
+      return side === 'exported' ? parts[parts.length - 1] : parts[0];
+    })
+    .filter((n) => IDENT.test(n));
+}
+
+/**
+ * The barrel's export map: which source file each name re-exported from
+ * `packages/shared-functions/src/index.ts` actually lives in. A deployed
+ * function that does `import { SIT_APP_URL } from '@ejm/shared-functions'`
+ * is one hop from `config/email.ts` — the file that owns the mailer — and
+ * the walk has to see that hop, or the bare-barrel importers fall into the
+ * same blind spot the package-absolute ones did (review on #501).
+ */
+function parseBarrel(index: string): { named: Map<string, string>; star: string[] } {
+  const named = new Map<string, string>();
+  const star: string[] = [];
+  for (const m of index.matchAll(/export\s+\*\s+from\s+'(\.[^']+)'/g)) {
+    star.push(`${SHARED_SRC}/${toTs(m[1].replace(/^\.\//, ''))}`);
+  }
+  for (const m of index.matchAll(/export\s+(?:type\s+)?\{([^}]*)\}\s+from\s+'(\.[^']+)'/g)) {
+    const file = `${SHARED_SRC}/${toTs(m[2].replace(/^\.\//, ''))}`;
+    for (const name of namesIn(m[1], 'exported')) named.set(name, file);
+  }
+  return { named, star };
+}
+
 describe('RESEND_API_KEY secret binding (#497)', () => {
   const files = ROOTS.flatMap(tsFiles);
   const src = new Map(files.map((f) => [f, readFileSync(join(REPO, f), 'utf8')]));
+  const barrel = parseBarrel(src.get(`${SHARED_SRC}/index.ts`)!);
 
-  // Transitive closure over relative imports: a function that calls a notify
-  // helper needs the key just as much as one that calls the mailer itself.
+  /** The star-exported barrel files that define `name` (all of them if none visibly does). */
+  function starFilesDefining(name: string): string[] {
+    const defines = new RegExp(
+      `export\\s+(?:async\\s+)?(?:const|let|function|class|type|interface|enum)\\s+${name}\\b|export\\s*\\{[^}]*\\b${name}\\b`,
+    );
+    const hits = barrel.star.filter((f) => src.has(f) && defines.test(src.get(f)!));
+    return hits.length > 0 ? hits : barrel.star;
+  }
+
+  /**
+   * Every file `clause from 'spec'` in `f` can pull code from. Three shapes,
+   * and the walk must follow all three (the first version followed only the
+   * first — review on #501 found five functions hiding behind the other two):
+   *   - `./x.js`                              relative, incl. `export * from` shims
+   *   - `@ejm/shared-functions/config/x.js`   package-absolute subpath
+   *   - `@ejm/shared-functions`               the barrel, resolved per imported name
+   * Other packages (`@ejm/shared-core`, …) own no mailer and are not followed.
+   */
+  function depsOf(f: string): string[] {
+    const out: string[] = [];
+    for (const m of src.get(f)!.matchAll(/(?:import|export)\s+([^;]*?)\s+from\s+'([^']+)'/g)) {
+      const [, clause, spec] = m;
+      if (spec.startsWith('.')) {
+        out.push(toTs(relative(REPO, resolve(dirname(join(REPO, f)), spec))));
+      } else if (spec.startsWith('@ejm/shared-functions/')) {
+        out.push(`${SHARED_SRC}/${toTs(spec.slice('@ejm/shared-functions/'.length))}`);
+      } else if (spec === '@ejm/shared-functions') {
+        const names = clause.match(/\{([^}]*)\}/);
+        if (!names) {
+          // `import * as sf` or a default: could be anything the barrel exports.
+          out.push(...barrel.named.values(), ...barrel.star);
+          continue;
+        }
+        for (const name of namesIn(names[1], 'local')) {
+          const known = barrel.named.get(name);
+          out.push(...(known ? [known] : starFilesDefining(name)));
+        }
+      }
+    }
+    return out.filter((p) => src.has(p));
+  }
+
+  // Transitive closure: a function that calls a notify helper needs the key
+  // just as much as one that calls the mailer itself.
   const reaches = new Set(files.filter((f) => MAIL.test(src.get(f)!)));
   for (let changed = true; changed; ) {
     changed = false;
     for (const f of files) {
       if (reaches.has(f)) continue;
-      const deps = [...src.get(f)!.matchAll(/from\s+'(\.[^']+)'/g)]
-        .map((m) =>
-          relative(REPO, resolve(dirname(join(REPO, f)), m[1])).replace(/\.js$/, '.ts'),
-        )
-        .filter((p) => src.has(p));
-      if (deps.some((d) => reaches.has(d))) {
+      if (depsOf(f).some((d) => reaches.has(d))) {
         reaches.add(f);
         changed = true;
       }
@@ -85,6 +174,21 @@ describe('RESEND_API_KEY secret binding (#497)', () => {
     expect(needsSecret.length).toBeGreaterThan(30);
     expect(needsSecret).toContain('packages/shared-functions/src/verification/submitVerification.ts');
     expect(needsSecret).toContain('apps/study-functions/src/sessions/bookSession.ts');
+  });
+
+  it('follows package-absolute specifiers, re-export shims and bare-barrel names, not only relative imports', () => {
+    // Each of these reaches the mailer ONLY through the import shape named --
+    // the five the first walker missed (review on #501), grouped by cause.
+    // package-absolute: `from '@ejm/shared-functions/config/notifyParents.js'`
+    expect(needsSecret).toContain('apps/study-functions/src/sessions/proposeSession.ts');
+    expect(needsSecret).toContain('apps/study-functions/src/scheduled/extendRecurring.ts');
+    expect(needsSecret).toContain('apps/study-functions/src/contact/respondToTutorContactRequest.ts');
+    expect(needsSecret).toContain('apps/study-functions/src/contact/sendFamilyContactRequest.ts');
+    // shim: `../config/notifyParents.js` -> `export * from '@ejm/shared-functions/...'`
+    expect(needsSecret).toContain('apps/functions/src/search/contactPublishedSearch.ts');
+    // bare barrel: `import { SIT_APP_URL } from '@ejm/shared-functions'` lands in config/email.ts
+    expect(barrel.star).toContain(`${SHARED_SRC}/config/email.ts`);
+    expect(starFilesDefining('SIT_APP_URL')).toEqual([`${SHARED_SRC}/config/email.ts`]);
   });
 
   it('every deployed function that can reach the mailer declares the secret', () => {

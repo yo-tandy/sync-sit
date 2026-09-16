@@ -12,6 +12,7 @@ import {
 import type { StudyUser } from '@ejm/study-core';
 import { getContact } from '@ejm/shared-core';
 import { respondTutorContactRequestSchema } from '../validation/contact.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * The acceptance email's contact block. Canonical root ?? nested resolution
@@ -29,7 +30,7 @@ export function buildTutorContactBlock(tutorUser: StudyUser | undefined): string
 }
 
 export const respondToTutorContactRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
