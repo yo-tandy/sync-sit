@@ -4,6 +4,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { verifyAdmin } from '../admin/verifyAdmin.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { notifyVerificationRejected } from './notifyVerificationRejected.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 const MAX_REJECTION_REASON_LENGTH = 1000;
 
@@ -14,7 +15,9 @@ interface ReviewInput {
 }
 
 export const reviewVerification = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  // Reaches the mailer since #496 (the rejection notice); bound per #501's
+  // rule -- its tripwire flags this function on main without it.
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
