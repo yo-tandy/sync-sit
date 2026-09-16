@@ -259,3 +259,113 @@ describe('buildRestoredOverride', () => {
     expect(doc.sessionBlocks).toEqual([{ appointmentId: 'apt-1', startIdx: 64, endIdx: 68 }]);
   });
 });
+
+// ── Issue #510: overnight claims ──────────────────────────────────────────
+// A sit appointment running 22:00 -> 02:00 arrives here as block
+// { start: 88, end: 8 }. The old `for (i = block.start; i < block.end; i++)`
+// ran ZERO times, so the claim wrote no slots and appended a ledger entry
+// describing a block that was never applied: the babysitter stayed bookable
+// for the exact hours they had just committed to, and a second family could
+// confirm on top. The wrap is day-local (88..95 then 0..7 of the SAME date's
+// doc) because that is how DayEditor writes an overnight availability range.
+
+/** A weekly grid open 22:00–02:00 the way DayEditor writes it: 88..95 + 0..7. */
+function overnightGrid(): boolean[] {
+  const g = new Array(96).fill(false);
+  for (let i = 88; i < 96; i++) g[i] = true;
+  for (let i = 0; i < 8; i++) g[i] = true;
+  return g;
+}
+
+describe('overnight blocks (issue #510)', () => {
+  it('an overnight claim actually blocks BOTH halves of the range', () => {
+    const entry: SessionBlockEntry = { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 };
+    const doc = buildMergedOverride({
+      existing: null,
+      date: '2027-06-07',
+      weeklySlots: overnightGrid(),
+      block: { start: 88, end: 8 },
+      entry,
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    const slots = doc.slots as boolean[];
+    // Evening half.
+    expect(slots[88]).toBe(false);
+    expect(slots[95]).toBe(false);
+    // Small-hours half — the half the old loop never reached.
+    expect(slots[0]).toBe(false);
+    expect(slots[7]).toBe(false);
+    // Nothing outside the claim was touched: 8..87 were already closed.
+    expect(slots.filter((v) => v === true)).toHaveLength(0);
+  });
+
+  it('does NOT claim the 8..87 gap the wrap skips over', () => {
+    // The wrap must not be read as "88 through 8 the long way round".
+    const open = new Array(96).fill(true);
+    const doc = buildMergedOverride({
+      existing: null,
+      date: '2027-06-07',
+      weeklySlots: open,
+      block: { start: 88, end: 8 },
+      entry: { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 },
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    const slots = doc.slots as boolean[];
+    expect(slots[8]).toBe(true);
+    expect(slots[87]).toBe(true);
+    expect(slots.filter((v) => v === false)).toHaveLength(16);
+  });
+
+  it('cancelling an overnight claim restores BOTH halves', () => {
+    const entry: SessionBlockEntry = { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 };
+    const claimed = buildMergedOverride({
+      existing: null,
+      date: '2027-06-07',
+      weeklySlots: overnightGrid(),
+      block: { start: 88, end: 8 },
+      entry,
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    const restored = buildRestoredOverride({
+      existing: claimed,
+      matches: (b) => b.appointmentId === 'apt-night',
+      weeklySlots: overnightGrid(),
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    // Ledger empty and the slots are exactly the weekly grid again → the doc
+    // is deleted. That equality is only reachable if the restore walked the
+    // wrap too; a half-restore would leave a residual and force a 'set'.
+    expect(restored.action).toBe('delete');
+  });
+
+  it('a REMAINING overnight claim keeps its slots shut when another is cancelled', () => {
+    // The coverage predicate has to wrap as well: cancelling the 22:00-23:00
+    // claim must not reopen 00:00-02:00, which the overnight claim still holds.
+    const evening: SessionBlockEntry = { appointmentId: 'apt-eve', startIdx: 88, endIdx: 92 };
+    const night: SessionBlockEntry = { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 };
+    const existing = {
+      date: '2027-06-07',
+      type: 'custom',
+      slots: new Array(96).fill(false).map((_, i) => (i >= 8 && i < 88 ? false : false)),
+      sessionBlocks: [evening, night],
+      appSource: 'sit',
+      reason: 'appointment',
+    };
+    const restored = buildRestoredOverride({
+      existing,
+      matches: (b) => b.appointmentId === 'apt-eve',
+      weeklySlots: overnightGrid(),
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    expect(restored.action).toBe('set');
+    const slots = (restored as { doc: Record<string, unknown> }).doc.slots as boolean[];
+    // Every slot the overnight claim covers stays blocked, on BOTH sides of
+    // midnight — 0..7 is the side an unwrapped predicate would have reopened.
+    for (const i of [88, 91, 95, 0, 7]) expect(slots[i]).toBe(false);
+  });
+});

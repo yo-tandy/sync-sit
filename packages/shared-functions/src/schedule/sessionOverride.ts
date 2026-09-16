@@ -16,6 +16,8 @@
  * implementation prevents the two apps' claim paths from drifting.
  */
 
+import { slotRangeIndices, slotRangeCovers } from '@ejm/shared-core';
+
 const SLOTS_PER_DAY = 96;
 
 /**
@@ -76,7 +78,12 @@ export function buildMergedOverride(args: {
     baseSlots = new Array(SLOTS_PER_DAY);
     for (let i = 0; i < SLOTS_PER_DAY; i++) baseSlots[i] = weeklySlots[i] ?? false;
   }
-  for (let i = block.start; i < block.end; i++) baseSlots[i] = false;
+  // Overnight blocks WRAP (issue #510): a 22:00-02:00 appointment claims
+  // 88..95 then 0..7 of this date's doc — the same day-local convention
+  // DayEditor writes availability with. The old `i < block.end` loop ran zero
+  // times for those, so an accepted overnight booking claimed NOTHING and the
+  // babysitter stayed bookable for the very hours they had just committed to.
+  for (const i of slotRangeIndices(block.start, block.end)) baseSlots[i] = false;
 
   const priorBlocks = Array.isArray(existing?.sessionBlocks)
     ? (existing!.sessionBlocks as unknown[])
@@ -177,10 +184,13 @@ export function buildRestoredOverride(args: {
   const slots = Array.isArray(existing.slots)
     ? [...(existing.slots as boolean[])]
     : new Array(SLOTS_PER_DAY).fill(false);
+  // Both the walk and the coverage predicate use the SAME wrap rule as the
+  // claim above — an overnight claim must restore exactly the slots it took,
+  // and an overnight REMAINING entry must still hold its slots shut.
   const coveredByRemaining = (i: number) =>
-    remaining.some((b) => i >= b.startIdx && i < b.endIdx);
+    remaining.some((b) => slotRangeCovers(i, b.startIdx, b.endIdx));
   for (const r of removed) {
-    for (let i = r.startIdx; i < r.endIdx; i++) {
+    for (const i of slotRangeIndices(r.startIdx, r.endIdx)) {
       if ((weeklySlots[i] ?? false) && !coveredByRemaining(i)) slots[i] = true;
     }
   }

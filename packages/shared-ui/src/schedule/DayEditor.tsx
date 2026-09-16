@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dialog, Button, Select } from '../components/index.js';
-import { createEmptySlots, setSlotRange, slotIndexToTime, timeToSlotIndex } from '@ejm/shared-core';
+import { createEmptySlots, setSlotRange, slotIndexToTime, timeRangeSlotIndices } from '@ejm/shared-core';
 import type { DayOfWeek } from '@ejm/shared-core';
 import {
   rangeTagSelection,
@@ -92,24 +92,13 @@ function slotsToRanges(slots: boolean[]): TimeRange[] {
   return ranges;
 }
 
-// Handle wrapping: if start >= end (e.g. 18:00 → 00:00), we need to handle
-// the slot range that wraps past midnight
+// The past-midnight wrap (18:00 → 00:00, 22:00 → 02:00) now lives in
+// `setSlotRange` itself: this file's hand-rolled version was the ONLY correct
+// implementation in the repo, and every reader of what it wrote got the range
+// wrong (issue #510). Lifting it into shared-core is what let the readers agree
+// with this writer; the thin wrapper stays for the call sites' naming.
 function addWrappingRange(slots: boolean[], start: string, end: string, value: boolean): boolean[] {
-  let result = [...slots];
-  const startIdx = timeToSlotIndex(start);
-  const endIdx = timeToSlotIndex(end);
-
-  if (startIdx < endIdx) {
-    // Normal range (e.g. 08:00 – 12:00)
-    result = setSlotRange(result, start, end, value);
-  } else {
-    // Wrapping range (e.g. 22:00 – 02:00)
-    // First part: start → midnight (slot 96 = end of day)
-    for (let i = startIdx; i < 96; i++) result[i] = value;
-    // Second part: midnight → end
-    for (let i = 0; i < endIdx; i++) result[i] = value;
-  }
-  return result;
+  return setSlotRange(slots, start, end, value);
 }
 
 function removeWrappingRange(slots: boolean[], start: string, end: string): boolean[] {
@@ -119,16 +108,7 @@ function removeWrappingRange(slots: boolean[], start: string, end: string): bool
 // The slot indices a display range covers, handling the past-midnight wrap
 // (e.g. 22:00 - 02:00 covers 88..95 then 0..7).
 function rangeSlotIndices(start: string, end: string): number[] {
-  const startIdx = timeToSlotIndex(start);
-  const endIdx = timeToSlotIndex(end);
-  const idxs: number[] = [];
-  if (startIdx < endIdx) {
-    for (let i = startIdx; i < endIdx; i++) idxs.push(i);
-  } else {
-    for (let i = startIdx; i < 96; i++) idxs.push(i);
-    for (let i = 0; i < endIdx; i++) idxs.push(i);
-  }
-  return idxs;
+  return timeRangeSlotIndices(start, end);
 }
 
 export function DayEditor({ day, slots: initialSlots, open, onClose, onSave, locationTags }: DayEditorProps) {

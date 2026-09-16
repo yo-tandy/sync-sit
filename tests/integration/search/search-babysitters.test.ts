@@ -473,6 +473,128 @@ describe('searchBabysitters distance tie-break & projection (issue #439)', () =>
   });
 });
 
+// ── Issue #510: overnight searches ────────────────────────────────────────
+// The parent's picker offers end times of 00:00-02:00 labelled "(following
+// day)", and publishSearch has always understood that shape. The availability
+// filter did not: it walked the range as `for (i = startIdx; i < endIdx; i++)`,
+// which for 22:00-02:00 is `i = 88; i < 8` — zero iterations, `available` left
+// true, so EVERY babysitter passed the schedule check no matter what their
+// grid said. These tests are the end-to-end form of that.
+describe('searchBabysitters overnight availability (issue #510)', () => {
+  let seed: SeedData;
+  let parentToken: string;
+
+  const FAMILY_LATLNG = { lat: 48.8566, lng: 2.2769 };
+  // Available 20:00-23:00 Saturday only — covers the start of an overnight
+  // sitting but not midnight onward.
+  const EVENING_ONLY = 'temp-bs-evening-only';
+  // Available 20:00-24:00 AND 00:00-02:00 Saturday, exactly as DayEditor
+  // writes an overnight range: 80..95 plus 0..8 in the SAME day array.
+  const OVERNIGHT = 'temp-bs-overnight';
+
+  function babysitterDoc(uid: string): Record<string, unknown> {
+    return {
+      uid,
+      email: `${uid}@ejm-test.org`,
+      status: 'active',
+      firstName: 'Night', lastName: 'Sitter',
+      dateOfBirth: new Date('2007-01-01'),
+      profiles: { babysitter: {
+        enrollmentComplete: true, ejemEmail: `${uid}@ejm-test.org`, searchable: true,
+        effectiveSearchable: true,
+        gender: 'female', classLevel: 'Terminale', languages: ['French'],
+        kidAgeRange: { min: 0, max: 18 }, maxKids: 3, hourlyRate: 12,
+        contactEmail: `${uid}@ejm-test.org`,
+        areaMode: 'distance', areaLatLng: FAMILY_LATLNG, areaRadiusKm: 20,
+      } },
+      fcmTokens: [], language: 'fr',
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+  }
+
+  function slots(ranges: [number, number][]): boolean[] {
+    const g = new Array(96).fill(false);
+    for (const [from, to] of ranges) for (let i = from; i < to; i++) g[i] = true;
+    return g;
+  }
+
+  async function searchAt(startTime: string, endTime: string): Promise<string[]> {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: getNextSaturday(),
+        startTime,
+        endTime,
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: FAMILY_LATLNG,
+        filters: {},
+      },
+      parentToken,
+    );
+    return result.results.map((r) => r.uid);
+  }
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+
+    for (const uid of [EVENING_ONLY, OVERNIGHT]) {
+      await getDb().collection('users').doc(uid).set(babysitterDoc(uid));
+    }
+    // 20:00-23:00 (slots 80..91).
+    await getDb().collection('schedules').doc(EVENING_ONLY).set({
+      weekly: { sat: slots([[80, 92]]) },
+    });
+    // 20:00-24:00 + 00:00-02:00 (slots 80..95 and 0..7) — the wrap.
+    await getDb().collection('schedules').doc(OVERNIGHT).set({
+      weekly: { sat: slots([[80, 96], [0, 8]]) },
+    });
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('CONTROL: a plain evening search returns both sitters', async () => {
+    // Proves the fixtures are visible and the filter is not simply rejecting
+    // everything — without this the two tests below would pass trivially.
+    const uids = await searchAt('20:00', '22:00');
+    expect(uids).toContain(EVENING_ONLY);
+    expect(uids).toContain(OVERNIGHT);
+  });
+
+  it('excludes a sitter who is NOT available past midnight', async () => {
+    // The whole bug: pre-fix this sitter came back as available for a sitting
+    // that runs three hours past the end of their grid.
+    const uids = await searchAt('22:00', '02:00');
+    expect(uids).not.toContain(EVENING_ONLY);
+  });
+
+  it('includes a sitter whose grid DOES cover both sides of midnight', async () => {
+    const uids = await searchAt('22:00', '02:00');
+    expect(uids).toContain(OVERNIGHT);
+  });
+
+  it('excludes every seeded babysitter too — none of them work past 23:00', async () => {
+    // The seeded fixtures end at 23:00 at the latest, so an overnight search
+    // must return ONLY the purpose-built overnight sitter. Pre-fix it returned
+    // the entire searchable roster.
+    const uids = await searchAt('22:00', '02:00');
+    expect(uids).toEqual([OVERNIGHT]);
+  });
+
+  it('an end time of 00:00 means midnight, not an empty range', async () => {
+    // 18:00-00:00 is the other everyday wrap shape: endIdx 0 made the old
+    // loop vacuous in exactly the same way.
+    const uids = await searchAt('22:00', '00:00');
+    expect(uids).toContain(OVERNIGHT);
+    expect(uids).not.toContain(EVENING_ONLY);
+  });
+});
+
 function getNextSaturday(): string {
   const d = new Date();
   d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
