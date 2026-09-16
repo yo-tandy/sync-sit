@@ -4,3 +4,5 @@ export { StepEmail } from './StepEmail.js';
 export { StepBasicInfo, type BasicInfoData } from './StepBasicInfo.js';
 export { StepContactInfo, type ContactInfoData } from './StepContactInfo.js';
 export { StepAdditionalInfo, type AdditionalInfoData } from './StepAdditionalInfo.js';
+export { StepParentEmail } from './StepParentEmail.js';
+export { StepFamilyInfo, type FamilyFormData } from './StepFamilyInfo.js';

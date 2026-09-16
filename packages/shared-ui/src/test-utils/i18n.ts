@@ -90,6 +90,29 @@ export function createTestI18n(): i18n {
             genderMale: 'Male',
             genderOther: 'Other',
             genderPreferNot: 'Prefer not to say',
+            // Shared parent wizard steps (issue #440, PR1). Same copy as the
+            // apps' `enrollment.*` blocks; the four keys marked NEW land in
+            // each app's en.ts when its orchestrator is rewired (PR2/PR3).
+            yourAccount: 'Your account',
+            yourAccountDesc: "Enter your email address. We'll send a code to verify it.",
+            emailLabel: 'Email address *',
+            yourFamily: 'Your family',
+            yourFamilyDesc: 'Tell us about your family.',
+            familyName: 'Family name *',
+            parentLastName: 'Last name', // NEW in sit
+            firstName: 'First name *',
+            familyAddressLabel: 'Address *', // NEW in both
+            pets: 'Pets',
+            petsHint: 'e.g. Cat, small dog', // NEW in sit
+            completeSignup: 'Complete sign-up', // NEW in sit
+          },
+          auth: {
+            sending: 'Sending...',
+            sendCode: 'Send verification code',
+            creatingAccount: 'Creating account...',
+          },
+          validation: {
+            validEmail: 'Enter a valid email address',
           },
           unifiedEnrollment: {
             landingTitle: 'Join the Sync community',
