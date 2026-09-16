@@ -7,3 +7,4 @@ export * from './lib/index.js';
 export * from './pages/index.js';
 export * from './utils/index.js';
 export * from './family/index.js';
+export * from './i18n/userLanguage.js';

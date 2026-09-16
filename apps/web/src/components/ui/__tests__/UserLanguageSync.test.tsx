@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, cleanup, act } from '@testing-library/react';
 import { I18nextProvider } from 'react-i18next';
+import { emitUserLanguageChange } from '@ejm/shared-ui';
 
 const h = vi.hoisted(() => ({
   updateDoc: vi.fn(() => Promise.resolve()),
@@ -37,13 +38,13 @@ beforeEach(async () => {
 });
 
 describe('UserLanguageSync', () => {
-  it('writes { language, updatedAt } to the signed-in user\'s own doc when the UI language changes (issue #512)', async () => {
+  it("writes { language, updatedAt } to the signed-in user's own doc on an explicit language pick (issue #512)", async () => {
     h.state = { firebaseUser: { uid: 'u1' } };
     renderSync();
     expect(h.updateDoc).not.toHaveBeenCalled(); // never on mount
 
     await act(async () => {
-      await i18n.changeLanguage('fr');
+      emitUserLanguageChange('fr');
     });
     expect(h.updateDoc).toHaveBeenCalledTimes(1);
     expect(h.updateDoc).toHaveBeenCalledWith(
@@ -52,10 +53,19 @@ describe('UserLanguageSync', () => {
     );
   });
 
-  it('writes nothing while signed out', async () => {
+  it('a PROGRAMMATIC i18n switch (HandoffPage applying a minted lang, bootstrap) writes nothing — it cannot be attributed to this session', async () => {
+    h.state = { firebaseUser: { uid: 'someone-else-still-signed-in' } };
     renderSync();
     await act(async () => {
       await i18n.changeLanguage('fr');
+    });
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing while signed out', async () => {
+    renderSync();
+    await act(async () => {
+      emitUserLanguageChange('fr');
     });
     expect(h.updateDoc).not.toHaveBeenCalled();
   });
