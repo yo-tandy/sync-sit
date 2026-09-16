@@ -20,7 +20,7 @@ import { DO_ENDORSEMENT_TEXT_MIN } from '@ejm/do-core';
 
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
-  error: null as { code?: string; details?: { reason?: string } } | null,
+  error: null as { code?: string; details?: { reason?: string; code?: string; retryAt?: string } } | null,
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -137,5 +137,23 @@ describe('EndorseDoerDialog', () => {
       expect(screen.getByText(/Could not send the endorsement/)).toBeInTheDocument(),
     );
     expect(screen.getByRole('button', { name: 'Send endorsement' })).toBeEnabled();
+  });
+
+  // Issue #356: a decline is not final — the server refuses with a
+  // failed-precondition carrying the cool-down retry date in `details`.
+  it('maps the cool-down refusal to its own message with the retry date, and does NOT settle the caller', async () => {
+    h.error = {
+      code: 'functions/failed-precondition',
+      details: { code: 'endorsement/cooldown', retryAt: '2026-10-11T00:00:00.000Z' },
+    };
+    const { onEndorsed } = render();
+    fillBody(GOOD_TEXT);
+    fireEvent.click(screen.getByRole('button', { name: 'Send endorsement' }));
+    await waitFor(() =>
+      expect(screen.getByText(/declined.*ask again.*october.*2026/i)).toBeInTheDocument(),
+    );
+    // Not endorsed yet — the family can still succeed after the cool-down, so
+    // the row must not settle the way already-exists does.
+    expect(onEndorsed).not.toHaveBeenCalled();
   });
 });
