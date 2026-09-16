@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS, getClassLevel } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, getClassLevel } from '@ejm/shared-core';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -222,7 +222,7 @@ export function BabysitterEnrollment() {
             onSubmit={async (password, consentVersion) => {
               await handleCreateAccount(password, consentVersion);
             }}
-            consentVersion="1.0"
+            consentVersion={CONSENT_VERSION}
             loading={loading}
             error={error}
           />

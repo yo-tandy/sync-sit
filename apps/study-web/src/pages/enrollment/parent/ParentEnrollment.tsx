@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasFamilyMembership } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { TopNav, StepIndicator, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
-import { hasFamilyMembership } from '@ejm/shared-core';
 import { getStudyRole } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
@@ -39,8 +38,8 @@ interface EnrollFamilyInput {
   pets?: string;
   note?: string;
   kids: { firstName: string; age: number; languages: string[] }[];
-  // Consent-document version the consent step presented (issue #178) — study
-  // sends its own '2025-12-01' so the record matches the terms actually shown.
+  // Consent-document version the consent step presented (issue #178) — every
+  // app now sends the shared CONSENT_VERSION (issue #415 decision 2).
   consentVersion?: string;
 }
 
@@ -359,7 +358,7 @@ export function ParentEnrollment() {
             onSubmit={async (pw, consent) => {
               handlePasswordNext(pw, consent);
             }}
-            consentVersion="2025-12-01"
+            consentVersion={CONSENT_VERSION}
             loading={loading}
             error={error}
           />

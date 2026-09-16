@@ -1,6 +1,26 @@
 import { z } from 'zod';
 import { LYCEE_CLASS_LEVELS } from '../constants/classLevels.js';
 
+// ── Consent-version shape (issue #415 decision 2) ──
+//
+// A consent version is a LABEL for a legal document's text, not a value this
+// schema can validate against a live constant (that comparison belongs to
+// requireCurrentConsent, and only for the guardian/kid-invite flow — see
+// CONSENT_VERSION / CONSENT_VERSIONS in constants/config.ts). What this
+// validates is only the SHAPE: either the dotted scheme the constants use
+// today ('1.0') or a YYYY-MM-DD dated scheme a past or future version might
+// use. Deliberately not an allowlist/enum — that pinned '1.0' and
+// '2025-12-01' and rejected everything else, including do's already-shipped
+// '2026-08-28'. A shape check instead means:
+//  - already-stored values ('2025-12-01', '2026-08-28') stay valid forever,
+//    because the audit trail (stored consentVersion) is never rewritten, and
+//  - a future version bump (dated or dotted) never needs an enum edit here.
+const CONSENT_VERSION_SHAPE = /^(?:\d+\.\d+|\d{4}-\d{2}-\d{2})$/;
+
+export const consentVersionSchema = z
+  .string()
+  .regex(CONSENT_VERSION_SHAPE, 'Invalid consent version');
+
 // ── Password Validation ──
 
 export const strongPasswordSchema = z
@@ -42,14 +62,13 @@ export const familyEnrollmentSchema = z.object({
   pets: z.string().optional(),
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),
-  // Consent-document version the enrolling client presented (issue #178:
-  // study's wizard shows '2025-12-01', sit's shows '1.0'). ALLOWLIST, not a
-  // free string — this lands verbatim in the canonical consent record, so
-  // only versions of terms that actually shipped are acceptable. When terms
-  // are re-versioned, add the new version here. Optional — legacy sit
-  // clients send nothing and the server defaults to '1.0', keeping their
-  // behavior byte-identical.
-  consentVersion: z.enum(['1.0', '2025-12-01']).optional(),
+  // Consent-document version the enrolling client presented (issue #178,
+  // reconciled onto one shared value by issue #415 decision 2 — every client
+  // now sends CONSENT_VERSION from `@ejm/shared-core`). Shape-validated, not
+  // an allowlist — see CONSENT_VERSION_SHAPE above. Optional — legacy sit
+  // clients send nothing and the server defaults to CONSENT_VERSION, keeping
+  // their behavior byte-identical.
+  consentVersion: consentVersionSchema.optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but
@@ -97,7 +116,7 @@ export const studentIdentityEnrollmentSchema = z.object({
   ejemEmail: z.string().email('Please enter a valid email'),
   verificationCode: z.string().min(1, 'Verification code is required'),
   password: strongPasswordSchema,
-  consentVersion: z.string().min(1, 'Consent is required'),
+  consentVersion: consentVersionSchema,
   firstName: z.string().min(1, 'First name is required'),
   lastName: z.string().min(1, 'Last name is required'),
   // "YYYY-MM-DD", matching the classic wizards' wire format.

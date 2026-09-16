@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { getEjemEmail } from '@ejm/shared-core';
+import { CONSENT_VERSION, getEjemEmail } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import {
   APP_NAME,
@@ -22,9 +22,6 @@ import { Spinner } from '@/components/ui';
 import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
-
-// Same consent version the classic sit wizard passes to StepPassword.
-const CONSENT_VERSION = '1.0';
 
 type SwitchingApp = 'sit' | 'study' | null;
 

@@ -12,7 +12,7 @@ import {
   enrollmentErrorReason,
   ageGateErrorCode,
 } from '@ejm/shared-ui';
-import { ADMIN_CONFIG_DEFS, hasAnyContact, type User } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasAnyContact, type User } from '@ejm/shared-core';
 import { getDoerProfile, type TaskCategory } from '@ejm/do-core';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -23,10 +23,6 @@ import { StepProfile } from './StepProfile';
 import type { ProfileData } from './StepProfile';
 import { StepDoerDetails } from './StepDoerDetails';
 import type { DoerDetailsData } from './StepDoerDetails';
-
-/** Version of the sync-do terms the consent tick accepts (recorded by
- * doEnrollDoer as consentAt/consentVersion, plan §11.4). */
-const CONSENT_VERSION = '2026-08-28';
 
 type StepId = 'email' | 'verify' | 'consent' | 'profile' | 'details';
 

@@ -5,7 +5,7 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import {
   StepEmail,
@@ -25,10 +25,6 @@ import { auth, db, functions, storage } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
 import { TopNav, StepIndicator } from '@/components/ui';
-
-// Same consent version sit's classic wizard passes to StepPassword — the
-// unified flow's account creation happens on sync-sit.com, same convention.
-const CONSENT_VERSION = '1.0';
 
 // Steps: 0=Email, 1=Verify, 2=Password+consent, 3=BasicInfo, 4=ContactInfo,
 // 5=AdditionalInfo (submitting step — creates the account).

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { getEjemEmail, isBabysitter } from '@ejm/shared-core';
+import { CONSENT_VERSION, getEjemEmail, isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
 import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { Button, Card, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
@@ -11,9 +11,6 @@ import { useAuthStore } from '@/stores/authStore';
 import { crossAppTutorGaps, hasCrossAppTutorGaps, postLoginRouter } from '@/utils/postLoginRouter';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
-
-// Same consent version the classic wizard passes to StepPassword.
-const CONSENT_VERSION = '2025-12-01';
 
 /**
  * `/tutor/welcome-crossapp` (issue #435 milestone, PR4) — a generic
