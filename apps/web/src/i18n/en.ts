@@ -390,6 +390,19 @@ export default {
     deleteErrorLastAdmin: "You're the last admin. Appoint another admin before deleting your account.",
     deleteErrorReauth: 'For your security, please sign in again before deleting your account.',
   },
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: "We've updated our terms",
+    body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+    agreePrefix: 'I have read and accept the',
+    terms: 'Terms of Service',
+    and: 'and the',
+    privacy: 'Privacy Policy',
+    accept: 'Accept and continue',
+    staleClient: 'This app is out of date. Reload the page and try again.',
+    signOut: 'Sign out instead',
+  },
   accountDeleted: {
     title: 'Your account has been deleted',
     body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',

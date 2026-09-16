@@ -40,6 +40,7 @@ export {
   redeemAppHandoffCode,
   // Self-serve account deletion (issue #368) — same erasure as the admin path
   deleteMyAccount,
+  acknowledgeConsent,
   // Server-side projection for cross-app `references` reads (issue #346).
   // Deployed once from this codebase — same GCP project as study/do, so
   // study-web and do-web call it the same way they call

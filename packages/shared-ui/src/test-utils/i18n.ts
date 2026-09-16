@@ -68,6 +68,18 @@ export function createTestI18n(): i18n {
             body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',
             backHome: 'Go to the homepage',
           },
+          // #488 -- the re-consent gate's copy, identical in all three apps' en.ts.
+          consentGate: {
+            title: "We've updated our terms",
+            body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+            agreePrefix: 'I have read and accept the',
+            terms: 'Terms of Service',
+            and: 'and the',
+            privacy: 'Privacy Policy',
+            accept: 'Accept and continue',
+            staleClient: 'This app is out of date. Reload the page and try again.',
+            signOut: 'Sign out instead',
+          },
           // GENDER_OPTIONS (from @ejm/shared-core, added on PR1) hardcodes
           // its labelKeys as `enrollment.genderFemale` etc. -- the SAME keys
           // sit's/study's existing per-role StepProfile already reads. This

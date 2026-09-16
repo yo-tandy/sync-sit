@@ -13,3 +13,5 @@ export { DeleteAccountSection } from './DeleteAccountSection.js';
 export type { DeleteAccountSectionProps } from './DeleteAccountSection.js';
 export { AccountDeletedPage } from './AccountDeletedPage.js';
 export type { AccountDeletedPageProps } from './AccountDeletedPage.js';
+export { ConsentGate } from './ConsentGate.js';
+export type { ConsentGateProps } from './ConsentGate.js';

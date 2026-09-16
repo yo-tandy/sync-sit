@@ -2,7 +2,8 @@ import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui';
 import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
-import { isTutor } from '@ejm/shared-core';
+import { isTutor, needsReconsent } from '@ejm/shared-core';
+import { ConsentGateHost } from '@/components/ConsentGateHost';
 
 type SitRole = 'babysitter' | 'parent' | 'admin';
 
@@ -48,6 +49,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
       </div>
     );
   }
+
+  // Re-consent gate (issue #488 decision 1): the consent documents were
+  // bumped after this member last accepted them. Nothing of the app renders
+  // -- not even the role-less hub -- until they accept the current ones or
+  // sign out. Before role routing on purpose: a stale record is stale in
+  // every portal.
+  if (needsReconsent(userDoc)) return <ConsentGateHost />;
 
   // Role-agnostic surface: signed in is the whole requirement.
   if (!role) return <>{children}</>;
