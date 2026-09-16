@@ -104,7 +104,7 @@ vi.mock('../performErasure.js', () => ({
   performErasure: (...args: unknown[]) => h.performErasureImpl(...args),
 }));
 
-import { eraseUserAccount } from '../deleteUser.js';
+import { eraseUserAccount, ERASURE_MARKER_TTL_MS } from '../deleteUser.js';
 
 const ADMIN_A = {
   uid: 'admin-a',
@@ -219,5 +219,66 @@ describe('guardAgainstLastAdmin — the count excludes docs already mid-erasure'
     const result = await eraseUserAccount('admin-a', 'admin-a');
     expect(result).toEqual({ ok: true });
     expect(h.txUpdates).toEqual([{ id: 'admin-a', data: { erasureStartedAt: expect.any(Date) } }]);
+  });
+
+  // The marker is only cleared by `eraseUserAccount`'s catch; a process
+  // killed outright (timeout, OOM) between the guard's commit and that
+  // catch leaves it behind forever. Without a TTL every such orphan would
+  // permanently under-count real admins by one (review on #490).
+  describe('the marker has a TTL -- an abandoned erasure does not under-count admins forever', () => {
+    const stale = () => new Date(Date.now() - ERASURE_MARKER_TTL_MS - 1_000);
+    const fresh = () => new Date(Date.now() - ERASURE_MARKER_TTL_MS + 60_000);
+
+    it('a marker OLDER than the TTL is an abandoned attempt: that admin counts again', async () => {
+      h.activeAdminQueryResults = [
+        { id: 'admin-a', data: { isAdmin: true, status: 'active' } },
+        { id: 'admin-b', data: { isAdmin: true, status: 'active', erasureStartedAt: stale() } },
+      ];
+      const result = await eraseUserAccount('admin-a', 'admin-a');
+      expect(result).toEqual({ ok: true });
+      expect(h.txUpdates).toEqual([{ id: 'admin-a', data: { erasureStartedAt: expect.any(Date) } }]);
+    });
+
+    it('a marker just INSIDE the TTL still excludes -- the erasure may be in flight', async () => {
+      h.activeAdminQueryResults = [
+        { id: 'admin-a', data: { isAdmin: true, status: 'active' } },
+        { id: 'admin-b', data: { isAdmin: true, status: 'active', erasureStartedAt: fresh() } },
+      ];
+      await expect(eraseUserAccount('admin-a', 'admin-a')).rejects.toMatchObject({
+        details: { code: 'admin/last-admin' },
+      });
+      expect(h.txUpdates).toEqual([]);
+    });
+
+    it('reads a Firestore Timestamp-shaped marker (toMillis) the same way as a Date', async () => {
+      // The admin SDK hands back `Timestamp`, not `Date`; the guard must not
+      // treat every real-world marker as unreadable (which would fail safe
+      // into "always excluded" and silently reinstate the bug).
+      const ts = (d: Date) => ({ toMillis: () => d.getTime() });
+      h.activeAdminQueryResults = [
+        { id: 'admin-a', data: { isAdmin: true, status: 'active' } },
+        { id: 'admin-b', data: { isAdmin: true, status: 'active', erasureStartedAt: ts(stale()) } },
+      ];
+      await expect(eraseUserAccount('admin-a', 'admin-a')).resolves.toEqual({ ok: true });
+
+      h.txUpdates.length = 0;
+      h.activeAdminQueryResults = [
+        { id: 'admin-a', data: { isAdmin: true, status: 'active' } },
+        { id: 'admin-b', data: { isAdmin: true, status: 'active', erasureStartedAt: ts(fresh()) } },
+      ];
+      await expect(eraseUserAccount('admin-a', 'admin-a')).rejects.toMatchObject({
+        details: { code: 'admin/last-admin' },
+      });
+    });
+
+    it('an unreadable marker fails SAFE: treated as live, so it still excludes', async () => {
+      h.activeAdminQueryResults = [
+        { id: 'admin-a', data: { isAdmin: true, status: 'active' } },
+        { id: 'admin-b', data: { isAdmin: true, status: 'active', erasureStartedAt: 'not a time' } },
+      ];
+      await expect(eraseUserAccount('admin-a', 'admin-a')).rejects.toMatchObject({
+        details: { code: 'admin/last-admin' },
+      });
+    });
   });
 });
