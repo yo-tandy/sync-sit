@@ -482,3 +482,89 @@ function getNextSaturday(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+// ── Issue #510: overnight sittings must be filtered like any other range ──
+// The parent's picker offers end times up to 02:00 "(following day)". A
+// 22:00 → 02:00 search reads slots 88..95 AND 0..7 of the SAME weekday's
+// array (the DayEditor storage convention). Before the fix the naive loop
+// ran zero times for a wrapped range and every babysitter passed.
+describe('searchBabysitters overnight schedule filter (issue #510)', () => {
+  let seed: SeedData;
+  let parentToken: string;
+  const NIGHT = '2027-06-14'; // a far-future Monday → weekly key 'mon'
+  const wrapGrid = () => {
+    const g = new Array(96).fill(false);
+    for (let i = 68; i < 96; i++) g[i] = true; // 17:00 → 24:00
+    for (let i = 0; i < 8; i++) g[i] = true; // 00:00 → 02:00 (same day key)
+    return g;
+  };
+  const untilMidnightGrid = () => {
+    const g = new Array(96).fill(false);
+    for (let i = 68; i < 96; i++) g[i] = true; // 17:00 → 24:00 only
+    return g;
+  };
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+    const db = getDb();
+    // babysitter1: open through the night → must match.
+    await db.collection('schedules').doc(seed.babysitter1.uid).update({ 'weekly.mon': wrapGrid() });
+    // babysitter2: open until midnight only → must NOT match a 22:00–02:00 sitting.
+    await db.collection('schedules').doc(seed.babysitter2.uid).update({ 'weekly.mon': untilMidnightGrid() });
+    // babysitter3: weekly open through the night, but a date override closes
+    // the small hours → the override path must exclude them too.
+    await db.collection('schedules').doc(seed.babysitter3.uid).update({ 'weekly.mon': wrapGrid() });
+    await db.collection('schedules').doc(seed.babysitter3.uid)
+      .collection('overrides').doc(NIGHT)
+      .set({ date: NIGHT, type: 'custom', slots: untilMidnightGrid(), createdAt: new Date() });
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('a 22:00 → 02:00 search keeps the sitter open through the night and drops the ones who stop at midnight', async () => {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: NIGHT,
+        startTime: '22:00',
+        endTime: '02:00',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: { lat: 48.8566, lng: 2.2769 },
+        filters: {},
+      },
+      parentToken,
+    );
+    const uids = result.results.map((r) => r.uid);
+    expect(uids).toContain(seed.babysitter1.uid);
+    // Weekly grid ends at midnight → the 00:00–02:00 half is closed.
+    expect(uids).not.toContain(seed.babysitter2.uid);
+    // Date override ends at midnight → same, via the override path.
+    expect(uids).not.toContain(seed.babysitter3.uid);
+  });
+
+  it('the same sitter still matches a plain evening range that ends before midnight', async () => {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: NIGHT,
+        startTime: '20:00',
+        endTime: '23:00',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: { lat: 48.8566, lng: 2.2769 },
+        filters: {},
+      },
+      parentToken,
+    );
+    const uids = result.results.map((r) => r.uid);
+    expect(uids).toContain(seed.babysitter1.uid);
+    expect(uids).toContain(seed.babysitter2.uid);
+  });
+});
