@@ -202,6 +202,28 @@ describe('proposeSession', () => {
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 
+  // ── Day edge (issue #515) ──
+
+  it('rejects a proposal that would run past midnight, BY NAME', async () => {
+    // 23:45 + 60min ends at slot 99. Pre-#515 proposeSession had no day-edge
+    // guard at all: it rejected only because the availability loop read
+    // grid[96..98] === undefined, and reported 'slot not available'.
+    //
+    // NOTE on what this isolates: tutor2's grid is 16:00–20:00, so 23:45 is
+    // unavailable for TWO reasons now. The assertion is on the MESSAGE, which
+    // pins the one that matters — the guard runs BEFORE the grid is computed,
+    // so removing it flips the message back to 'slot not available' and this
+    // test fails. The boundary case (a session ending exactly at midnight is
+    // accepted) is pinned in book-session.test.ts against a fully-open tutor,
+    // where it can be isolated properly.
+    await expect(
+      callFunction('proposeSession', { ...happyInput(), startTime: '23:45' }, tutor2Token),
+    ).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      message: 'Session cannot run past midnight',
+    });
+  });
+
   // ── Occupied slot (a confirmed session already holds the time) ──
 
   it('rejects a proposal whose slot is already confirmed (invalid-argument)', async () => {

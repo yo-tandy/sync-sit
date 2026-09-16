@@ -274,6 +274,36 @@ describe('bookSession', () => {
     expect(res.sessionId).toBeTruthy();
   });
 
+  // ── Day edge (issue #515) ──
+
+  it('rejects a one_time booking that would run past midnight, BY NAME', async () => {
+    // 23:45 + 60min ends at slot 99. Pre-#515 this was rejected only as a side
+    // effect of the availability loop reading grid[96..98] === undefined, so it
+    // came back as 'slot not available' — about a slot that was fine. The
+    // recurring path had always named the real reason; one_time now does too.
+    // flexTutor's grid is fully open, so nothing BUT the day edge can reject.
+    await expect(
+      callFunction(
+        'bookSession',
+        { ...happyInput(), tutorUserId: flexTutorUid, startTime: '23:45' },
+        parent1Token,
+      ),
+    ).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+      message: 'Session cannot run past midnight',
+    });
+  });
+
+  it('ACCEPTS a session ending exactly at midnight', async () => {
+    // The boundary the guard must not over-reject: 23:00 + 60min = slot 96.
+    const res = await callFunction<BookResponse>(
+      'bookSession',
+      { ...happyInput(), tutorUserId: flexTutorUid, startTime: '23:00' },
+      parent1Token,
+    );
+    expect(res.sessionId).toBeTruthy();
+  });
+
   // ── Duplicate-pending guard ──
 
   it('rejects a duplicate pending request for the same slot with already-exists', async () => {
