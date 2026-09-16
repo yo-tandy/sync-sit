@@ -338,6 +338,19 @@ describe('ParentEnrollment orchestrator', () => {
     });
   });
 
+  it('sends the UI language the wizard ran in (issue #440 audit)', async () => {
+    await i18n.changeLanguage('fr');
+    try {
+      await driveToEnrollFamily();
+      const enroll = h.calls.find((c) => c.name === 'enrollFamily')!;
+      // Persisted on the new user doc so server email copy follows it —
+      // until this pin every parent doc was hardcoded 'en'.
+      expect(enroll.payload).toMatchObject({ language: 'fr' });
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+
   it('omits postcode/city from the payload when the address lacks them', async () => {
     h.familyData = {
       ...defaultFamilyData(),
@@ -438,6 +451,9 @@ describe('ParentEnrollment orchestrator', () => {
     // The consent-only step's acceptance still travels: the backend records
     // it in the audit trail (issue #178).
     expect(enroll.payload).toMatchObject({ consentVersion: 'sentinel-consent-version' });
+    // The existing account keeps its own language — the add-profile payload
+    // never carries one (issue #440 audit).
+    expect(enroll.payload).not.toHaveProperty('language');
     // Already signed in — no re-authentication.
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.

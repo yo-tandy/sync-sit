@@ -69,6 +69,11 @@ export const familyEnrollmentSchema = z.object({
   // clients send nothing and the server defaults to CONSENT_VERSION, keeping
   // their behavior byte-identical.
   consentVersion: consentVersionSchema.optional(),
+  // UI language the parent enrolled in (issue #440 audit): persisted on the
+  // new user doc so server-side email copy (verification decisions, guardian
+  // notices) follows it. Mirrors studentIdentitySchema. Optional — legacy
+  // clients send nothing and the server keeps its former 'en' default.
+  language: z.enum(['en', 'fr']).optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but

@@ -37,6 +37,10 @@ interface EnrollFamilyData {
   // the shared CONSENT_VERSION (issue #415 decision 2); legacy sit clients
   // that send nothing default to it too.
   consentVersion?: string;
+  // UI language the wizard ran in (issue #440 audit) — persisted on the new
+  // user doc, the same way enrollStudentIdentity threads it. Add-profile
+  // callers already have a user doc with a language; it is left alone.
+  language?: 'en' | 'fr';
 }
 
 export const enrollFamily = onCall(
@@ -193,7 +197,11 @@ export const enrollFamily = onCall(
         status: 'active',
         firstName: data.firstName,
         lastName: data.lastName || data.familyName,
-        language: 'en',
+        // The language the wizard actually ran in; 'en' only for legacy
+        // clients that send nothing (issue #440 audit — until then every
+        // parent doc was hardcoded 'en', so French parents received
+        // server emails in English).
+        language: data.language ?? 'en',
         profiles: {
           parent: {
             enrollmentComplete: true,
