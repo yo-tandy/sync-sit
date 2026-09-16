@@ -13,10 +13,11 @@ import {
   latestDeclineMs,
   repairTimestamplessDeclines,
 } from './declineCooldown.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 
 export const sendTutorContactRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

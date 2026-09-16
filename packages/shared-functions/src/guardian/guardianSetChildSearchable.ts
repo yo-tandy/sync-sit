@@ -5,6 +5,7 @@ import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { sendPushNotification } from '../config/push.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
 import { requireActiveLinkParent } from './oversight.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface SetSearchableData {
   childUid: string;
@@ -20,7 +21,7 @@ const APP_TO_ROLE = { sit: 'babysitter', study: 'tutor' } as const;
  * transparent, never silent.
  */
 export const guardianSetChildSearchable = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

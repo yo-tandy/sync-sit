@@ -29,6 +29,7 @@ import {
   buildTaskOfferReceived,
   fallbackDoerName,
 } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doSubmitOffer` (plan §4.2, §6.2, §6.3, §8, §11.1): an active, enrolled
@@ -58,7 +59,7 @@ import {
  *   alone).
  */
 export const doSubmitOffer = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

@@ -8,13 +8,14 @@ import { handleExistingAccountSignup } from './accountExistsNotice.js';
 import { isInSendCooldown } from './sendCooldown.js';
 import { registerVerificationSend } from './sendRateLimit.js';
 import { PARENT_CODE_STAMP } from './verificationCodeClass.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * Send a 6-digit verification code to any email address (for parent enrollment).
  * Unlike verifyEjmEmail, this accepts any domain.
  */
 export const verifyParentEmail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     // `app` is an untrusted display-only hint (which app's copy the
     // account-exists email uses) — normalized inside the silent path.

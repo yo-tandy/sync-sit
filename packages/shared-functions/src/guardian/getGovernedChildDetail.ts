@@ -3,6 +3,7 @@ import { ageFromDob } from '@ejm/shared-core';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { iso, requireActiveLinkParent } from './oversight.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * The full per-kid oversight view — ruling 8 of the governance design:
@@ -15,7 +16,7 @@ import { iso, requireActiveLinkParent } from './oversight.js';
  * everything future or undated (recurring parents, dateless requests).
  */
 export const getGovernedChildDetail = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

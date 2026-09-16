@@ -8,6 +8,7 @@ import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { notifyAllParents } from '../config/notifyParents.js';
 import { escapeHtml } from '../config/email.js';
 import { hashInviteToken } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface RedeemKidInviteData {
   token: string;
@@ -34,7 +35,7 @@ function invalidInvite(): HttpsError {
  * the client signs in with the kid's email + chosen password.
  */
 export const redeemKidInvite = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     const data = request.data as RedeemKidInviteData;
 

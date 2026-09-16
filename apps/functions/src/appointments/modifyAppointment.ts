@@ -8,6 +8,7 @@ import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { getParentProfile, resolveNotifPref, type User } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 interface ModifyInput {
   appointmentId: string;
@@ -19,7 +20,7 @@ interface ModifyInput {
 }
 
 export const modifyAppointment = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

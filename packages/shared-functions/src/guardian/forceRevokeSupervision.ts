@@ -9,6 +9,7 @@ import { notifyAllParents } from '../config/notifyParents.js';
 import { escapeHtml } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface ForceRevokeData {
   childUid: string;
@@ -24,7 +25,7 @@ interface ForceRevokeData {
  * 15+ is a plain revoke. A missing DOB cannot prove 15+ → treated as a minor.
  */
 export const forceRevokeSupervision = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

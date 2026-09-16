@@ -6,6 +6,7 @@ import { verifyAdmin } from '../admin/verifyAdmin.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { GUARDIAN_SUCCESS } from './shared.js';
 import { iso } from './oversight.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * The admin GDPR audit view: EVERY guardian link (any status — revoked links
@@ -15,7 +16,7 @@ import { iso } from './oversight.js';
  * scan is fine and needs no index.
  */
 export const listSupervisedAccounts = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -74,7 +75,7 @@ export const listSupervisedAccounts = onCall(
  * "unreviewed" filter on a missing field cannot be a Firestore query anyway.
  */
 export const listAdminAlerts = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -103,7 +104,7 @@ export const listAdminAlerts = onCall(
 
 /** Mark an alert handled. Rules keep adminAlerts client-read-only; this callable is the only write path. */
 export const reviewAdminAlert = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

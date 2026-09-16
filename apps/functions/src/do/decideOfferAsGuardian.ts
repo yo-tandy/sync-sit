@@ -14,6 +14,7 @@ import {
   buildGuardianDecisionForChild,
   buildTaskOfferReceived,
 } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doDecideOfferAsGuardian` (plan §6.2, §8): the supervising parent decides
@@ -44,7 +45,7 @@ import {
  * which the §6.2 flow already tells the family nothing about).
  */
 export const doDecideOfferAsGuardian = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

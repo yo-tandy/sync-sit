@@ -11,6 +11,7 @@ import {
 } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { effectiveAuthTimeSeconds } from '../auth/effectiveAuthTime.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * Time within which the member must have presented a CREDENTIAL for a
@@ -255,7 +256,7 @@ export async function notifyGuardiansOfSelfDelete(
  * a veto over erasure.
  */
 export const deleteMyAccount = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

@@ -12,6 +12,7 @@ import {
   notifyChildOfGuardianAction,
 } from '@ejm/shared-functions/guardian/guardianAccess.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /** sit stamps the override docs it creates so its cancel can restore losslessly. */
 const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
@@ -24,7 +25,7 @@ interface RespondData {
 }
 
 export const respondToRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
