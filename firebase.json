@@ -157,7 +157,7 @@
   "functions": [
     {
       "source": "apps/functions",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "codebase": "default",
       "predeploy": [
         "node scripts/bundle-shared-for-deploy.js",
@@ -170,7 +170,7 @@
     },
     {
       "source": "apps/study-functions",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "codebase": "study",
       "predeploy": [
         "pnpm --filter study-functions build"
