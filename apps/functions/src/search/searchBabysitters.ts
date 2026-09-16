@@ -3,7 +3,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { haversineDistance, compareByDistanceLast, getParentProfile, getBabysitterView } from '@ejm/sit-core';
 import type { LatLng, User } from '@ejm/sit-core';
-import { getEjemEmail, getContact } from '@ejm/shared-core';
+import { getEjemEmail, getContact, timeRangeSlotIndices } from '@ejm/shared-core';
 import { calculateAge, passesAgeBackstop } from './ageBackstop.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
@@ -51,11 +51,6 @@ interface BabysitterResult {
   contactEmail?: string;
   contactPhone?: string;
   isPreferred?: boolean;
-}
-
-function timeToSlotIndex(time: string): number {
-  const [h, m] = time.split(':').map(Number);
-  return Math.floor((h * 60 + m) / 15);
 }
 
 export const searchBabysitters = onCall(
@@ -172,13 +167,15 @@ export const searchBabysitters = onCall(
           const dayKey = dayNames[dateObj.getDay()];
           const daySlots: boolean[] = schedule.weekly?.[dayKey];
 
+          // Wrap-aware (issue #510): an overnight sitting (22:00 → 02:00, a
+          // first-class option in the parent's picker) checks 88..95 AND
+          // 0..7 of the SAME day's array — the DayEditor storage convention.
+          // The former `for (i = start; i < end)` loop ran zero times for a
+          // wrapped range and let every babysitter through.
           if (daySlots) {
-            const startIdx = timeToSlotIndex(params.startTime);
-            const endIdx = timeToSlotIndex(params.endTime);
-            let available = true;
-            for (let i = startIdx; i < endIdx && i < 96; i++) {
-              if (!daySlots[i]) { available = false; break; }
-            }
+            const available = timeRangeSlotIndices(params.startTime, params.endTime).every(
+              (i) => !!daySlots[i],
+            );
             if (!available) continue;
           }
 
@@ -189,12 +186,10 @@ export const searchBabysitters = onCall(
             const override = overrideSnap.data()!;
             if (override.type === 'unavailable') continue;
             if (override.type === 'custom' && override.slots) {
-              const startIdx = timeToSlotIndex(params.startTime);
-              const endIdx = timeToSlotIndex(params.endTime);
-              let available = true;
-              for (let i = startIdx; i < endIdx && i < 96; i++) {
-                if (!override.slots[i]) { available = false; break; }
-              }
+              const overrideSlots = override.slots as boolean[];
+              const available = timeRangeSlotIndices(params.startTime, params.endTime).every(
+                (i) => !!overrideSlots[i],
+              );
               if (!available) continue;
             }
           }

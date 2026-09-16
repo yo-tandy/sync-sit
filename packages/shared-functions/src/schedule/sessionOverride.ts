@@ -16,6 +16,8 @@
  * implementation prevents the two apps' claim paths from drifting.
  */
 
+import { rangeSlotIndices, slotInRange } from '@ejm/shared-core';
+
 const SLOTS_PER_DAY = 96;
 
 /**
@@ -76,7 +78,11 @@ export function buildMergedOverride(args: {
     baseSlots = new Array(SLOTS_PER_DAY);
     for (let i = 0; i < SLOTS_PER_DAY; i++) baseSlots[i] = weeklySlots[i] ?? false;
   }
-  for (let i = block.start; i < block.end; i++) baseSlots[i] = false;
+  // Wrap-aware (issue #510): an overnight block { start: 88, end: 8 } claims
+  // 88..95 AND 0..7 of this same day's array. The former naive loop ran zero
+  // times for a wrapped block, so an accepted overnight sitting claimed
+  // nothing and the sitter stayed bookable.
+  for (const i of rangeSlotIndices(block.start, block.end)) baseSlots[i] = false;
 
   const priorBlocks = Array.isArray(existing?.sessionBlocks)
     ? (existing!.sessionBlocks as unknown[])
@@ -177,10 +183,13 @@ export function buildRestoredOverride(args: {
   const slots = Array.isArray(existing.slots)
     ? [...(existing.slots as boolean[])]
     : new Array(SLOTS_PER_DAY).fill(false);
+  // Both walks are wrap-aware (issue #510): a removed overnight claim reopens
+  // its two runs, and a REMAINING overnight entry still covers slots on
+  // either side of midnight.
   const coveredByRemaining = (i: number) =>
-    remaining.some((b) => i >= b.startIdx && i < b.endIdx);
+    remaining.some((b) => slotInRange(i, b.startIdx, b.endIdx));
   for (const r of removed) {
-    for (let i = r.startIdx; i < r.endIdx; i++) {
+    for (const i of rangeSlotIndices(r.startIdx, r.endIdx)) {
       if ((weeklySlots[i] ?? false) && !coveredByRemaining(i)) slots[i] = true;
     }
   }

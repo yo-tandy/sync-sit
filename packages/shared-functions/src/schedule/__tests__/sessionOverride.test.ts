@@ -259,3 +259,92 @@ describe('buildRestoredOverride', () => {
     expect(doc.sessionBlocks).toEqual([{ appointmentId: 'apt-1', startIdx: 64, endIdx: 68 }]);
   });
 });
+
+// ── Issue #510: overnight (past-midnight) claims ──
+// A 22:00 → 02:00 sitting is block { start: 88, end: 8 } on ONE day's array
+// (88..95 then 0..7 — the DayEditor storage convention). The former naive
+// `for (i = start; i < end)` loop ran zero times, so the claim wrote nothing
+// and the restore reopened nothing.
+describe('overnight (wrapped) blocks', () => {
+  /** A weekly grid open 17:00 → 02:00 the same day-key: 68..95 and 0..7. */
+  function overnightGrid(): boolean[] {
+    const g = new Array(96).fill(false);
+    for (let i = 68; i < 96; i++) g[i] = true;
+    for (let i = 0; i < 8; i++) g[i] = true;
+    return g;
+  }
+
+  it('claims both runs of a wrapped block and leaves the rest of the open window alone', () => {
+    const entry: SessionBlockEntry = { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 };
+    const doc = buildMergedOverride({
+      existing: null,
+      date: '2027-06-07',
+      weeklySlots: overnightGrid(),
+      block: { start: 88, end: 8 },
+      entry,
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    const slots = doc.slots as boolean[];
+    // The two runs are blocked…
+    for (let i = 88; i < 96; i++) expect(slots[i]).toBe(false);
+    for (let i = 0; i < 8; i++) expect(slots[i]).toBe(false);
+    // …and exactly 16 slots were claimed: 17:00–22:00 (68..87) stays open.
+    expect(slots.filter(Boolean)).toHaveLength(20);
+    expect(slots[68]).toBe(true);
+    expect(slots[87]).toBe(true);
+    expect(doc.sessionBlocks).toEqual([entry]);
+  });
+
+  it('restores both runs of a removed wrapped claim (ours-only doc → delete)', () => {
+    const claimed = buildMergedOverride({
+      existing: null,
+      date: '2027-06-07',
+      weeklySlots: overnightGrid(),
+      block: { start: 88, end: 8 },
+      entry: { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 },
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    const res = buildRestoredOverride({
+      existing: claimed,
+      matches: (b) => b.appointmentId === 'apt-night',
+      weeklySlots: overnightGrid(),
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    // Everything reopened where the weekly grid allows → slots === weekly → delete.
+    expect(res).toEqual({ action: 'delete' });
+  });
+
+  it('a REMAINING wrapped entry keeps covering slots on both sides of midnight during a restore', () => {
+    // Two claims: an evening 20:00–23:00 (80..92) and an overnight 22:00–02:00
+    // (88..8). Remove the evening one: 80..87 reopen, 88..91 stay blocked
+    // (still held by the overnight entry), and the small hours are untouched.
+    const grid = overnightGrid();
+    const evening: SessionBlockEntry = { appointmentId: 'apt-eve', startIdx: 80, endIdx: 92 };
+    const night: SessionBlockEntry = { appointmentId: 'apt-night', startIdx: 88, endIdx: 8 };
+    const afterEvening = buildMergedOverride({
+      existing: null, date: '2027-06-07', weeklySlots: grid,
+      block: { start: 80, end: 92 }, entry: evening, ownProvenance: SIT, now: NOW,
+    });
+    const afterBoth = buildMergedOverride({
+      existing: afterEvening, date: '2027-06-07', weeklySlots: grid,
+      block: { start: 88, end: 8 }, entry: night, ownProvenance: SIT, now: NOW,
+    });
+    const res = buildRestoredOverride({
+      existing: afterBoth,
+      matches: (b) => b.appointmentId === 'apt-eve',
+      weeklySlots: grid,
+      ownProvenance: SIT,
+      now: NOW,
+    });
+    expect(res.action).toBe('set');
+    const slots = (res as { action: 'set'; doc: Record<string, unknown> }).doc.slots as boolean[];
+    for (let i = 80; i < 88; i++) expect(slots[i]).toBe(true);   // evening-only part reopened
+    for (let i = 88; i < 92; i++) expect(slots[i]).toBe(false);  // overlap still held overnight
+    for (let i = 92; i < 96; i++) expect(slots[i]).toBe(false);  // overnight-only, untouched
+    for (let i = 0; i < 8; i++) expect(slots[i]).toBe(false);    // small hours, untouched
+    expect((res as { action: 'set'; doc: Record<string, unknown> }).doc.sessionBlocks).toEqual([night]);
+  });
+});

@@ -438,4 +438,55 @@ describe('cancelAppointment', () => {
       ).rejects.toThrow();
     });
   });
+
+  // ── Issue #510: cancelling an overnight sitting reopens BOTH runs ──
+  describe('overnight schedule ledger restoration (issue #510)', () => {
+    const NIGHT = '2027-06-14'; // far-future Monday
+    const scheduleRef = () => getDb().collection('schedules').doc(seed.babysitter1.uid);
+    const overrideRef = () => scheduleRef().collection('overrides').doc(NIGHT);
+    let originalMon: boolean[];
+
+    beforeAll(async () => {
+      originalMon = (await scheduleRef().get()).data()!.weekly.mon;
+      // Open 17:00 → 02:00 on the same day key (68..95, 0..7).
+      const g = new Array(96).fill(false);
+      for (let i = 68; i < 96; i++) g[i] = true;
+      for (let i = 0; i < 8; i++) g[i] = true;
+      await scheduleRef().update({ 'weekly.mon': g });
+      await overrideRef().delete().catch(() => {});
+    });
+    afterAll(async () => {
+      await scheduleRef().update({ 'weekly.mon': originalMon });
+      await overrideRef().delete().catch(() => {});
+    });
+
+    it('claims 88..95 and 0..7 on accept, then cancel restores them and deletes the clean override', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+        date: NIGHT, startTime: '22:00', endTime: '02:00',
+      });
+      await callFunction(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept', blockSchedule: true },
+        babysitterToken
+      );
+      const claimed = (await overrideRef().get()).data()!;
+      expect(claimed.sessionBlocks).toEqual([{ appointmentId: apptId, startIdx: 88, endIdx: 8 }]);
+      expect(claimed.slots[95]).toBe(false);
+      expect(claimed.slots[0]).toBe(false);
+
+      await callFunction(
+        'cancelAppointment',
+        { appointmentId: apptId, reason: 'Plans changed' },
+        babysitterToken
+      );
+      // Both runs reopened where the weekly grid allows → slots equal the
+      // weekly grid exactly → the doc is deleted (day reverts to weekly).
+      expect((await overrideRef().get()).exists).toBe(false);
+    });
+  });
+
 });
