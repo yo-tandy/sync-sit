@@ -424,10 +424,16 @@ service cloud.firestore {
       // - sessionEpoch: server-owned (signOutEverywhere callable) — a client
       //   bumping it could force-sign-out its own other-origin sessions
       //   without token revocation, or spoof the coherence signal.
+      // - consentVersion / consentAt: the consent record (issue #488). Only
+      //   the enrollment callables and acknowledgeConsent may move them --
+      //   the re-consent gate trusts consentVersion, so a client writing it
+      //   would clear the gate with no version check and no audit row,
+      //   i.e. no acceptance at all.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'ejemEmail', 'status', 'createdAt', 'isAdmin',
                                  'governedBy', 'identityLocked', 'sessionEpoch',
+                                 'consentVersion', 'consentAt',
                                  // Root familyId: legacy Plan C membership. Client-
                                  // deleting it turned a hybrid doc into an "orphan"
                                  // by addProfileToUser's carve-out predicate and

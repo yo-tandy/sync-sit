@@ -86,6 +86,9 @@ export { createAppHandoffCode, redeemAppHandoffCode } from './handoff/appHandoff
 // Callable — a member deletes their OWN account, across all three apps
 // (issue #368). Runs the same erasure as the admin path.
 export { deleteMyAccount } from './account/deleteMyAccount.js';
+// Re-consent gate (issue #488 decision 1): the one write behind the gate
+// every app's AuthGuard renders when a member's consentVersion is stale.
+export { acknowledgeConsent } from './account/acknowledgeConsent.js';
 
 // Callable — server-side projection for CROSS-APP `references` reads
 // (issue #346, PII minimisation follow-up from #280 / PR #337).

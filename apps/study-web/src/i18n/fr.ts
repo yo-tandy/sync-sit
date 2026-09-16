@@ -193,6 +193,19 @@ export default {
     },
   },
 
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: 'Nos conditions ont été mises à jour',
+    body: "Avant de continuer, veuillez lire et accepter les Conditions d'utilisation et la Politique de confidentialité en vigueur.",
+    agreePrefix: "J'ai lu et j'accepte les",
+    terms: "Conditions d'utilisation",
+    and: 'et la',
+    privacy: 'Politique de confidentialité',
+    accept: 'Accepter et continuer',
+    staleClient: "Cette application n'est pas à jour. Rechargez la page et réessayez.",
+    signOut: 'Me déconnecter plutôt',
+  },
   auth: {
     login: 'Se connecter',
     loginTitle: 'Bon retour',

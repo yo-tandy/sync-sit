@@ -93,12 +93,36 @@ export const CONSENT_VERSIONS = {
  *    derived from them) is a deliberate act coupled to a counsel sign-off on
  *    revised document text — see the block comment above. A version bump
  *    with no re-consent gate reading it is silent: nothing currently
- *    compares a stored `consentVersion` against the live constant outside
- *    `requireCurrentConsent` (guardian/kid-invite only). Building that gate
- *    for the enrollment flows is issue #415 decision 1, tracked as a
- *    follow-up, not part of this change.
+ *    compared a stored `consentVersion` against the live constant outside
+ *    `requireCurrentConsent` (guardian/kid-invite only) until issue #488
+ *    decision 1 shipped the gate: `isCurrentConsentVersion` (utils/consent)
+ *    is what every app's AuthGuard now reads, and `acknowledgeConsent` is
+ *    what re-stamps the doc. A bump here is therefore no longer silent.
  */
 export const CONSENT_VERSION = TOS_VERSION;
+
+/**
+ * The version an account is taken to have accepted when its `users` doc has
+ * no `consentVersion` at all: every account created before the field existed
+ * enrolled under the original documents, which are '1.0'. Read by
+ * `isCurrentConsentVersion` (issue #488 decision 1) so the re-consent gate
+ * does not fire for those accounts until a real bump happens.
+ */
+export const INITIAL_CONSENT_VERSION = '1.0';
+
+/**
+ * Stored labels that denote the SAME document text as the keyed version.
+ * Before #415 decision 2 unified the scheme, study stamped '2025-12-01' and
+ * do stamped '2026-08-28' for the identical '1.0' text (see CONSENT_VERSION
+ * above) -- those records were deliberately left as written, so the
+ * re-consent gate (#488) has to know they are not stale. WHEN YOU BUMP: add a
+ * new key only if the new version also has alias labels; the old key's
+ * aliases stop being current automatically, because the lookup is by the
+ * CURRENT version.
+ */
+export const CONSENT_VERSION_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  '1.0': ['2025-12-01', '2026-08-28'],
+};
 
 /** Kid-invite validity window in days (resend resets the clock) */
 export const KID_INVITE_VALIDITY_DAYS = ADMIN_CONFIG_DEFS.kidInviteValidityDays.default;

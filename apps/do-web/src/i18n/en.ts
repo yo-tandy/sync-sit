@@ -17,6 +17,19 @@ export default {
     helloNoName: 'Hello',
   },
 
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: "We've updated our terms",
+    body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+    agreePrefix: 'I have read and accept the',
+    terms: 'Terms of Service',
+    and: 'and the',
+    privacy: 'Privacy Policy',
+    accept: 'Accept and continue',
+    staleClient: 'This app is out of date. Reload the page and try again.',
+    signOut: 'Sign out instead',
+  },
   auth: {
     login: 'Log in',
     loginTitle: 'Welcome back',

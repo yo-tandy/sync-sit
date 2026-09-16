@@ -17,3 +17,4 @@ export * from './photoType.js';
 export * from './safeNext.js';
 export * from './isRenderableDocType.js';
 export * from './endorsementResubmission.js';
+export * from './consent.js';

@@ -388,6 +388,19 @@ export default {
       'Vous êtes le dernier administrateur. Désignez un autre administrateur avant de supprimer votre compte.',
     deleteErrorReauth: 'Pour votre sécurité, veuillez vous reconnecter avant de supprimer votre compte.',
   },
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: 'Nos conditions ont été mises à jour',
+    body: "Avant de continuer, veuillez lire et accepter les Conditions d'utilisation et la Politique de confidentialité en vigueur.",
+    agreePrefix: "J'ai lu et j'accepte les",
+    terms: "Conditions d'utilisation",
+    and: 'et la',
+    privacy: 'Politique de confidentialité',
+    accept: 'Accepter et continuer',
+    staleClient: "Cette application n'est pas à jour. Rechargez la page et réessayez.",
+    signOut: 'Me déconnecter plutôt',
+  },
   accountDeleted: {
     title: 'Votre compte a été supprimé',
     body: 'Vos données ont été supprimées de sync/sit, sync/study et sync/do. Merci d\'avoir fait partie de la communauté.',
