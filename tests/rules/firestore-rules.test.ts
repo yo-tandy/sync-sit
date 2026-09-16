@@ -362,6 +362,40 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // consentVersion / consentAt are the consent record (issue #488): the
+  // re-consent gate trusts consentVersion, and only acknowledgeConsent (with
+  // its version check and audit row) and the enrollment callables may move
+  // it. A client write here would clear the gate with no acceptance at all.
+  it('owner may NOT write consentVersion (lone field) -- the re-consent gate cannot be cleared client-side', async () => {
+    await seed('cv1', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv1'), { consentVersion: '1.0' })
+    );
+  });
+
+  it('owner may NOT write consentAt, nor smuggle either consent field into an allowed profile update', async () => {
+    await seed('cv2', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv2'), { consentAt: new Date() })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv2'), {
+        'profiles.babysitter.hourlyRate': 20,
+        consentVersion: '1.0',
+      })
+    );
+  });
+
+  it('normal profile update still passes with a stale consentVersion present on the doc', async () => {
+    await seed('cv3', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'cv3'), { 'profiles.babysitter.hourlyRate': 20 })
+    );
+  });
+
   it('normal profile update still passes with sessionEpoch present on the doc', async () => {
     await seed('se3', { status: 'active', email: 'b@ejm.org', sessionEpoch: new Date(), profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
     const authed = testEnv.authenticatedContext('se3');
