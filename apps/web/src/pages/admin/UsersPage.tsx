@@ -214,8 +214,9 @@ export function AdminUsersPage() {
   // Machine-readable error code from an HttpsError's `details`, mirroring the
   // `guardianErrorCode`/`identityError` convention used across this app
   // (`GovernedChildPage.tsx`, `KidInvitePage.tsx`, ...). Today the only
-  // mapped code is `admin/last-admin` (issue #421) — everything else falls
-  // back to a generic failure message.
+  // mapped code is `admin/last-admin` (issue #421 for delete, #500 for
+  // block — same code, same copy) — everything else falls back to a generic
+  // failure message.
   const [confirmError, setConfirmError] = useState('');
   const handleConfirm = async () => {
     if (confirming) return;

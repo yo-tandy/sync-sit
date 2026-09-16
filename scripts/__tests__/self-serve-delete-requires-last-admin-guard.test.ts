@@ -17,17 +17,20 @@ import { resolve } from 'node:path';
  * the server guard it maps.
  */
 describe('self-serve deletion ships only with the last-admin guard (#490 ↔ #493 contract)', () => {
-  const src = readFileSync(
-    resolve(__dirname, '../../packages/shared-functions/src/admin/deleteUser.ts'),
-    'utf8',
-  );
+  const read = (rel: string) =>
+    readFileSync(resolve(__dirname, '../../packages/shared-functions/src/admin/', rel), 'utf8');
+  const src = read('deleteUser.ts');
+  // #500 moved the count and the throw into a module both erasure and
+  // blockUser share; the guard in deleteUser.ts now delegates to it.
+  const guardModule = read('lastAdmin.ts');
 
   it('eraseUserAccount carries guardAgainstLastAdmin', () => {
     expect(src.length, 'deleteUser.ts read as empty').toBeGreaterThan(0);
     expect(src).toContain('guardAgainstLastAdmin');
+    expect(src).toContain("from './lastAdmin.js'");
   });
 
   it("the guard throws the 'admin/last-admin' code the client maps", () => {
-    expect(src).toContain("'admin/last-admin'");
+    expect(guardModule).toContain("'admin/last-admin'");
   });
 });
