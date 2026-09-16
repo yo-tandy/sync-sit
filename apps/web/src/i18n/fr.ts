@@ -966,10 +966,10 @@ export default {
     confirmUnblock: 'Êtes-vous sûr de vouloir débloquer cet utilisateur ?',
     confirmDelete: 'Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.',
     confirmDeleteAppointment: 'Êtes-vous sûr de vouloir annuler ce rendez-vous ? Les deux parties seront notifiées.',
-    // Issue #421 : le dernier administrateur actif ne peut pas être supprimé
-    // — nommez un autre administrateur d'abord.
+    // Issues #421/#500 : le dernier administrateur actif ne peut être ni
+    // supprimé ni bloqué — nommez un autre administrateur d'abord.
     lastAdminError:
-      "C'est le dernier administrateur. Nommez un autre administrateur avant de supprimer ce compte.",
+      "C'est le dernier administrateur actif. Nommez un autre administrateur avant de supprimer ou de bloquer ce compte.",
     actionFailed: "Cette action a échoué. Veuillez réessayer.",
     confirmResetPassword: 'Envoyer un email de réinitialisation du mot de passe à cet utilisateur ?',
     userBlocked: 'Utilisateur bloqué avec succès',

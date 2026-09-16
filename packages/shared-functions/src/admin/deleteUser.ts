@@ -7,6 +7,10 @@ import { writeAuditLog } from './writeAuditLog.js';
 import { escapeHtml, sendAdminNotification } from '../config/email.js';
 import { raisePartialErasureAlert } from './partialErasureAlert.js';
 import { performErasure } from './performErasure.js';
+import { countEligibleActiveAdmins, lastAdminError } from './activeAdmins.js';
+
+// Re-exported for the tests that pin the marker's TTL through this module.
+export { ERASURE_MARKER_TTL_MS } from './activeAdmins.js';
 
 interface DeleteUserInput {
   targetUserId: string;
@@ -47,43 +51,16 @@ interface DeleteUserInput {
  * both transactions see the same stale count of two and both pass, leaving
  * nobody able to administer the platform.
  *
- * The marker has a TTL (`ERASURE_MARKER_TTL_MS`, review on #490). It is only
- * ever cleared by `eraseUserAccount`'s catch below -- so a process killed
- * OUTRIGHT between the transaction commit and that catch (the callable's
- * timeout, an OOM) would leave it behind forever, and every such orphan
- * would permanently under-count real admins by one until the guard refused
- * to let ANY admin go. So the exclusion only honours a marker younger than
- * the longest an erasure could still be running; older ones are abandoned
- * attempts and that admin counts again. In-memory on the docs the query
- * already returned -- no extra index, no cron. A marker that cannot be read
- * as a time fails SAFE: treated as live, i.e. over-block, never double-erase.
+ * The count itself -- and the marker's TTL (review on #490: only this
+ * function's catch ever clears the marker, so a process killed outright
+ * would otherwise under-count admins forever) -- live in `activeAdmins.ts`,
+ * shared with `blockUser` (issue #500), which can lock the platform out of
+ * its last admin just as surely.
  *
  * Returns the target's data (read before the marker write) plus whether the
  * marker was actually written, so the caller knows whether it owns cleanup
  * duty on a later failure.
  */
-/**
- * How long an `erasureStartedAt` marker is believed. Well past the callable's
- * timeout (`deleteUser`/`deleteMyAccount` run on the v2 default, 60s): an
- * erasure that started longer ago than this is not still running. If a
- * `timeoutSeconds` is ever set on those callables, keep this comfortably
- * above it.
- */
-export const ERASURE_MARKER_TTL_MS = 15 * 60 * 1000;
-
-/** Whether an `erasureStartedAt` value marks an erasure that may still be in flight. */
-function erasureMarkerIsLive(value: unknown, now: number): boolean {
-  if (value == null) return false;
-  const ms =
-    value instanceof Date
-      ? value.getTime()
-      : typeof (value as { toMillis?: unknown }).toMillis === 'function'
-        ? (value as { toMillis: () => number }).toMillis()
-        : NaN;
-  if (!Number.isFinite(ms)) return true;
-  return now - ms < ERASURE_MARKER_TTL_MS;
-}
-
 async function guardAgainstLastAdmin(userRef: FirebaseFirestore.DocumentReference): Promise<{
   data: FirebaseFirestore.DocumentData;
   markerWritten: boolean;
@@ -96,22 +73,8 @@ async function guardAgainstLastAdmin(userRef: FirebaseFirestore.DocumentReferenc
     const data = snap.data()!;
 
     if (data.isAdmin === true && data.status === 'active') {
-      const activeAdmins = await tx.get(
-        db.collection('users').where('isAdmin', '==', true).where('status', '==', 'active'),
-      );
-      // A doc already mid-erasure (by a concurrent, still-in-flight call) is
-      // not a REAL alternative admin — it is on its way out too. A marker
-      // older than the TTL is an abandoned attempt, not an erasure in flight.
-      const now = Date.now();
-      const eligible = activeAdmins.docs.filter(
-        (d) => !erasureMarkerIsLive(d.data().erasureStartedAt, now),
-      );
-      if (eligible.length <= 1) {
-        throw new HttpsError(
-          'failed-precondition',
-          'You are the last active admin — appoint another admin first.',
-          { code: 'admin/last-admin' },
-        );
+      if ((await countEligibleActiveAdmins(tx)) <= 1) {
+        throw lastAdminError('You are the last active admin — appoint another admin first.');
       }
       tx.update(userRef, { erasureStartedAt: new Date() });
       return { data, markerWritten: true };

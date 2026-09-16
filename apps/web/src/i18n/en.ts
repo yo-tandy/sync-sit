@@ -985,9 +985,11 @@ export default {
     confirmUnblock: 'Are you sure you want to unblock this user?',
     confirmDelete: 'Are you sure you want to delete this user? This action cannot be undone.',
     confirmDeleteAppointment: 'Are you sure you want to cancel this appointment? Both parties will be notified.',
-    // Issue #421: the last active admin cannot be deleted or blocked away —
-    // appoint another admin first.
-    lastAdminError: 'This is the last admin. Appoint another admin before deleting this account.',
+    // Issues #421/#500: the last active admin cannot be deleted or blocked
+    // away — appoint another admin first. One message, both actions: the
+    // confirm dialog's error slot is shared.
+    lastAdminError:
+      'This is the last active admin. Appoint another admin before deleting or blocking this account.',
     actionFailed: 'That action failed. Please try again.',
     confirmResetPassword: 'Send a password reset email to this user?',
     userBlocked: 'User blocked successfully',
