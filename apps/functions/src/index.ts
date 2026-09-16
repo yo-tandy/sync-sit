@@ -54,6 +54,12 @@ export {
   lookupCommunityCode,
   approveCommunityCode,
   getVerificationDocument,
+  // Verification-document uploads (issue #447) — signed-URL callable,
+  // replaces the direct client write storage.rules used to allow. Deployed
+  // only from this codebase (same GCP project as study/do — study-web's
+  // VerificationPage calls it the same way it already calls
+  // getVerificationDocument above, with no re-export needed on its side).
+  createVerificationDocumentUploadUrl,
   // Family photo uploads (issue #471) — signed-URL callable, same
   // Admin-SDK-membership-check shape as getVerificationDocument above.
   createFamilyPhotoUploadUrl,

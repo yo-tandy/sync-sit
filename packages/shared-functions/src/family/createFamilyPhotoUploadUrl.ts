@@ -47,9 +47,12 @@ function extensionFromFileName(fileName: string): string {
  * membership fields it reads (`profiles.parent.familyId`, `isAdmin`) live
  * in `@ejm/shared-core`, not `@ejm/sit-core` — study-web's FamilySettingsPage
  * has no photo plumbing yet, but nothing here assumes sit. The signing
- * helper (`createSignedUploadUrl`) is factored out of this file for the
- * same reason issue #471 calls out: #447's verification-document upload
- * needs the identical v4-signed-PUT shape and should not re-derive it.
+ * helper (`createSignedUploadUrl`) and the membership check
+ * (`assertFamilyMember`, `./familyMembership.js`) are both factored out of
+ * this file for the same reason issue #471 called out: #447's
+ * verification-document upload (`createVerificationDocumentUploadUrl`)
+ * needs the identical v4-signed-PUT shape and membership gate, and reuses
+ * both rather than re-deriving them.
  */
 export const createFamilyPhotoUploadUrl = onCall(
   { region: 'europe-west1', cors: getCorsOrigin() },

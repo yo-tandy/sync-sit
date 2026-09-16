@@ -21,6 +21,16 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 export const MAX_FAMILY_PHOTO_BYTES = 10 * 1024 * 1024;
 
 /**
+ * Max verification-document upload size in bytes (10 MB) — issue #447,
+ * the same shape as MAX_FAMILY_PHOTO_BYTES above. Shared between the server
+ * (createVerificationDocumentUploadUrl, which binds it into the V4 signed
+ * URL as the x-goog-content-length-range extension header) and the client
+ * (both apps' VerificationPage, which must send that SAME header value on
+ * the PUT, or GCS's SignatureDoesNotMatch rejects the request outright).
+ */
+export const MAX_VERIFICATION_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/**
  * Current consent-document versions. The guardian callables require callers
  * to send versions EQUAL to these (stale consent → invalid-argument), so a
  * bump here forces clients to re-present the documents.
