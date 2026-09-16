@@ -8,7 +8,7 @@ import { notifyAllParents } from '@ejm/shared-functions/config/notifyParents.js'
 import { escapeHtml, STUDY_APP_URL } from '@ejm/shared-functions/config/email.js';
 import { parisWallTimeToUtc } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { timeToSlotIndex, slotIndexToTime } from '@ejm/shared-core';
-import { resolveEffectiveLocations } from '@ejm/study-core';
+import { resolveEffectiveLocations, sessionCrossesMidnight } from '@ejm/study-core';
 import type { StudyUser, TutorProfile, SubjectOffering } from '@ejm/study-core';
 import { proposeSessionInputSchema } from '../validation/session.js';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
@@ -124,6 +124,13 @@ export const proposeSession = onCall(
     // tutor's OWN schedule (uid === the tutor here). ──
     const startIdx = timeToSlotIndex(startTime);
     const endIdx = startIdx + sessionLengthMinutes / SLOT_MINUTES;
+    // A tutor's proposal is bound by the same day edge a family's booking is
+    // (issue #515): without this it rejected only because the loop below read
+    // past the end of a 96-slot grid, and said 'slot not available' about a
+    // slot that was never the problem.
+    if (sessionCrossesMidnight(startIdx, sessionLengthMinutes)) {
+      throw new HttpsError('invalid-argument', 'Session cannot run past midnight');
+    }
     const { slots: grid, locationCells } = await computeSingleDateAvailability(
       uid,
       date,

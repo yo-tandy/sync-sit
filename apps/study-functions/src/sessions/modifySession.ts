@@ -15,6 +15,7 @@ import {
   getSchoolYearsInRange,
   dayOfWeek,
   resolveEffectiveLocations,
+  sessionCrossesMidnight,
   type DayOverride,
 } from '@ejm/study-core';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
@@ -199,7 +200,7 @@ export const modifySession = onCall(
     if (whenChanged) {
       const startIdxPeek = timeToSlotIndex(newStartPeek);
       const endIdxPeek = startIdxPeek + newLengthPeek / 15;
-      if (endIdxPeek > 96) {
+      if (sessionCrossesMidnight(startIdxPeek, newLengthPeek)) {
         // bookSession's guard verbatim: without it a 23:45 + 75min modify
         // writes endTime '25:00' and the session becomes permanently
         // unconfirmable (the confirm grid check reads grid[96..] === undefined).

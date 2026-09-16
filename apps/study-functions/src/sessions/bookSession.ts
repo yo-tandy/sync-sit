@@ -25,6 +25,7 @@ import {
   incrementDate,
   resolveEffectiveLocations,
   sanitizeDayLocations,
+  sessionCrossesMidnight,
 } from '@ejm/study-core';
 import { parisDateString } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { bookSessionInputSchema } from '../validation/session.js';
@@ -33,7 +34,6 @@ import type { HolidayPeriod } from '../availability/computeDateAvailability.js';
 import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 const SLOT_MINUTES = 15;
-const SLOTS_PER_DAY = 96;
 
 /** Human-readable weekday for notification copy. */
 const DAY_LABELS: Record<DayOfWeek, string> = {
@@ -178,7 +178,7 @@ export const bookSession = onCall(
       // ── Slot math: the weekly session must fit within the day ──
       const startIdx = timeToSlotIndex(slotStart);
       const endIdx = startIdx + sessionLengthMinutes / SLOT_MINUTES;
-      if (endIdx > SLOTS_PER_DAY) {
+      if (sessionCrossesMidnight(startIdx, sessionLengthMinutes)) {
         throw new HttpsError('invalid-argument', 'Session cannot run past midnight');
       }
       const slotEnd = slotIndexToTime(endIdx);
@@ -375,6 +375,12 @@ export const bookSession = onCall(
       // ── Best-effort availability pre-check (NOT the lock — confirm is) ──
       const startIdx = timeToSlotIndex(bookingStart);
       const endIdx = startIdx + sessionLengthMinutes / SLOT_MINUTES;
+      // The recurring path above has always guarded this; one_time only
+      // rejected as a SIDE EFFECT of the loop below reading grid[96..] ===
+      // undefined (issue #515). Same invariant, same message, stated once.
+      if (sessionCrossesMidnight(startIdx, sessionLengthMinutes)) {
+        throw new HttpsError('invalid-argument', 'Session cannot run past midnight');
+      }
       const { slots: grid, locationCells } = await computeSingleDateAvailability(
         tutorUserId,
         bookingDate,

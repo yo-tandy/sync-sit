@@ -3,7 +3,10 @@ import {
   computeDayAvailability,
   expandRecurringDates,
   getSchoolYearsInRange,
+  sessionCrossesMidnight,
+  sessionEndSlot,
 } from '../availability.js';
+import { rangeSlotIndices } from '@ejm/shared-core';
 import type { RecurringSlot } from '@ejm/shared-core';
 
 // Grid helpers — 96 fifteen-minute slots per day.
@@ -275,5 +278,61 @@ describe('getSchoolYearsInRange', () => {
       '2025-2026',
       '2026-2027',
     ]);
+  });
+});
+
+// ── Issue #515: the day-edge invariant, and why sit's wrap must not come here ──
+
+describe('sessionCrossesMidnight', () => {
+  it('allows a session that ends exactly at 24:00', () => {
+    // 23:00 (slot 92) + 60min = slot 96 = midnight exactly. Not a crossing.
+    expect(sessionEndSlot(92, 60)).toBe(96);
+    expect(sessionCrossesMidnight(92, 60)).toBe(false);
+  });
+
+  it('rejects a session that ends after 24:00', () => {
+    // 23:00 + 2h = slot 100.
+    expect(sessionEndSlot(92, 120)).toBe(100);
+    expect(sessionCrossesMidnight(92, 120)).toBe(true);
+  });
+
+  it('rejects the 23:45 + 75min case modifySession calls out by name', () => {
+    // Its comment: this writes endTime '25:00' and the session becomes
+    // permanently unconfirmable.
+    expect(sessionCrossesMidnight(95, 75)).toBe(true);
+  });
+
+  it('leaves ordinary daytime sessions alone', () => {
+    expect(sessionCrossesMidnight(40, 60)).toBe(false);
+    expect(sessionCrossesMidnight(0, 15)).toBe(false);
+  });
+});
+
+describe('study ranges OVERFLOW, they do not wrap (issue #515)', () => {
+  // The reason this predicate exists instead of study adopting sit's
+  // rangeSlotIndices. Sit's endIdx comes from timeToSlotIndex(endTime) and
+  // WRAPS to a small number; study's is startIdx + duration and OVERFLOWS past
+  // 96. rangeSlotIndices CLAMPS to [0, 96], so handing it a study range
+  // silently discards the overflow — turning today's correct rejection into a
+  // false "available". This test is the guard on that reasoning: if someone
+  // later "unifies" these, it fails.
+  const OPEN_DAY = new Array(96).fill(true);
+
+  it('the naive loop REJECTS a 23:00 + 2h session on a fully open day', () => {
+    let available = true;
+    for (let i = 92; i < 100; i++) {
+      if (!OPEN_DAY[i]) { available = false; break; }
+    }
+    // grid[96..99] are undefined → falsy → rejected. Study fails CLOSED.
+    expect(available).toBe(false);
+  });
+
+  it('rangeSlotIndices would ACCEPT the same session — the regression it would cause', () => {
+    expect(rangeSlotIndices(92, 100)).toEqual([92, 93, 94, 95]);
+    expect(rangeSlotIndices(92, 100).every((i) => OPEN_DAY[i])).toBe(true);
+  });
+
+  it('...which is exactly what the predicate refuses up front', () => {
+    expect(sessionCrossesMidnight(92, 120)).toBe(true);
   });
 });
