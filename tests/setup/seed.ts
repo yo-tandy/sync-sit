@@ -598,6 +598,9 @@ export async function seedCommunityCode(data: CommunityCodeSeed): Promise<string
 
 export interface ContactSharingRequestSeed {
   requestId?: string;
+  /** The parent the request belongs to (writers set it since issue #273); optional so the
+   * pre-#273 and tutor-initiated shapes (no parent yet) stay seedable. */
+  parentUserId?: string;
   babysitterUserId: string;
   familyId: string;
   familyName?: string;
@@ -627,6 +630,7 @@ export async function seedContactSharingRequest(
   };
   if (data.respondedAt !== undefined) doc.respondedAt = data.respondedAt;
 
+  if (data.parentUserId !== undefined) doc.parentUserId = data.parentUserId;
   await ref.set(doc);
   return ref.id;
 }
@@ -640,6 +644,9 @@ export async function seedContactSharingRequest(
  */
 export interface StudyContactRequestSeed {
   requestId?: string;
+  /** The parent the request belongs to (writers set it since issue #273); optional so the
+   * pre-#273 and tutor-initiated shapes (no parent yet) stay seedable. */
+  parentUserId?: string;
   tutorUserId: string;
   familyId: string;
   familyName?: string;
@@ -691,6 +698,7 @@ export async function seedStudyContactRequest(
   if (data.publishedSearchId !== undefined) doc.publishedSearchId = data.publishedSearchId;
   if (data.tutorName !== undefined) doc.tutorName = data.tutorName;
 
+  if (data.parentUserId !== undefined) doc.parentUserId = data.parentUserId;
   await ref.set(doc);
   return ref.id;
 }

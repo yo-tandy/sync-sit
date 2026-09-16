@@ -519,6 +519,48 @@ export async function performErasure(
   ) as FirebaseFirestore.QueryDocumentSnapshot[];
   await commitInChunks(searchDocsToDelete.map((doc) => (b) => b.delete(doc.ref)));
 
+  // 4-ter-ter. Contact requests (issue #408, the ledger's two leftovers):
+  // `contactSharingRequests` (sit) and `studyContactRequests` (study). Both
+  // are one doc shared by two parties, carrying the other party's name and
+  // the family's name next to this member's uid -- `nameFanOut` sweeps both
+  // for identity corrections, so they were known to hold personal data, yet
+  // no erasure path touched them. Full deletion, not anonymisation: a
+  // request whose requester or addressee is gone has no one left to answer
+  // or act on it (the accepted contact, where one exists, lives on the
+  // family/babysitter docs, not here), so there is no keep-and-scrub case
+  // the way engagements get. Three sides, the same rule as `searches`: the
+  // counterparty side by uid (`babysitterUserId` / `tutorUserId`), the
+  // member's own side (`parentUserId`, and for study also `createdByUserId`
+  // -- the tutor-initiated shape only fills `parentUserId` at accept), and
+  // the family side by `familyId` ONLY when this is the last parent; while a
+  // co-parent survives, the family's requests are theirs to keep.
+  const familyRequests = (col: string) =>
+    familyId && isLastParent
+      ? db.collection(col).where('familyId', '==', familyId).get()
+      : Promise.resolve({ docs: [] as any[] } as any);
+  const uniqueDocs = (snaps: any[]) =>
+    Array.from(
+      new Map(
+        snaps.flatMap((snap: any) => snap.docs).map((doc: any) => [doc.ref.path, doc]),
+      ).values(),
+    ) as FirebaseFirestore.QueryDocumentSnapshot[];
+  const [sharingRequestDocs, studyRequestDocs] = await Promise.all([
+    Promise.all([
+      db.collection('contactSharingRequests').where('babysitterUserId', '==', targetUserId).get(),
+      db.collection('contactSharingRequests').where('parentUserId', '==', targetUserId).get(),
+      familyRequests('contactSharingRequests'),
+    ]).then(uniqueDocs),
+    Promise.all([
+      db.collection('studyContactRequests').where('tutorUserId', '==', targetUserId).get(),
+      db.collection('studyContactRequests').where('parentUserId', '==', targetUserId).get(),
+      db.collection('studyContactRequests').where('createdByUserId', '==', targetUserId).get(),
+      familyRequests('studyContactRequests'),
+    ]).then(uniqueDocs),
+  ]);
+  await commitInChunks(
+    [...sharingRequestDocs, ...studyRequestDocs].map((doc) => (b) => b.delete(doc.ref)),
+  );
+
   // 4-quater. sync-do (plan §11.4): `doTasks` + `taskOffers` on BOTH sides,
   // the two uid-keyed Storage prefixes, and the dangling-reference scrub
   // that keeps a co-parent's surviving task from pointing at objects this
@@ -625,6 +667,9 @@ export async function performErasure(
     refDocsDeleted: refDocsToDelete.length,
     // issue #408 item 2 -- the `searches` half of the erasure.
     searchesDeleted: searchDocsToDelete.length,
+    // issue #408 ledger -- the two contact-request collections.
+    contactSharingRequestsDeleted: sharingRequestDocs.length,
+    studyContactRequestsDeleted: studyRequestDocs.length,
     doErasure,
     /** The family that supervised this member, captured before the link was deleted. */
     supervisingFamilyId,

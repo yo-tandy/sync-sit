@@ -337,6 +337,8 @@ export const deleteMyAccount = onCall(
         // issue #408 item 2 — counts only, no personal data (same convention
         // as `deletedReferences`).
         deletedSearches: erased.searchesDeleted,
+        deletedContactSharingRequests: erased.contactSharingRequestsDeleted,
+        deletedStudyContactRequests: erased.studyContactRequestsDeleted,
         deletedDoTasks: erased.doErasure.tasksDeleted,
         deletedDoOffers: erased.doErasure.offersDeleted,
         deletedDoPhotoObjects: erased.doErasure.photoObjectsDeleted,
