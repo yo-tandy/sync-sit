@@ -1301,7 +1301,7 @@ export default {
     approveTitle: 'Approve Verification',
     approveConfirm: 'Are you sure you want to approve this document?',
     rejectTitle: 'Reject Verification',
-    rejectDesc: 'Provide a reason for rejecting this document.',
+    rejectDesc: 'A reason is required. It is emailed to the family\'s parents (their replies reach the support inbox), so write it for them.',
     rejectionReasonPlaceholder: 'Reason for rejection...',
     enrollmentDesc: 'Upload your child\'s EJM enrollment or re-enrollment document.',
     enrollmentNote: 'The admin will verify the document against your family\'s registered information (parents and children).',
