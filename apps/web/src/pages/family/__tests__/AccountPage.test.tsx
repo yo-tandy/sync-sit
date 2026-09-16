@@ -222,4 +222,39 @@ describe('family AccountPage', () => {
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.sit.confirmed.push', 'updatedAt']);
     expect(payload['notifPrefs.sit.confirmed.push']).toBe(false);
   });
+
+  it('a typed phone number SURVIVES the render it causes (seeded once per mount)', async () => {
+    // `parent` is a fresh object every render (getParentView spreads), so an
+    // unguarded `[parent]` seeding effect re-fires on the very render its own
+    // setters trigger and resets the field to the stored value — the parent
+    // cannot change their phone number at all. study-web fixed this on its
+    // copy of this page (PR #206 review); sit's copy was never updated.
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    const phoneInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    // Seeded from profiles.parent.phone = '+33100000000' (FR code stripped).
+    expect(phoneInput.value).toBe('100000000');
+
+    fireEvent.change(phoneInput, { target: { value: '612345678' } });
+
+    expect(phoneInput.value).toBe('612345678');
+    // And it is still the typed value one macrotask later, after every
+    // effect the change scheduled has flushed.
+    await waitFor(() => expect(phoneInput.value).toBe('612345678'));
+  });
+
+  it('saves the TYPED phone, not the value the page was seeded with', async () => {
+    // The consequence the test above guards, at the write boundary: without
+    // the guard the save payload carries the stored number back to itself.
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: '612345678' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('account.saveContact') }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const userCall = h.updateDoc.mock.calls.find((c) => c[0].path === 'users/p1')!;
+    expect(userCall[1]['profiles.parent.phone']).toBe('+33 612345678');
+  });
 });

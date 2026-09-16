@@ -257,4 +257,21 @@ describe('family AccountPage', () => {
       expect(h.auth.resetPassword).toHaveBeenCalledWith('parent@example.com'),
     );
   });
+
+  it('a typed phone number SURVIVES the render it causes (seeded once per mount)', async () => {
+    // The guard this pins already exists here (PR #206 review) but was never
+    // tested, so nothing stopped a refactor from dropping it — which is
+    // exactly what sit's copy of this page was still missing. `parent` is a
+    // fresh object every render, so an unguarded `[parent]` seeding effect
+    // re-fires on the render its own setters trigger and resets the field.
+    renderWithProviders(<AccountPage />);
+
+    const phoneInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    expect(phoneInput.value).toBe('600000000');
+
+    fireEvent.change(phoneInput, { target: { value: '612345678' } });
+
+    expect(phoneInput.value).toBe('612345678');
+    await waitFor(() => expect(phoneInput.value).toBe('612345678'));
+  });
 });
