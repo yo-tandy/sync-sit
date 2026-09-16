@@ -31,7 +31,10 @@ describe('useSyncUserLanguage', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
-  it('does nothing while signed out, and starts listening once a user is present', async () => {
+  it('holds a change seen while signed out and writes it once the user arrives (handoff ordering)', async () => {
+    // HandoffPage switches i18n to the minted `lang` BEFORE redeeming the
+    // code and signing in — the only language signal that parent may ever
+    // give. It must not be dropped.
     const { i18n, write, hook } = setup(null);
     await act(async () => {
       await i18n.changeLanguage('fr');
@@ -39,10 +42,31 @@ describe('useSyncUserLanguage', () => {
     expect(write).not.toHaveBeenCalled();
 
     hook.rerender({ uid: 'u1' });
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledWith('fr');
+
     await act(async () => {
       await i18n.changeLanguage('en');
     });
     expect(write).toHaveBeenCalledWith('en');
+    expect(write).toHaveBeenCalledTimes(2);
+  });
+
+  it('a plain sign-in with NO prior change writes nothing (the doc is not overwritten with the browser default)', () => {
+    const { write, hook } = setup(null);
+    hook.rerender({ uid: 'u1' });
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it('the held change is consumed once: a second sign-in does not replay it', async () => {
+    const { i18n, write, hook } = setup(null);
+    await act(async () => {
+      await i18n.changeLanguage('fr');
+    });
+    hook.rerender({ uid: 'u1' });
+    hook.rerender({ uid: null });
+    hook.rerender({ uid: 'u2' });
+    expect(write).toHaveBeenCalledTimes(1);
   });
 
   it('collapses a repeated change to the same language into one write', async () => {
