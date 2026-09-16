@@ -55,6 +55,7 @@ export function AdminUsersPage() {
 
   const handleBlock = (uid: string, currentStatus: string) => {
     const isBlocked = currentStatus === 'blocked';
+    setConfirmError('');
     setConfirmDialog({
       open: true,
       title: isBlocked ? t('admin.unblockUser') : t('admin.blockUser'),
@@ -69,6 +70,7 @@ export function AdminUsersPage() {
   };
 
   const handleDeactivate = (uid: string, searchable: boolean) => {
+    setConfirmError('');
     setConfirmDialog({
       open: true,
       title: searchable ? t('admin.deactivate') : t('admin.activate'),
@@ -81,6 +83,7 @@ export function AdminUsersPage() {
   };
 
   const handleDelete = (uid: string) => {
+    setConfirmError('');
     setConfirmDialog({
       open: true,
       title: t('admin.deleteUser'),
@@ -93,6 +96,7 @@ export function AdminUsersPage() {
   };
 
   const handleResetPassword = (uid: string) => {
+    setConfirmError('');
     setConfirmDialog({
       open: true,
       title: t('admin.resetPassword'),
@@ -207,14 +211,29 @@ export function AdminUsersPage() {
   };
 
   const [confirming, setConfirming] = useState(false);
+  // Machine-readable error code from an HttpsError's `details`, mirroring the
+  // `guardianErrorCode`/`identityError` convention used across this app
+  // (`GovernedChildPage.tsx`, `KidInvitePage.tsx`, ...). Today the only
+  // mapped code is `admin/last-admin` (issue #421) — everything else falls
+  // back to a generic failure message.
+  const [confirmError, setConfirmError] = useState('');
   const handleConfirm = async () => {
     if (confirming) return;
     setConfirming(true);
     try {
       await confirmDialog.action();
+      setConfirmDialog((prev) => ({ ...prev, open: false }));
+    } catch (err: unknown) {
+      const code = (err as { details?: { code?: unknown } } | null)?.details?.code;
+      // The dialog stays OPEN on failure (issue #421 review): before this,
+      // `finally` closed it unconditionally, so a rejected `deleteUser` call
+      // vanished with no feedback — the admin had no way to tell the delete
+      // failed at all.
+      setConfirmError(
+        code === 'admin/last-admin' ? t('admin.lastAdminError') : t('admin.actionFailed'),
+      );
     } finally {
       setConfirming(false);
-      setConfirmDialog((prev) => ({ ...prev, open: false }));
     }
   };
 
@@ -383,14 +402,25 @@ export function AdminUsersPage() {
       {/* `|| undefined` — a blank title (the initial state) must fall back to
           the legacy plain-div path rather than ship an EMPTY accessible name
           (axe aria-dialog-name); every opener sets a title today. */}
-      <Dialog open={confirmDialog.open} onClose={() => setConfirmDialog((prev) => ({ ...prev, open: false }))} ariaLabel={confirmDialog.title || undefined}>
+      <Dialog
+        open={confirmDialog.open}
+        onClose={() => {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+          setConfirmError('');
+        }}
+        ariaLabel={confirmDialog.title || undefined}
+      >
         <h3 className="mb-2 text-lg font-semibold">{confirmDialog.title}</h3>
         <p className="mb-6 text-sm text-gray-600">{confirmDialog.message}</p>
+        {confirmError && <p className="mb-4 text-sm text-red-600">{confirmError}</p>}
         <div className="flex gap-3">
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => setConfirmDialog((prev) => ({ ...prev, open: false }))}
+            onClick={() => {
+              setConfirmDialog((prev) => ({ ...prev, open: false }));
+              setConfirmError('');
+            }}
           >
             {t('common.cancel')}
           </Button>

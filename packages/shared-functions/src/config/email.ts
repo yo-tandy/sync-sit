@@ -140,7 +140,13 @@ const ACCOUNT_EXISTS_COPY: Record<AccountExistsApp, { appName: string; loginUrl:
   do: { appName: 'Sync/Do', loginUrl: `${DO_APP_URL}/login` },
 };
 
-const SUPPORT_EMAIL = 'support@sync-sit.com';
+/**
+ * The one support address every app-facing surface links to (issue #363 —
+ * verified domain, not the earlier unverified one). Exported so other
+ * callers (the last-parent-erasure minor notification, #421) reuse this
+ * value rather than inlining a second copy that could drift from it.
+ */
+export const SUPPORT_EMAIL = 'support@sync-sit.com';
 
 /**
  * Builds the account-exists email (issue #148): sent INSTEAD of a verification
