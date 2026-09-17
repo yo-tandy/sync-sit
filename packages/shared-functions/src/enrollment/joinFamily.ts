@@ -7,6 +7,7 @@ import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser } from './addProfileToUser.js';
 import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
+import { claimInvite, consumeInviteClaim, releaseInviteClaim, newClaimId } from './inviteClaim.js';
 
 interface JoinFamilyData {
   token: string;
@@ -35,153 +36,152 @@ export const joinFamily = onCall(
       throw new HttpsError('invalid-argument', 'Invite token is required');
     }
 
-    // 1. Validate invite token
-    const inviteSnap = await db.collection('inviteLinks').doc(data.token).get();
-    if (!inviteSnap.exists) {
-      throw new HttpsError('not-found', 'Invalid invite link');
-    }
+    // 1. CLAIM the invite token. See ./inviteClaim.ts for why redemption takes
+    // a short lease rather than checking `used` here and setting it at the end
+    // — the old shape let two overlapping redemptions of one link both join.
+    const inviteRef = db.collection('inviteLinks').doc(data.token);
+    const claimId = newClaimId();
+    const familyId = await claimInvite(inviteRef, claimId);
 
-    const invite = inviteSnap.data()!;
-    if (invite.used) {
-      throw new HttpsError('failed-precondition', 'This invite link has already been used');
-    }
-    if (invite.expiresAt.toDate() < new Date()) {
-      throw new HttpsError('deadline-exceeded', 'This invite link has expired');
-    }
+    // Everything below holds the claim. ANY failure releases it, so a
+    // rejected attempt (a wrong code, an email already registered, the
+    // profile-exists rejection step 5 is ordered around) leaves the link
+    // usable — the property the old read-then-write ordering was protecting.
+    try {
+      // 2. Verify email code — new-account path only.
+      let codeRef: FirebaseFirestore.DocumentReference | null = null;
+      if (!isAddProfile) {
+        const codeDoc = await db
+          .collection('verificationCodes')
+          .doc(data.email.toLowerCase())
+          .get();
 
-    const familyId = invite.familyId;
-
-    // 2. Verify email code — new-account path only.
-    let codeRef: FirebaseFirestore.DocumentReference | null = null;
-    if (!isAddProfile) {
-      const codeDoc = await db
-        .collection('verificationCodes')
-        .doc(data.email.toLowerCase())
-        .get();
-
-      if (!codeDoc.exists) {
-        throw new HttpsError('not-found', 'No verification code found');
-      }
-
-      const codeData = codeDoc.data()!;
-
-      // Joining a family as a second parent asserts nothing about EJM
-      // membership — the invite token is the authorization, the code only
-      // proves the joiner owns the mailbox. 'mailbox' (the class every issuer
-      // produces) is exactly that. Stated rather than assumed (issue #322).
-      // Unstamped legacy docs also read as 'mailbox', so no transitional gap.
-      assertCodeIdentityClass(codeData, 'mailbox');
-
-      if (codeData.expiresAt.toDate() < new Date()) {
-        throw new HttpsError('deadline-exceeded', 'Verification code expired');
-      }
-
-      if ((codeData.attempts || 0) >= 5) {
-        throw new HttpsError('resource-exhausted', 'Too many failed attempts. Request a new code.');
-      }
-
-      if (codeData.code !== data.verificationCode) {
-        await codeDoc.ref.update({ attempts: (codeData.attempts || 0) + 1 });
-        throw new HttpsError('invalid-argument', 'Invalid verification code');
-      }
-
-      codeRef = codeDoc.ref;
-    }
-
-    // 3. Verify family exists
-    const familySnap = await db.collection('families').doc(familyId).get();
-    if (!familySnap.exists) {
-      throw new HttpsError('not-found', 'Family not found');
-    }
-
-    // 4. Resolve the uid — either the authed caller (add-profile) or a new
-    // Firebase Auth user (new-account path).
-    let uid: string;
-    if (isAddProfile) {
-      uid = request.auth!.uid;
-    } else {
-      try {
-        const userRecord = await adminAuth.createUser({
-          email: data.email.toLowerCase(),
-          password: data.password,
-          displayName: `${data.firstName} ${data.lastName}`,
-        });
-        uid = userRecord.uid;
-      } catch (err: unknown) {
-        const fbErr = err as { code?: string };
-        if (fbErr.code === 'auth/email-already-exists') {
-          // Race backstop only: reaching here requires a valid emailed code,
-          // so this is not an enumeration oracle (the caller owns the
-          // mailbox). No machine-readable reason — clients surface the
-          // message as-is.
-          throw new HttpsError('already-exists', 'An account with this email already exists');
+        if (!codeDoc.exists) {
+          throw new HttpsError('not-found', 'No verification code found');
         }
-        throw new HttpsError('internal', 'Failed to create account');
+
+        const codeData = codeDoc.data()!;
+
+        // Joining a family as a second parent asserts nothing about EJM
+        // membership — the invite token is the authorization, the code only
+        // proves the joiner owns the mailbox. 'mailbox' (the class every issuer
+        // produces) is exactly that. Stated rather than assumed (issue #322).
+        // Unstamped legacy docs also read as 'mailbox', so no transitional gap.
+        assertCodeIdentityClass(codeData, 'mailbox');
+
+        if (codeData.expiresAt.toDate() < new Date()) {
+          throw new HttpsError('deadline-exceeded', 'Verification code expired');
+        }
+
+        if ((codeData.attempts || 0) >= 5) {
+          throw new HttpsError('resource-exhausted', 'Too many failed attempts. Request a new code.');
+        }
+
+        if (codeData.code !== data.verificationCode) {
+          await codeDoc.ref.update({ attempts: (codeData.attempts || 0) + 1 });
+          throw new HttpsError('invalid-argument', 'Invalid verification code');
+        }
+
+        codeRef = codeDoc.ref;
       }
-    }
 
-    const now = new Date();
+      // 3. Verify family exists
+      const familySnap = await db.collection('families').doc(familyId).get();
+      if (!familySnap.exists) {
+        throw new HttpsError('not-found', 'Family not found');
+      }
 
-    // 5. Create / merge the parent user document. This MUST run before the
-    // invite is consumed and before parentIds arrayUnion, so a profile-exists
-    // rejection leaves the invite valid for a retry.
-    if (isAddProfile) {
-      await addProfileToUser({
-        uid,
-        profileKey: 'parent',
-        profileData: { enrollmentComplete: true, familyId },
-        fillBaseFields: {
-          ...(data.firstName ? { firstName: data.firstName } : {}),
-          ...(data.lastName ? { lastName: data.lastName } : {}),
-          language: 'en',
-        },
-        auditAction: 'joined_family',
-        auditDetails: { familyId },
-      });
-    } else {
-      await db.collection('users').doc(uid).set({
-        uid,
-        email: data.email.toLowerCase(),
-        status: 'active',
-        firstName: data.firstName,
-        lastName: data.lastName,
-        language: 'en',
-        profiles: {
-          parent: {
-            enrollmentComplete: true,
-            familyId,
+      // 4. Resolve the uid — either the authed caller (add-profile) or a new
+      // Firebase Auth user (new-account path).
+      let uid: string;
+      if (isAddProfile) {
+        uid = request.auth!.uid;
+      } else {
+        try {
+          const userRecord = await adminAuth.createUser({
+            email: data.email.toLowerCase(),
+            password: data.password,
+            displayName: `${data.firstName} ${data.lastName}`,
+          });
+          uid = userRecord.uid;
+        } catch (err: unknown) {
+          const fbErr = err as { code?: string };
+          if (fbErr.code === 'auth/email-already-exists') {
+            // Race backstop only: reaching here requires a valid emailed code,
+            // so this is not an enumeration oracle (the caller owns the
+            // mailbox). No machine-readable reason — clients surface the
+            // message as-is.
+            throw new HttpsError('already-exists', 'An account with this email already exists');
+          }
+          throw new HttpsError('internal', 'Failed to create account');
+        }
+      }
+
+      const now = new Date();
+
+      // 5. Create / merge the parent user document. This MUST run before the
+      // invite is consumed and before parentIds arrayUnion, so a profile-exists
+      // rejection leaves the invite valid for a retry.
+      if (isAddProfile) {
+        await addProfileToUser({
+          uid,
+          profileKey: 'parent',
+          profileData: { enrollmentComplete: true, familyId },
+          fillBaseFields: {
+            ...(data.firstName ? { firstName: data.firstName } : {}),
+            ...(data.lastName ? { lastName: data.lastName } : {}),
+            language: 'en',
           },
-        },
-        // App-scoped since issue #369; the shared constant is the single
+          auditAction: 'joined_family',
+          auditDetails: { familyId },
+        });
+      } else {
+        await db.collection('users').doc(uid).set({
+          uid,
+          email: data.email.toLowerCase(),
+          status: 'active',
+          firstName: data.firstName,
+          lastName: data.lastName,
+          language: 'en',
+          profiles: {
+            parent: {
+              enrollmentComplete: true,
+              familyId,
+            },
+          },
+          // App-scoped since issue #369; the shared constant is the single
 
-        // source for the product defaults.
+          // source for the product defaults.
 
-        notifPrefs: DEFAULT_NOTIF_PREFS,
-        fcmTokens: [],
-        createdAt: now,
+          notifPrefs: DEFAULT_NOTIF_PREFS,
+          fcmTokens: [],
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+
+      // 6. Add to family's parentIds (shared, both modes)
+      await db.collection('families').doc(familyId).update({
+        parentIds: FieldValue.arrayUnion(uid),
         updatedAt: now,
       });
+
+      // 7. Consume the claim we hold (shared, both modes).
+      await consumeInviteClaim(inviteRef, claimId, uid);
+
+      // 8. Clean up verification code and audit — new-account path only; the
+      // add-profile path audits via addProfileToUser with 'joined_family'.
+      if (!isAddProfile) {
+        if (codeRef) await codeRef.delete();
+        await writeUserActivity(uid, 'joined_family', { familyId });
+      }
+
+      return { success: true, uid, familyId };
+    } catch (err) {
+      // Give the link back: a rejected attempt must leave it usable, which is
+      // the property joinFamily's step-5 ordering was protecting all along.
+      await releaseInviteClaim(inviteRef, claimId);
+      throw err;
     }
-
-    // 6. Add to family's parentIds (shared, both modes)
-    await db.collection('families').doc(familyId).update({
-      parentIds: FieldValue.arrayUnion(uid),
-      updatedAt: now,
-    });
-
-    // 7. Mark invite as used (shared, both modes)
-    await inviteSnap.ref.update({
-      used: true,
-      usedByUserId: uid,
-    });
-
-    // 8. Clean up verification code and audit — new-account path only; the
-    // add-profile path audits via addProfileToUser with 'joined_family'.
-    if (!isAddProfile) {
-      if (codeRef) await codeRef.delete();
-      await writeUserActivity(uid, 'joined_family', { familyId });
-    }
-
-    return { success: true, uid, familyId };
   }
 );
