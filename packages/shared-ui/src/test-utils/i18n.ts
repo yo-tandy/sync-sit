@@ -24,6 +24,8 @@ export function createTestI18n(): i18n {
         translation: {
           common: {
             continue: 'Continue',
+            addressPlaceholder: 'Start typing an address...',
+            addressPoweredBy: 'Powered by adresse.data.gouv.fr',
             cancel: 'Cancel',
             signOut: 'Sign out',
             error: 'Something went wrong. Please try again.',

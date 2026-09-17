@@ -7,6 +7,9 @@ export default {
     fridays: 'Vendredis', saturdays: 'Samedis', sundays: 'Dimanches',
   },
   common: {
+    // AddressAutocomplete partagé (issue #524) : les deux chaînes qu'il codait en dur.
+    addressPlaceholder: 'Commencez à saisir une adresse...',
+    addressPoweredBy: 'Propulsé par adresse.data.gouv.fr',
     save: 'Enregistrer',
     cancel: 'Annuler',
     back: 'Retour',
