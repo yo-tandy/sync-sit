@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { TopNav } from '../components/TopNav.js';
+import { AuthColumn } from '../components/AuthColumn.js';
 import { Button } from '../components/Button.js';
 import { Input } from '../components/Input.js';
 import { InfoBanner } from '../components/InfoBanner.js';
@@ -28,7 +29,7 @@ export function ForgotPasswordPage({ onSubmit, error, clearError }: ForgotPasswo
 
   if (sent) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title={t('auth.forgotPasswordTitle')} backTo="/login" />
         <div className="px-6 pt-8 text-center">
           <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
@@ -40,12 +41,12 @@ export function ForgotPasswordPage({ onSubmit, error, clearError }: ForgotPasswo
           </p>
           <InfoBanner icon="ℹ️">{t('auth.checkEmailHint')}</InfoBanner>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
   return (
-    <div>
+    <AuthColumn>
       <TopNav title={t('auth.forgotPasswordTitle')} backTo="/login" />
       <div className="px-6 pt-8">
         <h2 className="mb-2 text-2xl font-bold">{t('auth.forgotPasswordHeading')}</h2>
@@ -64,6 +65,6 @@ export function ForgotPasswordPage({ onSubmit, error, clearError }: ForgotPasswo
           <Button type="submit">{t('auth.forgotPasswordSubmit')}</Button>
         </form>
       </div>
-    </div>
+    </AuthColumn>
   );
 }
