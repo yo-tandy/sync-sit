@@ -376,11 +376,19 @@ service cloud.firestore {
                  && identityFieldSettable('dateOfBirth'));
     }
 
-    // Users: read own profile; parents can read active babysitters (for search results)
+    // Users: read own profile, admin, or a same-family member. There is NO
+    // client read of another person's doc beyond that: rules are all-or-
+    // nothing per document, so the former "any authed user may read any
+    // active babysitter" clause handed out dateOfBirth (minors), the root
+    // address with lat/lng, the contact trio, ejemEmail, approvedFamilies and
+    // fcmTokens to every signed-in account — strictly more than
+    // searchBabysitters / lookupBabysitter project (issue #529). Every
+    // cross-user babysitter read now goes through a callable that projects
+    // and gates: searchBabysitters, lookupBabysitter,
+    // findBabysittersForEndorsement (#531), getBabysitterSummaries (#534).
     match /users/{userId} {
       allow read: if isOwner(userId)
                   || isAdmin()
-                  || (isAuth() && isBabysitterData(resource.data) && resource.data.status == 'active')
                   || (isAuth() && parentFamilyId(resource.data) != null
                       && parentFamilyId(resource.data) == parentFamilyId(callerData()));
       allow create, delete: if false; // Only via Cloud Functions

@@ -92,11 +92,22 @@ describe('users collection — Plan D reads', () => {
     await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'someParent')));
   });
 
-  it('active babysitter is readable by any authed user', async () => {
+  it('an active babysitter doc is NOT readable by another user — callables project and gate instead (issue #529)', async () => {
+    // Rules are all-or-nothing per document: a direct read would return
+    // dateOfBirth, address, contact, ejemEmail, approvedFamilies and
+    // fcmTokens. Parents reach babysitters through searchBabysitters /
+    // lookupBabysitter / findBabysittersForEndorsement / getBabysitterSummaries.
     await seed('bsN', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', searchable: true } } });
     await seed('caller', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famC' } } });
     const authed = testEnv.authenticatedContext('caller');
-    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'bsN')));
+    await assertFails(getDoc(doc(authed.firestore(), 'users', 'bsN')));
+    // Another babysitter cannot read a peer either.
+    await seed('bsPeer', { status: 'active', email: 'p@ejm.org', profiles: { babysitter: { ejemEmail: 'p@ejm.org' } } });
+    const peer = testEnv.authenticatedContext('bsPeer');
+    await assertFails(getDoc(doc(peer.firestore(), 'users', 'bsN')));
+    // The babysitter still reads their own doc.
+    const self = testEnv.authenticatedContext('bsN');
+    await assertSucceeds(getDoc(doc(self.firestore(), 'users', 'bsN')));
   });
 
   it('inactive new-shape babysitter is NOT readable by others', async () => {
@@ -120,11 +131,12 @@ describe('users collection — Plan D reads', () => {
     await assertFails(getDoc(doc(authed.firestore(), 'users', 'otherFamN')));
   });
 
-  // The babysitter-read gate backs the client babysitter-search query
-  // (SubmittedEndorsementsPage). Under Plan D the client filters the new
-  // profiles.babysitter shape; the rule must keep that list query provably
-  // allowed. Regression guard for the rule's query-provability.
-  it('allows the Plan D babysitter list query (status + profiles.babysitter)', async () => {
+  // The babysitter roster query that SubmittedEndorsementsPage used to run
+  // client-side (every active babysitter's FULL doc, per keystroke) moved
+  // behind findBabysittersForEndorsement (#531). With the any-authed-user
+  // read clause gone (issue #529) the query is DENIED — no client may list
+  // babysitter documents; this pins that the door stays shut.
+  it('denies the babysitter roster list query (status + profiles.babysitter) to a parent', async () => {
     await seed('bsQ', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: true } } });
     await seed('callerQ', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famQ' } } });
     const authed = testEnv.authenticatedContext('callerQ');
@@ -133,7 +145,7 @@ describe('users collection — Plan D reads', () => {
       where('status', '==', 'active'),
       where('profiles.babysitter.enrollmentComplete', 'in', [true, false]),
     );
-    await assertSucceeds(getDocs(q));
+    await assertFails(getDocs(q));
   });
 });
 
