@@ -1,5 +1,8 @@
 export default {
   common: {
+    // Shared AddressAutocomplete (issue #524): the two strings it used to hardcode.
+    addressPlaceholder: 'Start typing an address...',
+    addressPoweredBy: 'Powered by adresse.data.gouv.fr',
     back: 'Back',
     continue: 'Continue',
     done: 'Done',

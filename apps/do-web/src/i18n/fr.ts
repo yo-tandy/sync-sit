@@ -1,5 +1,8 @@
 export default {
   common: {
+    // AddressAutocomplete partagé (issue #524) : les deux chaînes qu'il codait en dur.
+    addressPlaceholder: 'Commencez à saisir une adresse...',
+    addressPoweredBy: 'Propulsé par adresse.data.gouv.fr',
     back: 'Retour',
     continue: 'Continuer',
     done: 'Terminé',
