@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -68,31 +68,27 @@ export function PreferredBabysittersPage() {
     }
 
     async function loadInfos() {
-      const infos: BabysitterSummary[] = [];
-      for (const uid of preferredIds) {
-        try {
-          const snap = await getDoc(doc(db, 'users', uid));
-          if (snap.exists()) {
-            const d = snap.data();
-            infos.push({
-              uid,
-              firstName: d.firstName || '',
-              lastName: d.lastName || '',
-              photoUrl: d.photoUrl || null,
-              classLevel: d.classLevel || '',
-              languages: d.languages || [],
-              aboutMe: d.aboutMe || undefined,
-              kidAgeRange: d.kidAgeRange || undefined,
-              maxKids: d.maxKids || undefined,
-              contactEmail: d.contactEmail || undefined,
-              contactPhone: d.contactPhone || undefined,
-              whatsapp: d.whatsapp || undefined,
-            });
-          }
-        // eslint-disable-next-line no-restricted-syntax -- best-effort: per-preferred-babysitter info read; unreadable rows are skipped
-        } catch {
-          // Skip if can't read (permissions)
-        }
+      // One callable for the list (issue #529): the page no longer reads
+      // users/{uid} directly. Unreadable / inactive rows are simply absent,
+      // as the old catch-and-skip produced. The summary is resolved
+      // server-side from the profile view, so languages / aboutMe /
+      // kidAgeRange / maxKids now come from the nested babysitter profile
+      // rather than root fields that the Plan-D shape no longer carries.
+      let infos: BabysitterSummary[] = [];
+      try {
+        const summarize = httpsCallable<{ uids: string[] }, { summaries: BabysitterSummary[] }>(
+          functions,
+          'getBabysitterSummaries',
+        );
+        const res = await summarize({ uids: preferredIds });
+        infos = res.data.summaries.map((s) => ({
+          ...s,
+          photoUrl: s.photoUrl ?? null,
+          classLevel: s.classLevel || '',
+          languages: s.languages || [],
+        }));
+      } catch (err) {
+        console.error('[preferred] babysitter summaries failed', err);
       }
       setPreferredInfos(infos);
       setLoading(false);

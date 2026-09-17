@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
 import { useSubmittedEndorsements } from '@/hooks/useSubmittedEndorsements';
@@ -78,27 +78,23 @@ export function SubmittedEndorsementsPage() {
     const missing = uids.filter((uid) => !babysitterNames[uid]);
     if (missing.length === 0) return;
 
-    Promise.all(
-      missing.map(async (uid) => {
-        try {
-          const snap = await getDoc(doc(db, 'users', uid));
-          if (snap.exists()) {
-            const d = snap.data();
-            return [uid, formatBabysitterName(d.firstName || '', d.lastName || '')] as [string, string];
-          }
-        // eslint-disable-next-line no-restricted-syntax -- best-effort: babysitter-name enrichment for a submitted reference
-        } catch { /* skip */ }
-        return null;
+    // One callable for the batch (issue #529): the page no longer reads
+    // users/{uid} directly.
+    const summarize = httpsCallable<{ uids: string[] }, { summaries: { uid: string; firstName: string; lastName: string }[] }>(
+      functions,
+      'getBabysitterSummaries',
+    );
+    summarize({ uids: missing })
+      .then((res) => {
+        const newNames: Record<string, string> = {};
+        for (const s of res.data.summaries) {
+          newNames[s.uid] = formatBabysitterName(s.firstName || '', s.lastName || '');
+        }
+        if (Object.keys(newNames).length > 0) {
+          setBabysitterNames((prev) => ({ ...prev, ...newNames }));
+        }
       })
-    ).then((results) => {
-      const newNames: Record<string, string> = {};
-      for (const r of results) {
-        if (r) newNames[r[0]] = r[1];
-      }
-      if (Object.keys(newNames).length > 0) {
-        setBabysitterNames((prev) => ({ ...prev, ...newNames }));
-      }
-    });
+      .catch(() => { /* skip */ });
   }, [references]);
 
   // Search babysitters with debounce

@@ -97,6 +97,7 @@ export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
 export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
 export { lookupBabysitter } from './family/lookupBabysitter.js';
 export { findBabysittersForEndorsement } from './family/findBabysittersForEndorsement.js';
+export { getBabysitterSummaries } from './family/getBabysitterSummaries.js';
 export { respondToContactSharing } from './family/respondToContactSharing.js';
 export { respondToRequest } from './appointments/respondToRequest.js';
 export { cancelAppointment } from './appointments/cancelAppointment.js';
