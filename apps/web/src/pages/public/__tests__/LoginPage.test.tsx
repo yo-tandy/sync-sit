@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 // Capture the props the sit LoginPage passes into the shared LoginPage.
 let captured: Record<string, unknown> = {};
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   LoginPage: (props: Record<string, unknown>) => {
     captured = props;
     return null;

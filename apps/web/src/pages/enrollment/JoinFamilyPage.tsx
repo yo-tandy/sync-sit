@@ -5,7 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { enrollmentErrorReason } from '@ejm/shared-ui';
+import { AuthColumn, enrollmentErrorReason } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
@@ -206,7 +206,7 @@ export function JoinFamilyPage() {
 
   if (invalidToken) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-3xl">❌</div>
@@ -216,7 +216,7 @@ export function JoinFamilyPage() {
           </p>
           <Button onClick={() => navigate('/')}>Go to home</Button>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
@@ -226,7 +226,7 @@ export function JoinFamilyPage() {
   // membered doc (either field, incl. legacy root) dead-ends here.
   if (firebaseUser && hasFamilyMembership(userDoc)) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <h2 className="mb-6 text-xl font-bold">{t('enrollment.alreadyInFamily')}</h2>
@@ -237,7 +237,7 @@ export function JoinFamilyPage() {
             Go to my family
           </Link>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
@@ -246,7 +246,7 @@ export function JoinFamilyPage() {
   // confirm button that joins with the token alone.
   if (firebaseUser) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="px-6 py-8">
           <h2 className="mb-2 text-xl font-bold">Join the {familyName} family</h2>
@@ -258,12 +258,12 @@ export function JoinFamilyPage() {
             {submitting ? 'Joining...' : t('enrollment.joinFamilyConfirm', { familyName })}
           </Button>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
   return (
-    <div>
+    <AuthColumn>
       <TopNav
         title="Join Family"
         backTo={step === 0 ? '/' : undefined}
@@ -404,6 +404,6 @@ export function JoinFamilyPage() {
           </Button>
         </div>
       )}
-    </div>
+    </AuthColumn>
   );
 }

@@ -13,6 +13,7 @@ import {
   StepFamilyInfo,
   enrollmentErrorReason,
   type FamilyFormData,
+  AuthColumn,
 } from '@ejm/shared-ui';
 import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasFamilyMembership } from '@ejm/shared-core';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
@@ -397,7 +398,7 @@ export function ParentEnrollment() {
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep && isAddProfile ? (
         // Add-profile users never held a code, so they keep the plain
         // enrollment bar on the family step.
@@ -432,6 +433,6 @@ export function ParentEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

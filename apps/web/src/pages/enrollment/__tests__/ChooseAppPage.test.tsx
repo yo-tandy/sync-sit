@@ -60,6 +60,8 @@ vi.mock('@/components/ui', () => ({
   Spinner: () => <div>spinner</div>,
 }));
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   APP_NAME: { sit: 'sync/sit', study: 'sync/study', do: 'sync/do' },
   useDocumentGround: () => {},
   LanguageSelector: () => <div>lang-selector</div>,

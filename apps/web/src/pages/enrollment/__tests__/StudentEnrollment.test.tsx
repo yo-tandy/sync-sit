@@ -74,6 +74,8 @@ vi.mock('@ejm/sit-core', () => ({
 }));
 
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   createAdminConfigReader: () => ({
     getClientConfigValue: (_k: string, fallback: number) => Promise.resolve(fallback),
     useClientConfigValue: (_k: string, fallback: number) => fallback,

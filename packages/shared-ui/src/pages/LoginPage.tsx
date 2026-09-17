@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { AuthColumn } from '../components/AuthColumn.js';
 import { ArrowLeftIcon } from '../components/Icons.js';
 
 interface LoginPageProps {
@@ -56,7 +57,7 @@ export function LoginPage({
   };
 
   return (
-    <div>
+    <AuthColumn>
       <div className="flex h-[52px] items-center justify-between px-5">
         <Link to="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200">
           <ArrowLeftIcon className="h-[18px] w-[18px]" />
@@ -123,6 +124,6 @@ export function LoginPage({
           )}
         </div>
       </div>
-    </div>
+    </AuthColumn>
   );
 }

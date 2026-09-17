@@ -113,6 +113,8 @@ vi.mock('@ejm/sit-core', () => ({
     userDoc?.profiles?.babysitter ? 'babysitter' : userDoc?.profiles?.parent ? 'parent' : undefined,
 }));
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // Mirrors the real helper: read details.reason off the rejected value.
   enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
     const reason = err?.details?.reason;

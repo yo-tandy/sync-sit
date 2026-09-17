@@ -51,6 +51,8 @@ vi.mock('@ejm/sit-core', () => ({
     userDoc?.profiles?.parent ?? null,
 }));
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
   // (issue #250) -- stub returns the caller's fallback (code default).
   createAdminConfigReader: () => ({
