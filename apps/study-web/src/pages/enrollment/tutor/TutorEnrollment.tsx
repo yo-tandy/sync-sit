@@ -4,7 +4,7 @@ import { ADMIN_CONFIG_DEFS, CONSENT_VERSION } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
 import type { StudyUser, SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -427,7 +427,7 @@ export function TutorEnrollment() {
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep ? (
         <EnrollmentAppBar />
       ) : (
@@ -441,6 +441,6 @@ export function TutorEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

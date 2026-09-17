@@ -63,7 +63,7 @@ export function UnifiedLandingPage({ roles, marks }: UnifiedLandingPageProps) {
         <LanguageSelector />
       </div>
 
-      <div className="flex flex-1 flex-col justify-center pb-8">
+      <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center pb-8">
         <h1 className="mb-1 text-center text-2xl font-bold text-gray-950">
           {t('unifiedEnrollment.landingTitle')}
         </h1>

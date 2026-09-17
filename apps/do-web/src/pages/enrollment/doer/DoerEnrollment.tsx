@@ -11,6 +11,7 @@ import {
   StepPassword,
   enrollmentErrorReason,
   ageGateErrorCode,
+  AuthColumn,
 } from '@ejm/shared-ui';
 import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasAnyContact, type User } from '@ejm/shared-core';
 import { getDoerProfile, type TaskCategory } from '@ejm/do-core';
@@ -450,7 +451,7 @@ export function DoerEnrollment() {
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep ? (
         <EnrollmentAppBar />
       ) : (
@@ -464,6 +465,6 @@ export function DoerEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

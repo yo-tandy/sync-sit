@@ -12,6 +12,7 @@ import {
   StepPassword,
   StepFamilyInfo,
   enrollmentErrorReason,
+  AuthColumn,
 } from '@ejm/shared-ui';
 import type { FamilyFormData } from '@ejm/shared-ui';
 import { getStudyRole } from '@ejm/study-core';
@@ -436,7 +437,7 @@ export function ParentEnrollment() {
   const isPostAuthStep = step >= FAMILY_STEP;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep && isAddProfile ? (
         <EnrollmentAppBar />
       ) : isPostAuthStep ? (
@@ -476,6 +477,6 @@ export function ParentEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

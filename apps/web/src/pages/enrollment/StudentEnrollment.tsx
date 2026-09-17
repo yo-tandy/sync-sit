@@ -19,6 +19,7 @@ import {
   type BasicInfoData,
   type ContactInfoData,
   type AdditionalInfoData,
+  AuthColumn,
 } from '@ejm/shared-ui';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
 import { auth, db, functions, storage } from '@/config/firebase';
@@ -278,7 +279,7 @@ export function StudentEnrollment() {
   if (authLoading) return null;
 
   return (
-    <div>
+    <AuthColumn>
       <TopNav
         title={t('unifiedEnrollment.studentTitle')}
         backTo={step === 0 ? '/enroll' : undefined}
@@ -286,6 +287,6 @@ export function StudentEnrollment() {
       />
       <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

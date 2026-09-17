@@ -20,6 +20,7 @@ export { LanguageSelector } from './LanguageSelector.js';
 export { PhotoLightbox } from './PhotoLightbox.js';
 export { TopNav } from './TopNav.js';
 export { PageContainer } from './PageContainer.js';
+export { AuthColumn } from './AuthColumn.js';
 export { NavTabs } from './NavTabs.js';
 export type { NavTabItem } from './NavTabs.js';
 export { AppSwitchBar } from './AppSwitchBar.js';
