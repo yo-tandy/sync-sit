@@ -12,6 +12,9 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 
 const h = vi.hoisted(() => ({
   updateDoc: vi.fn(() => Promise.resolve()),
+  // Callable traffic (issue #529): the picker's name search.
+  calls: [] as { name: string; payload: unknown }[],
+  searchResults: [] as unknown[],
   references: [
     {
       referenceId: 'ref-1',
@@ -47,6 +50,15 @@ vi.mock('@/hooks/useSubmittedEndorsements', () => ({
 vi.mock('@/components/endorsements/EndorsementDialog', () => ({
   EndorsementDialog: () => null,
 }));
+vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
+vi.mock('firebase/functions', () => ({
+  // Issue #529: the picker's name search is a callable now, not a roster
+  // download through firebase/firestore.
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
+    h.calls.push({ name, payload });
+    return Promise.resolve({ data: { results: h.searchResults } });
+  },
+}));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   collection: vi.fn(),
@@ -63,6 +75,8 @@ import { SubmittedEndorsementsPage } from '../SubmittedEndorsementsPage';
 afterEach(() => {
   cleanup();
   h.updateDoc.mockClear();
+  h.calls.length = 0;
+  h.searchResults = [];
 });
 
 describe('SubmittedEndorsementsPage — delete confirmation', () => {
@@ -105,5 +119,36 @@ describe('SubmittedEndorsementsPage — delete confirmation', () => {
 
     expect(screen.queryByRole('dialog', { name: 'submittedReferences.confirmDeleteTitle' })).toBeNull();
     expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #529: the add-reference picker searches through a callable that
+// returns five display fields — never by downloading the babysitter roster
+// through the users collection.
+describe('SubmittedEndorsementsPage — babysitter picker search', () => {
+  it('sends the typed name to findBabysittersForEndorsement and renders what comes back', async () => {
+    h.searchResults = [
+      { uid: 'bs-9', firstName: 'Lea', lastName: 'Bernard', photoUrl: null, classLevel: 'Terminale' },
+    ];
+    render(<SubmittedEndorsementsPage />);
+    // The add button is icon-only; it is the round brand button in the header.
+    fireEvent.click(document.querySelector('button.bg-brand-600')!);
+    fireEvent.change(screen.getByPlaceholderText('preferred.searchPlaceholder'), { target: { value: 'Lea' } });
+
+    await vi.waitFor(() => {
+      expect(h.calls.find((c) => c.name === 'findBabysittersForEndorsement')).toBeTruthy();
+    }, { timeout: 2000 });
+    expect(h.calls.find((c) => c.name === 'findBabysittersForEndorsement')!.payload).toEqual({ query: 'lea' });
+    expect(await screen.findByText(/Lea/)).toBeInTheDocument();
+    // No Firestore roster query was issued.
+    expect(h.calls.every((c) => c.name === 'findBabysittersForEndorsement')).toBe(true);
+  });
+
+  it('does not search below two characters', async () => {
+    render(<SubmittedEndorsementsPage />);
+    fireEvent.click(document.querySelector('button.bg-brand-600')!);
+    fireEvent.change(screen.getByPlaceholderText('preferred.searchPlaceholder'), { target: { value: 'L' } });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(h.calls).toHaveLength(0);
   });
 });
