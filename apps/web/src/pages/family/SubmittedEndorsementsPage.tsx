@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, getDocs, updateDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '@/config/firebase';
 import { useSubmittedEndorsements } from '@/hooks/useSubmittedEndorsements';
 import { Button, Card, TopNav, Spinner, Dialog } from '@/components/ui';
 import { Avatar } from '@/components/ui';
 import { SearchIcon, PlusIcon } from '@/components/ui/Icons';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { formatBabysitterName } from '@/lib/formatName';
-import { getBabysitterView, type ReferenceDoc, type BabysitterSummary, type User } from '@ejm/sit-core';
+import type { ReferenceDoc, BabysitterSummary } from '@ejm/sit-core';
 
 function ReferenceCard({ reference, babysitterName, onEdit, onDelete }: { reference: ReferenceDoc; babysitterName: string; onEdit: () => void; onDelete: () => void }) {
   const { t, i18n } = useTranslation();
@@ -110,30 +111,16 @@ export function SubmittedEndorsementsPage() {
     setSearching(true);
     const timer = setTimeout(async () => {
       try {
-        const snap = await getDocs(
-          query(
-            collection(db, 'users'),
-            where('status', '==', 'active'),
-            where('profiles.babysitter.enrollmentComplete', 'in', [true, false]),
-          )
+        // Server-side name search (issue #529): the picker used to download
+        // every active babysitter's FULL user doc per keystroke and filter
+        // in the browser. The callable keeps the same population and match
+        // rule and returns only the five fields rendered below.
+        const find = httpsCallable<{ query: string }, { results: BabysitterSummary[] }>(
+          functions,
+          'findBabysittersForEndorsement',
         );
-        const results: BabysitterSummary[] = [];
-        for (const d of snap.docs) {
-          const b = getBabysitterView(d.data() as User);
-          if (!b) continue;
-          const fullName = `${b.firstName || ''} ${b.lastName || ''}`.toLowerCase();
-          if (fullName.includes(q)) {
-            results.push({
-              uid: d.id,
-              firstName: b.firstName || '',
-              lastName: b.lastName || '',
-              photoUrl: b.photoUrl || null,
-              classLevel: b.classLevel || '',
-            });
-          }
-          if (results.length >= 10) break;
-        }
-        setSearchResults(results);
+        const res = await find({ query: q });
+        setSearchResults(res.data.results);
       } catch (err) {
         console.error('[endorsements] babysitter search failed', err);
       }
