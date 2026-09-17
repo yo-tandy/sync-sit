@@ -42,8 +42,8 @@ vi.mock('../../config/firebase.js', () => ({
           h.txGets.push(ref.id);
           return { exists: h.doc !== undefined, data: () => h.doc };
         },
-        update: (_ref: unknown, data: Record<string, unknown>) => {
-          h.txUpdates.push(data);
+        update: (ref: { id: string }, data: Record<string, unknown>) => {
+          h.txUpdates.push({ __ref: ref.id, ...data });
         },
       };
       return fn(tx);
@@ -52,13 +52,17 @@ vi.mock('../../config/firebase.js', () => ({
 }));
 
 vi.mock('firebase-admin/firestore', () => ({
-  FieldValue: { delete: () => '__DELETE__' },
+  FieldValue: {
+    delete: () => '__DELETE__',
+    arrayUnion: (...v: unknown[]) => ({ __arrayUnion: v }),
+  },
 }));
 
-const { claimInvite, consumeInviteClaim, releaseInviteClaim, INVITE_CLAIM_TTL_MS, newClaimId } =
+const { claimInvite, consumeInviteClaimAndJoin, releaseInviteClaim, INVITE_CLAIM_TTL_MS, newClaimId } =
   await import('../inviteClaim.js');
 
 const REF = { id: 'tok-1' } as unknown as FirebaseFirestore.DocumentReference;
+const FAMILY_REF = { id: 'fam-1' } as unknown as FirebaseFirestore.DocumentReference;
 const NOW = new Date('2027-03-01T12:00:00.000Z');
 const ts = (d: Date) => ({ toDate: () => d });
 
@@ -89,7 +93,7 @@ describe('claimInvite', () => {
     expect(familyId).toBe('fam-1');
     expect(h.runTransactionCalls).toBe(1);
     expect(h.txGets).toEqual(['tok-1']);
-    expect(h.txUpdates).toEqual([{ claimedAt: NOW, claimId: 'claim-A' }]);
+    expect(h.txUpdates).toEqual([{ __ref: 'tok-1', claimedAt: NOW, claimId: 'claim-A' }]);
     expect(h.directGets).toBe(0);
     expect(h.directUpdates).toBe(0);
   });
@@ -119,7 +123,7 @@ describe('claimInvite', () => {
       claimId: 'dead-invocation',
     });
     await expect(claimInvite(REF, 'claim-A', NOW)).resolves.toBe('fam-1');
-    expect(h.txUpdates).toEqual([{ claimedAt: NOW, claimId: 'claim-A' }]);
+    expect(h.txUpdates).toEqual([{ __ref: 'tok-1', claimedAt: NOW, claimId: 'claim-A' }]);
   });
 
   it('refuses a missing link and an expired one', async () => {
@@ -132,27 +136,39 @@ describe('claimInvite', () => {
   });
 });
 
-describe('consumeInviteClaim', () => {
-  it('burns the link and clears the lease, transactionally', async () => {
+describe('consumeInviteClaimAndJoin', () => {
+  it('burns the link AND joins the family in ONE transaction', async () => {
+    // The membership write lives here, not beside the call, precisely so a
+    // stolen claim cannot leave a join already committed (PR #533 review).
     h.doc = invite({ claimedAt: ts(NOW), claimId: 'claim-A' });
-    await consumeInviteClaim(REF, 'claim-A', 'uid-1');
+    await consumeInviteClaimAndJoin(REF, 'claim-A', 'uid-1', FAMILY_REF, NOW);
 
     expect(h.runTransactionCalls).toBe(1);
     expect(h.txGets).toEqual(['tok-1']);
     expect(h.txUpdates).toEqual([
-      { used: true, usedByUserId: 'uid-1', claimedAt: '__DELETE__', claimId: '__DELETE__' },
+      { __ref: 'fam-1', parentIds: { __arrayUnion: ['uid-1'] }, updatedAt: NOW },
+      {
+        __ref: 'tok-1',
+        used: true,
+        usedByUserId: 'uid-1',
+        claimedAt: '__DELETE__',
+        claimId: '__DELETE__',
+      },
     ]);
     expect(h.directUpdates).toBe(0);
   });
 
-  it('refuses to burn a link claimed by SOMEONE ELSE', async () => {
-    // Our lease expired and another redemption took over: this invocation must
-    // not stamp itself as the user of a link somebody else is redeeming.
+  it('a link claimed by SOMEONE ELSE grants NO membership at all', async () => {
+    // The regression this shape exists to prevent: the old ordering joined the
+    // family first and discovered the stolen claim second, so both redemptions
+    // landed in parentIds. Nothing may be written now.
     h.doc = invite({ claimedAt: ts(NOW), claimId: 'claim-B' });
-    await expect(consumeInviteClaim(REF, 'claim-A', 'uid-1')).rejects.toMatchObject({
-      code: 'failed-precondition',
-    });
+    await expect(
+      consumeInviteClaimAndJoin(REF, 'claim-A', 'uid-1', FAMILY_REF, NOW),
+    ).rejects.toMatchObject({ code: 'failed-precondition' });
+
     expect(h.txUpdates).toEqual([]);
+    expect(h.directUpdates).toBe(0);
   });
 });
 
@@ -160,7 +176,9 @@ describe('releaseInviteClaim', () => {
   it('clears OUR lease so the link is immediately reusable', async () => {
     h.doc = invite({ claimedAt: ts(NOW), claimId: 'claim-A' });
     await releaseInviteClaim(REF, 'claim-A');
-    expect(h.txUpdates).toEqual([{ claimedAt: '__DELETE__', claimId: '__DELETE__' }]);
+    expect(h.txUpdates).toEqual([
+      { __ref: 'tok-1', claimedAt: '__DELETE__', claimId: '__DELETE__' },
+    ]);
   });
 
   it('never clears a lease belonging to another redemption', async () => {
