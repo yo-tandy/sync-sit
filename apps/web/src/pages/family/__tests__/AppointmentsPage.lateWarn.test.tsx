@@ -18,7 +18,8 @@ const h = vi.hoisted(() => ({
     loading: false,
   },
   // Per-callable overrides; anything unlisted resolves undefined.
-  callables: {} as Record<string, (payload: unknown) => Promise<unknown>>,
+  callables: {
+    getBabysitterSummaries: () => Promise.resolve({ data: { summaries: [] } }),} as Record<string, (payload: unknown) => Promise<unknown>>,
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));

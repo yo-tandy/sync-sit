@@ -1,17 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
-import { doc, getDoc, collection, onSnapshot, query, where } from 'firebase/firestore';
+import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { getContact } from '@ejm/shared-core';
 import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
 import { Button, Badge, Card, SkeletonCard, Input, Dialog, Textarea, TopNav } from '@/components/ui';
 import { CalendarIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterSummary, RecurringSlot, User } from '@ejm/sit-core';
-import { getBabysitterProfile } from '@ejm/sit-core';
+import type { AppointmentDoc, BabysitterSummary, RecurringSlot } from '@ejm/sit-core';
 import { getFamilyId } from '@ejm/shared-core';
 import { formatBabysitterName } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
@@ -276,46 +274,29 @@ export function FamilyAppointmentsPage() {
     const missing = uids.filter((uid) => !babysitters[uid]);
     if (missing.length === 0) return;
 
-    Promise.all(
-      missing.map(async (uid) => {
-        try {
-          const snap = await getDoc(doc(db, 'users', uid));
-          if (snap.exists()) {
-            const u = snap.data() as User;
-            const contact = getContact(u);
-            const bp = getBabysitterProfile(u);
-            const dob = typeof u.dateOfBirth === 'string' ? new Date(u.dateOfBirth) : u.dateOfBirth?.toDate?.() ? u.dateOfBirth.toDate() : null;
-            let age: number | undefined;
-            if (dob) {
-              age = new Date().getFullYear() - dob.getFullYear();
-              const m = new Date().getMonth() - dob.getMonth();
-              if (m < 0 || (m === 0 && new Date().getDate() < dob.getDate())) age--;
-            }
-            const info: BabysitterSummary = {
-              uid,
-              firstName: u.firstName,
-              lastName: u.lastName,
-              name: formatBabysitterName(u.firstName, u.lastName),
-              age,
-              classLevel: bp?.classLevel,
-              languages: bp?.languages,
-              photoUrl: u.photoUrl,
-              aboutMe: bp?.aboutMe,
-              // Root-first resolution (issue #203): the Account page writes
-              // contact ROOT-ONLY, so reading the nested copy would freeze
-              // this card at enrollment-time values.
-              contactEmail: contact.contactEmail ?? undefined,
-              contactPhone: contact.contactPhone ?? undefined,
-              kidAgeRange: bp?.kidAgeRange,
-              maxKids: bp?.maxKids,
-            };
+    // One callable for the batch (issue #529): the page no longer reads
+    // users/{uid} directly; `age` arrives computed (the date of birth
+    // stays on the server) and contact is present only when this family
+    // is approved or has a confirmed appointment with the babysitter.
+    const summarize = httpsCallable<{ uids: string[] }, { summaries: BabysitterSummary[] }>(
+      functions,
+      'getBabysitterSummaries',
+    );
+    summarize({ uids: missing })
+      .then((res) => res?.data?.summaries ?? [])
+      .catch(() => [] as BabysitterSummary[])
+      .then((summaries) => {
+        const byUid = new Map(summaries.map((s) => [s.uid, s]));
+        return missing.map((uid) => {
+          const s = byUid.get(uid);
+          if (s) {
+            const info: BabysitterSummary = { ...s, name: formatBabysitterName(s.firstName, s.lastName) };
             return [uid, info] as [string, BabysitterSummary];
           }
-        // eslint-disable-next-line no-restricted-syntax -- best-effort: babysitter-info enrichment falls back to a generic label
-        } catch { /* permission error */ }
-        return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
+          return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
+        });
       })
-    ).then((entries) => {
+      .then((entries) => {
       const newData = Object.fromEntries(entries);
       setBabysitters((prev) => ({ ...prev, ...newData }));
     });

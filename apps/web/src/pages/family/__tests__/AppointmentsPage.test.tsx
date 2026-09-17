@@ -25,7 +25,15 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  // getBabysitterSummaries (issue #529) answers with an empty batch here —
+  // every card falls back to the generic label, as the unreadable-doc path
+  // did before; other callables stay inert stubs.
+  httpsCallable: (_fns: unknown, name: string) =>
+    name === 'getBabysitterSummaries'
+      ? () => Promise.resolve({ data: { summaries: [] } })
+      : vi.fn(),
+}));
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
