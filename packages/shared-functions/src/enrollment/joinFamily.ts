@@ -7,7 +7,7 @@ import { DEFAULT_NOTIF_PREFS } from '@ejm/shared-core';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 import { addProfileToUser } from './addProfileToUser.js';
 import { assertCodeIdentityClass } from '../auth/verificationCodeClass.js';
-import { claimInvite, consumeInviteClaim, releaseInviteClaim, newClaimId } from './inviteClaim.js';
+import { claimInvite, consumeInviteClaimAndJoin, releaseInviteClaim, newClaimId } from './inviteClaim.js';
 
 interface JoinFamilyData {
   token: string;
@@ -160,14 +160,18 @@ export const joinFamily = onCall(
         });
       }
 
-      // 6. Add to family's parentIds (shared, both modes)
-      await db.collection('families').doc(familyId).update({
-        parentIds: FieldValue.arrayUnion(uid),
-        updatedAt: now,
-      });
-
-      // 7. Consume the claim we hold (shared, both modes).
-      await consumeInviteClaim(inviteRef, claimId, uid);
+      // 6+7. Join the family and consume the claim — ONE transaction, shared
+      // by both modes. They used to be separate writes, which meant a
+      // redemption whose claim had been taken over committed the join and only
+      // then failed the ownership check: membership granted, error returned,
+      // two parents in `parentIds` (PR #533 review).
+      await consumeInviteClaimAndJoin(
+        inviteRef,
+        claimId,
+        uid,
+        db.collection('families').doc(familyId),
+        now,
+      );
 
       // 8. Clean up verification code and audit — new-account path only; the
       // add-profile path audits via addProfileToUser with 'joined_family'.

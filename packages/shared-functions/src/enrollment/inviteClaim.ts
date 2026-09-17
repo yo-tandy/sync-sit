@@ -23,7 +23,10 @@ import { db } from '../config/firebase.js';
  *
  * WHY THE TTL. The one path that cannot release is an invocation that dies
  * holding a claim. The TTL bounds that: the lease goes stale and the link
- * becomes takeable again, rather than being lost forever.
+ * becomes takeable again, rather than being lost forever. It is deliberately
+ * NOT load-bearing for the join — `consumeInviteClaimAndJoin` records
+ * membership in the same transaction that burns the link, so even a lease
+ * taken over from a still-running invocation cannot produce a second member.
  *
  * WHY EVERY STEP IS A TRANSACTION. Exclusion is by construction — Firestore
  * serializes transactions contending on the same document. An emulator test
@@ -82,20 +85,45 @@ export async function claimInvite(
 }
 
 /**
- * Burn the link — conditional on the claim still being OURS. If our lease
- * expired and another redemption took over, this invocation must not stamp
- * itself as the user of a link somebody else is now redeeming.
+ * Burn the link AND record family membership, in ONE transaction — conditional
+ * on the claim still being OURS.
+ *
+ * WHY THE JOIN BELONGS IN HERE (PR #533 review). These were two separate
+ * writes: `parentIds` arrayUnion first, then the consume. So a redemption
+ * whose claim had been taken over committed its join and only THEN failed the
+ * ownership check — the membership was already granted, and the caller got an
+ * error describing a family they had just been added to. Both parties end up
+ * in `parentIds`, which is precisely the defect the lease exists to prevent,
+ * merely reached by a different route.
+ *
+ * Today the takeover needs a redemption to outlive INVITE_CLAIM_TTL_MS, which
+ * the platform's function timeout makes unreachable — but that is a config
+ * value in another file, and correctness must not rest on it. Joining inside
+ * the same transaction removes the dependency entirely: a stolen claim now
+ * means no join at all, whatever the timeout is set to.
+ *
+ * RESIDUAL, unchanged by this and pre-existing for any step-6/7 failure: the
+ * loser keeps the account and user doc created earlier in the redemption, with
+ * `profiles.parent.familyId` naming a family they are not a member of. That is
+ * a strictly better outcome than an unearned membership, but it is not nothing
+ * — see the issue for the cleanup discussion.
  */
-export async function consumeInviteClaim(
+export async function consumeInviteClaimAndJoin(
   inviteRef: FirebaseFirestore.DocumentReference,
   claimId: string,
   uid: string,
+  familyRef: FirebaseFirestore.DocumentReference,
+  now: Date = new Date(),
 ): Promise<void> {
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(inviteRef);
     if (!snap.exists || snap.data()!.claimId !== claimId) {
       throw new HttpsError('failed-precondition', 'This invite link has already been used');
     }
+    tx.update(familyRef, {
+      parentIds: FieldValue.arrayUnion(uid),
+      updatedAt: now,
+    });
     tx.update(inviteRef, {
       used: true,
       usedByUserId: uid,
@@ -120,11 +148,20 @@ export async function releaseInviteClaim(
   await db
     .runTransaction(async (tx) => {
       const snap = await tx.get(inviteRef);
+      // Not ours (or gone) is the EXPECTED quiet case — a claim we no longer
+      // hold is not ours to clear. Anything else reaching the catch below is an
+      // operational anomaly, so it is logged rather than disappearing (PR #533
+      // review; same reasoning as the bare-catch fix in issue #463).
       if (!snap.exists || snap.data()!.claimId !== claimId) return;
       tx.update(inviteRef, {
         claimedAt: FieldValue.delete(),
         claimId: FieldValue.delete(),
       });
     })
-    .catch(() => {});
+    .catch((err) => {
+      console.error('[joinFamily] invite claim release failed', {
+        inviteId: inviteRef.id,
+        err,
+      });
+    });
 }
