@@ -284,6 +284,39 @@ html[data-ground='admin'] {
   background-color: var(--color-ground-admin);
 }
 
+/* ═══════════════════════════════════════════
+   Platform surfaces — issue #537, decision D1
+   ═══════════════════════════════════════════
+
+   Shared, platform-owned surfaces (the unified student enrollment, the
+   app chooser, the role-neutral /account hub) render GRAY, not the hosting
+   app's brand: the owner's design rule is that a shared resource must not
+   look like it belongs to sit just because sit serves it.
+
+   Mechanism: brand-* utilities compile to var(--color-brand-*) reads, so a
+   scoped re-declaration on a wrapper element re-colors every descendant
+   with no component changes. Values are Tailwind v4's gray stops, PINNED
+   VERBATIM for the same reason sit.css pins its ramp: the palette must not
+   drift if Tailwind's defaults move (and @theme tree-shaking means the
+   gray-* vars may not even be emitted at runtime, so var(--color-gray-*)
+   references here would silently resolve to nothing).
+
+   The card shadow's brand tint follows along via --shadow-card-tint (a
+   plain custom property, cascade-visible — see the :root note in sit.css
+   for why it must not live in @theme). */
+.brand-platform {
+  --color-brand-50: oklch(98.5% 0.002 247.839);
+  --color-brand-100: oklch(96.7% 0.003 264.542);
+  --color-brand-200: oklch(92.8% 0.006 264.531);
+  --color-brand-300: oklch(87.2% 0.01 258.338);
+  --color-brand-400: oklch(70.7% 0.022 261.325);
+  --color-brand-500: oklch(55.1% 0.027 264.364);
+  --color-brand-600: oklch(44.6% 0.03 256.802);
+  --color-brand-700: oklch(37.3% 0.034 259.733);
+  --color-brand-800: oklch(27.8% 0.033 256.848);
+  --shadow-card-tint: oklch(92.8% 0.006 264.531);
+}
+
 /* A11y: collapse animation/transitions for users who ask for reduced
    motion (WCAG 2.3.3). 0.01ms rather than 0 so animationend/transitionend
    still fire for any logic listening to them. */
