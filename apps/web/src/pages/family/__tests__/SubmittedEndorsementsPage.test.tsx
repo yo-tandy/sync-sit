@@ -153,7 +153,12 @@ describe('SubmittedEndorsementsPage — babysitter picker search', () => {
     fireEvent.click(document.querySelector('button.bg-brand-600')!);
     fireEvent.change(screen.getByPlaceholderText('preferred.searchPlaceholder'), { target: { value: 'L' } });
     await new Promise((r) => setTimeout(r, 500));
-    expect(h.calls).toHaveLength(0);
+    // (The by-uid summaries call for the reference rows fires on mount; only
+    // the picker search must stay silent.)
+    expect(h.calls.filter((c) => c.name === 'findBabysittersForEndorsement')).toHaveLength(0);
+  });
+});
+
 // Issue #529: reference rows resolve their babysitter's name through the
 // getBabysitterSummaries callable, never by reading users/{uid}.
 describe('SubmittedEndorsementsPage — babysitter names', () => {

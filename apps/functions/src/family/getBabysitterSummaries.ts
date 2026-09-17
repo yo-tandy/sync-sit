@@ -98,62 +98,74 @@ export const getBabysitterSummaries = onCall(
     const familyId = caller.familyId;
     const familyLatLng = (await db.collection('families').doc(familyId).get()).data()?.latLng;
 
-    const summaries: BabysitterSummaryHit[] = [];
-    for (const babysitterUid of uids) {
-      const snap = await db.collection('users').doc(babysitterUid).get();
-      if (!snap.exists) continue;
-      const raw = snap.data() as User;
-      if (raw.status !== 'active') continue;
-      const view = getBabysitterView(raw);
-      if (!view) continue;
+    // One independent resolution per uid, in parallel (a 50-uid batch is
+    // otherwise up to ~100 sequential round-trips), each isolated: a
+    // transient read error or an unexpected doc shape drops THAT summary
+    // only — the per-uid catch-and-skip the pages used to do client-side,
+    // kept server-side (#534 review).
+    const resolved = await Promise.all(
+      uids.map(async (babysitterUid): Promise<BabysitterSummaryHit | null> => {
+        try {
+          const snap = await db.collection('users').doc(babysitterUid).get();
+          if (!snap.exists) return null;
+          const raw = snap.data() as User;
+          if (raw.status !== 'active') return null;
+          const view = getBabysitterView(raw);
+          if (!view) return null;
 
-      let worksInYourArea = false;
-      if (view.areaMode === 'distance' && view.areaLatLng && familyLatLng) {
-        worksInYourArea = haversineDistance(view.areaLatLng, familyLatLng) <= (view.areaRadiusKm || 5);
-      } else if (view.areaMode === 'arrondissement') {
-        worksInYourArea = true;
-      }
+          let worksInYourArea = false;
+          if (view.areaMode === 'distance' && view.areaLatLng && familyLatLng) {
+            worksInYourArea = haversineDistance(view.areaLatLng, familyLatLng) <= (view.areaRadiusKm || 5);
+          } else if (view.areaMode === 'arrondissement') {
+            worksInYourArea = true;
+          }
 
-      const approved = ((view.approvedFamilies as string[] | undefined) || []).includes(familyId);
-      let related = approved;
-      if (!related) {
-        const apt = await db.collection('appointments')
-          .where('familyId', '==', familyId)
-          .where('babysitterUserId', '==', babysitterUid)
-          .where('status', '==', 'confirmed')
-          .limit(1)
-          .get();
-        related = !apt.empty;
-      }
-      // Root-first resolution (issue #203): the Account page writes contact
-      // ROOT-ONLY; the nested copy is frozen at enrollment time.
-      const contact = getContact(raw);
+          const approved = ((view.approvedFamilies as string[] | undefined) || []).includes(familyId);
+          let related = approved;
+          if (!related) {
+            const apt = await db.collection('appointments')
+              .where('familyId', '==', familyId)
+              .where('babysitterUserId', '==', babysitterUid)
+              .where('status', '==', 'confirmed')
+              .limit(1)
+              .get();
+            related = !apt.empty;
+          }
+          // Root-first resolution (issue #203): the Account page writes contact
+          // ROOT-ONLY; the nested copy is frozen at enrollment time.
+          const contact = getContact(raw);
 
-      summaries.push({
-        uid: babysitterUid,
-        firstName: view.firstName || '',
-        lastName: view.lastName || '',
-        age: ageFrom(view.dateOfBirth),
-        classLevel: view.classLevel || undefined,
-        languages: view.languages || undefined,
-        photoUrl: view.photoUrl ?? null,
-        aboutMe: view.aboutMe ?? undefined,
-        kidAgeRange: view.kidAgeRange || undefined,
-        maxKids: view.maxKids || undefined,
-        hourlyRate: view.hourlyRate || undefined,
-        cancellationNoticeHours: view.cancellationNoticeHours || undefined,
-        worksInYourArea,
-        // Keys omitted (not undefined) for unrelated families: the callable
-        // encoder would serialise undefined as null and leak the key.
-        ...(related
-          ? {
-              contactEmail: contact.contactEmail ?? undefined,
-              contactPhone: contact.contactPhone ?? undefined,
-              whatsapp: contact.whatsapp ?? undefined,
-            }
-          : {}),
-      });
-    }
+          return {
+            uid: babysitterUid,
+            firstName: view.firstName || '',
+            lastName: view.lastName || '',
+            age: ageFrom(view.dateOfBirth),
+            classLevel: view.classLevel || undefined,
+            languages: view.languages || undefined,
+            photoUrl: view.photoUrl ?? null,
+            aboutMe: view.aboutMe ?? undefined,
+            kidAgeRange: view.kidAgeRange || undefined,
+            maxKids: view.maxKids || undefined,
+            hourlyRate: view.hourlyRate || undefined,
+            cancellationNoticeHours: view.cancellationNoticeHours || undefined,
+            worksInYourArea,
+            // Keys omitted (not undefined) for unrelated families: the callable
+            // encoder would serialise undefined as null and leak the key.
+            ...(related
+              ? {
+                  contactEmail: contact.contactEmail ?? undefined,
+                  contactPhone: contact.contactPhone ?? undefined,
+                  whatsapp: contact.whatsapp ?? undefined,
+                }
+              : {}),
+          };
+        } catch (err) {
+          console.warn('[getBabysitterSummaries] skipped one uid', babysitterUid, err);
+          return null;
+        }
+      }),
+    );
+    const summaries = resolved.filter((s): s is BabysitterSummaryHit => s !== null);
 
     return { summaries };
   },

@@ -74,24 +74,27 @@ export function PreferredBabysittersPage() {
       // server-side from the profile view, so languages / aboutMe /
       // kidAgeRange / maxKids now come from the nested babysitter profile
       // rather than root fields that the Plan-D shape no longer carries.
-      let infos: BabysitterSummary[] = [];
       try {
         const summarize = httpsCallable<{ uids: string[] }, { summaries: BabysitterSummary[] }>(
           functions,
           'getBabysitterSummaries',
         );
         const res = await summarize({ uids: preferredIds });
-        infos = res.data.summaries.map((s) => ({
-          ...s,
-          photoUrl: s.photoUrl ?? null,
-          classLevel: s.classLevel || '',
-          languages: s.languages || [],
-        }));
+        setPreferredInfos(
+          res.data.summaries.map((s) => ({
+            ...s,
+            photoUrl: s.photoUrl ?? null,
+            classLevel: s.classLevel || '',
+            languages: s.languages || [],
+          })),
+        );
       } catch (err) {
+        // A failed batch keeps whatever was already on screen rather than
+        // wiping the list to "no preferred babysitters" (#534 review).
         console.error('[preferred] babysitter summaries failed', err);
+      } finally {
+        setLoading(false);
       }
-      setPreferredInfos(infos);
-      setLoading(false);
     }
     loadInfos();
   }, [preferredIds]);

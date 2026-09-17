@@ -100,6 +100,30 @@ describe('getBabysitterSummaries', () => {
     }
   });
 
+  it('a malformed babysitter doc in the batch never fails the batch (#534 review)', async () => {
+    // The adapter tolerates a garbage profile (it yields an empty-named
+    // summary rather than throwing), so this pins the batch contract —
+    // the well-formed sibling is still returned — not the per-uid catch,
+    // which guards transient read errors that data alone cannot provoke.
+    const db = getDb();
+    await db.collection('users').doc('malformed-bs').set({
+      uid: 'malformed-bs', status: 'active',
+      profiles: { babysitter: 'garbage' },
+      firstName: 'Broken', lastName: 'Doc', email: 'broken@ejm.org',
+    });
+    try {
+      const { summaries } = await callFunction<{ summaries: Summary[] }>(
+        'getBabysitterSummaries',
+        { uids: ['malformed-bs', seed.babysitter1.uid] },
+        parent1Token,
+      );
+      expect(summaries.map((s) => s.uid)).toContain(seed.babysitter1.uid);
+      for (const s of summaries) for (const k of FORBIDDEN_KEYS) expect(s).not.toHaveProperty(k);
+    } finally {
+      await db.collection('users').doc('malformed-bs').delete();
+    }
+  });
+
   it('rejects babysitters and unauthenticated calls', async () => {
     await expect(callFunction('getBabysitterSummaries', { uids: [seed.babysitter2.uid] }, babysitterToken)).rejects.toMatchObject({ code: 'PERMISSION_DENIED' });
     await expect(callFunction('getBabysitterSummaries', { uids: [seed.babysitter2.uid] })).rejects.toThrow();
