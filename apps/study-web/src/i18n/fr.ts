@@ -270,6 +270,7 @@ export default {
   signup: {
     crossAppBanner: 'Vous êtes connecté — choisissez un rôle à ajouter à votre compte existant.',
     roleExclusiveTutor: "Le tutorat est réservé aux élèves de l'EJM — un compte parent ne peut pas s'inscrire comme tuteur.",
+    roleExclusiveParent: "Les comptes famille sont réservés aux parents — un compte élève (tuteur ou babysitter) ne peut pas s'inscrire comme parent.",
   },
 
   welcomeCross: {
@@ -1302,6 +1303,7 @@ export default {
     familyName: 'Nom de famille *',
     parentLastName: 'Nom',
     addressLabel: 'Adresse *',
+    familyAddressLabel: 'Adresse *',
     pets: 'Animaux',
     petsHint: 'ex. Chat, petit chien',
     notesForTutors: 'Notes pour les tuteurs',

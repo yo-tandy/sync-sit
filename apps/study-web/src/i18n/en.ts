@@ -270,6 +270,10 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveTutor: "Tutoring is for EJM students — parent accounts can't enroll as tutors.",
+    // Defense-in-depth copy for a direct /enroll/parent visit by a provider
+    // account (tutor or babysitter) — issue #440 audit found this key
+    // missing, so ParentEnrollment.tsx was rendering the raw key.
+    roleExclusiveParent: "Family accounts are for parents — student accounts (tutor or babysitter) can't enroll as a parent.",
   },
 
   welcomeCross: {
@@ -1305,6 +1309,11 @@ export default {
     familyName: 'Family name *',
     parentLastName: 'Last name',
     addressLabel: 'Address *',
+    // Used by the shared StepFamilyInfo (@ejm/shared-ui, issue #440 PR3) —
+    // distinct from addressLabel above so the shared component can be
+    // rendered under a family-specific label without colliding with other
+    // steps that also use addressLabel.
+    familyAddressLabel: 'Address *',
     pets: 'Pets',
     petsHint: 'e.g. Cat, small dog',
     notesForTutors: 'Notes for tutors',

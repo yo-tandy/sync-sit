@@ -152,7 +152,11 @@ vi.mock('@ejm/shared-ui', () => ({
       {onBack && <button onClick={onBack}>top-back</button>}
     </div>
   ),
-  StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
+  // data-total exposes totalSteps for the 4-vs-3 dot pin without disturbing
+  // the plain "step-N" text the other cases already match on.
+  StepIndicator: ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => (
+    <div data-total={totalSteps}>step-{currentStep}</div>
+  ),
   // Renders its error prop like the real component (CodeInput surfaces it),
   // so tests can pin that a family-step rejection doesn't leak back here.
   StepVerify: ({ onVerify, onResend, error }: { onVerify: (c: string) => void; onResend: () => void; error?: string | null }) => (
@@ -171,11 +175,10 @@ vi.mock('@ejm/shared-ui', () => ({
       password-submit
     </button>
   ),
-}));
-vi.mock('@/components/ui/EnrollmentAppBar', () => ({
-  EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
-}));
-vi.mock('../StepParentEmail', () => ({
+  // Stand-ins for the shared steps the orchestrator now imports from
+  // '@ejm/shared-ui' (issue #440 PR3) — same test affordances the old local
+  // per-app mocks provided, so every existing case keeps passing unchanged
+  // in intent.
   StepParentEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
     <button
       onClick={() => {
@@ -186,25 +189,29 @@ vi.mock('../StepParentEmail', () => ({
       email-submit
     </button>
   ),
-}));
-vi.mock('../StepFamilyInfo', () => ({
   // Controlled stub mirroring the real component's API: `family-fill` pushes
   // the test's draft up through onChange (the orchestrator owns the draft),
   // `family-submit` fires the argless onNext. The rendered familyName pins
-  // draft preservation across a back-navigation.
-  StepFamilyInfo: ({ data, onChange, onNext, error }: {
+  // draft preservation across a back-navigation. `noteLabel` is rendered so
+  // tests can pin the host-supplied copy the orchestrator passes down.
+  StepFamilyInfo: ({ data, onChange, onNext, error, noteLabel }: {
     data: { familyName: string };
     onChange: (partial: unknown) => void;
     onNext: () => void;
     error?: string | null;
+    noteLabel: string;
   }) => (
     <div>
       {error && <p>{error}</p>}
       <span>family-name:{data.familyName}</span>
+      <span>note-label:{noteLabel}</span>
       <button onClick={() => onChange(h.familyData)}>family-fill</button>
       <button onClick={() => onNext()}>family-submit</button>
     </div>
   ),
+}));
+vi.mock('@/components/ui/EnrollmentAppBar', () => ({
+  EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
 }));
 
 import { I18nextProvider } from 'react-i18next';
@@ -245,7 +252,11 @@ describe('ParentEnrollment orchestrator', () => {
   it('starts on the email step with the auth-phase chrome (TopNav + StepIndicator)', () => {
     renderFlow();
     expect(screen.getByText('email-submit')).toBeInTheDocument();
-    expect(screen.getByText('step-0')).toBeInTheDocument();
+    const indicator = screen.getByText('step-0');
+    expect(indicator).toBeInTheDocument();
+    // 4 steps total (issue #440 spec D1/§3) — was 3 (credential steps only)
+    // before the shared-step rewire.
+    expect(indicator).toHaveAttribute('data-total', '4');
     expect(screen.queryByText('enrollment-app-bar')).toBeNull();
   });
 
@@ -263,14 +274,17 @@ describe('ParentEnrollment orchestrator', () => {
     // Signed-out (default): password is collected.
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
-    // Step 2 -> 3 crosses into the post-auth phase: the step indicator goes
-    // away, and a FRESH signup keeps TopNav with a back affordance (expired
-    // codes are rescued from the verify step) — not the add-profile app bar.
+    // Step 2 -> 3 crosses into the post-auth phase: a FRESH signup keeps
+    // TopNav with a back affordance (expired codes are rescued from the
+    // verify step) — not the add-profile app bar — AND keeps the step
+    // indicator, now showing the family step as step 3 of 4 (issue #440
+    // spec D1/§3; it used to disappear here when the indicator only covered
+    // the 3 credential steps).
     fireEvent.click(screen.getByText('password-submit'));
     expect(await screen.findByText('family-submit')).toBeInTheDocument();
     expect(screen.queryByText('enrollment-app-bar')).toBeNull();
     expect(screen.getByText('top-back')).toBeInTheDocument();
-    expect(screen.queryByText(/step-\d/)).toBeNull();
+    expect(screen.getByText('step-3')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('family-fill'));
     fireEvent.click(screen.getByText('family-submit'));
@@ -309,6 +323,27 @@ describe('ParentEnrollment orchestrator', () => {
     // New-account path signs the parent in — the navigation must land in
     // the portal, not bounce to login.
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'claire@example.com', 'Pw123456!');
+  });
+
+  it('the family step renders the shared StepFamilyInfo with the study-specific noteLabel', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+
+    // Passed down as a prop (not a key the shared component looks up
+    // itself) so sit and study can each supply their own wording.
+    expect(await screen.findByText(`note-label:${i18n.t('enrollment.notesForTutors')}`)).toBeInTheDocument();
+  });
+
+  it('shows the 4-step indicator on the family step for a fresh signup (issue #440 spec D1/§3)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+
+    const indicator = await screen.findByText('step-3');
+    expect(indicator).toHaveAttribute('data-total', '4');
   });
 
   it('verifyParentEmail carries the study app hint (silent account-exists copy, issue #154)', async () => {
@@ -493,11 +528,16 @@ describe('ParentEnrollment orchestrator', () => {
   it("enrollFamily 'role-exclusive' rejection renders the provider-account explanation", async () => {
     // Defense-in-depth: the signup role page withholds the parent option from
     // provider accounts (issue #116), but a direct /enroll/parent visit still
-    // gets the explanation instead of a raw server error.
+    // gets the explanation instead of a raw server error. Hardcoded (not
+    // i18n.t('signup.roleExclusiveParent')) so the pin actually proves the
+    // key resolves to real copy — the key was missing from both locales
+    // until the #440 audit caught it (ParentEnrollment.tsx was rendering
+    // the raw key), and a lookup-based assertion would pass vacuously
+    // against that same missing key.
     h.errorReason = 'role-exclusive';
     await driveToEnrollFamily();
 
-    const msg = i18n.t('signup.roleExclusiveParent');
+    const msg = "Family accounts are for parents — student accounts (tutor or babysitter) can't enroll as a parent.";
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });

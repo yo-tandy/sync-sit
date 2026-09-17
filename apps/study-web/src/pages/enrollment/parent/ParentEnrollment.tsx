@@ -4,23 +4,35 @@ import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasFamilyMembership } from '@ejm/sh
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
+import {
+  TopNav,
+  StepIndicator,
+  StepParentEmail,
+  StepVerify,
+  StepPassword,
+  StepFamilyInfo,
+  enrollmentErrorReason,
+} from '@ejm/shared-ui';
+import type { FamilyFormData } from '@ejm/shared-ui';
 import { getStudyRole } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
-import { StepParentEmail } from './StepParentEmail';
-import { StepFamilyInfo } from './StepFamilyInfo';
-import type { FamilyFormData } from './StepFamilyInfo';
 
 // Steps: 0=Email, 1=Verify, 2=Password+consent, 3=Family info (submitting).
 // Sync-sit's ParentEnrollment is the FLOW reference (same backend callables:
 // verifyParentEmail + enrollFamily); the tutor wizard is the STRUCTURE
 // reference (shared credential steps, app-bar switch after them, best-effort
-// post-enroll sign-in). The visible step indicator only covers the 3
-// credential steps; the family-info step renders under the enrollment app bar.
-const AUTH_STEPS = 3;
+// post-enroll sign-in). All four steps now share one `@ejm/shared-ui`
+// StepParentEmail/StepFamilyInfo pair with sit (issue #440 PR3) and the step
+// indicator covers all four for a fresh signup (spec D1/§3) — not just the 3
+// credential steps as before.
+const TOTAL_STEPS = 4;
+// The submitting step's index — also the boundary where the chrome switches
+// from TopNav+indicator to the add-profile app bar / expired-code back
+// affordance (isPostAuthStep below).
+const FAMILY_STEP = 3;
 
 interface EnrollFamilyInput {
   // Credential keys are OMITTED entirely (not sent empty) on the authed
@@ -342,6 +354,8 @@ export function ParentEnrollment() {
             onSubmit={handleSendCode}
             loading={loading}
             error={error}
+            logoSrc="/logo.png"
+            logoAlt="Sync/Study"
           />
         );
       case 1:
@@ -382,6 +396,7 @@ export function ParentEnrollment() {
             onNext={handleFamilyInfoNext}
             loading={loading}
             error={error}
+            noteLabel={t('enrollment.notesForTutors')}
           />
         );
       default:
@@ -418,28 +433,35 @@ export function ParentEnrollment() {
     );
   }
 
-  const isPostAuthStep = step >= AUTH_STEPS;
+  const isPostAuthStep = step >= FAMILY_STEP;
 
   return (
     <div>
       {isPostAuthStep && isAddProfile ? (
         <EnrollmentAppBar />
       ) : isPostAuthStep ? (
-        // Fresh signups keep a back affordance on the family step: the
-        // verification code has a 10-minute TTL that can expire while the
-        // form is filled, and the only rescue is resending from the verify
-        // step (sit keeps back visible on every step for the same reason).
-        // Straight to verify — the draft survives, it lives in this
-        // component. The error is cleared: a family-step rejection (e.g.
-        // profile-exists) must not leak under the code input. Add-profile
-        // users never held a code, so they keep the plain enrollment bar.
-        <TopNav
-          title={t('enrollment.parentTitle')}
-          onBack={() => {
-            setError(null);
-            setStep(1);
-          }}
-        />
+        <>
+          {/* Fresh signups keep a back affordance on the family step: the
+              verification code has a 10-minute TTL that can expire while the
+              form is filled, and the only rescue is resending from the verify
+              step (sit keeps back visible on every step for the same reason).
+              Straight to verify — the draft survives, it lives in this
+              component. The error is cleared: a family-step rejection (e.g.
+              profile-exists) must not leak under the code input. Add-profile
+              users never held a code, so they keep the plain enrollment bar. */}
+          <TopNav
+            title={t('enrollment.parentTitle')}
+            onBack={() => {
+              setError(null);
+              setStep(1);
+            }}
+          />
+          {/* The indicator now covers all 4 steps of a fresh signup,
+              including this submitting step (issue #440 spec D1/§3 — the
+              student-wizard convention, not the old 3-dot credentials-only
+              variant). Add-profile never reaches this branch. */}
+          <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
+        </>
       ) : (
         <>
           <TopNav
@@ -448,9 +470,9 @@ export function ParentEnrollment() {
             onBack={step > firstStep ? handleBack : undefined}
           />
           {/* Add-profile enters at the consent step and can never reach the
-              credential steps below it — a 3-dot indicator would paint
+              credential steps below it — an indicator would paint
               unreachable steps, so it is hidden on that path. */}
-          {!isAddProfile && <StepIndicator totalSteps={AUTH_STEPS} currentStep={step} />}
+          {!isAddProfile && <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />}
         </>
       )}
       {renderStep()}
