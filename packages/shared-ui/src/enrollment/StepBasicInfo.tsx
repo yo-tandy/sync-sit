@@ -187,10 +187,16 @@ export function StepBasicInfo({ onNext, initial = null, ejemEmail, serverError =
         </div>
       </div>
 
-      <label className="mb-2 block text-sm font-medium text-gray-700">
-        {t('unifiedEnrollment.languages')}
-      </label>
-      <LanguagePicker selected={languages} onChange={setLanguages} />
+      {/* The label goes THROUGH the picker, not around it: LanguagePicker
+          renders its own <label> and defaults it to a hardcoded English
+          'Languages spoken *', so wrapping it would show a French user the
+          translated label followed by the untranslated default (#539
+          review). */}
+      <LanguagePicker
+        selected={languages}
+        onChange={setLanguages}
+        label={t('unifiedEnrollment.languages')}
+      />
       <p className="mb-4 -mt-3 text-xs text-gray-500">{t('unifiedEnrollment.languagesHint')}</p>
 
       {serverError && <p className="mb-4 text-sm text-error-600">{serverError}</p>}

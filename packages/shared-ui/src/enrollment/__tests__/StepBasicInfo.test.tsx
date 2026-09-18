@@ -181,4 +181,15 @@ describe('StepBasicInfo', () => {
     renderWithProviders(<StepBasicInfo onNext={vi.fn()} ejemEmail="" serverError="Something went wrong." />);
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
   });
+
+  it('renders ONE languages label, from i18n — not the picker\'s hardcoded English default', () => {
+    // LanguagePicker renders its own <label> and defaults it to a hardcoded
+    // English 'Languages spoken *'. Wrapping the picker in a second,
+    // translated <label> showed a French user both — the translated one and
+    // the untranslated default, stacked (#539 review). The label must go
+    // THROUGH the picker, so exactly one renders and it is translatable.
+    renderWithProviders(<StepBasicInfo onNext={vi.fn()} ejemEmail="" />);
+
+    expect(screen.getAllByText('Languages spoken *')).toHaveLength(1);
+  });
 });
