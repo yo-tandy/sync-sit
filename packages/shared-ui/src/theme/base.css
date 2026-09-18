@@ -235,6 +235,14 @@
      Scoped on the admin shell's own ground class so it costs one rule and no
      new markup; recessTokens.test.ts pins that AdminLayout still carries that
      class, which is what keeps the coupling from rotting silently. */
+  /* Platform surfaces lose the host app's card tint (#537 D1). Layered, and
+     placed BEFORE .bg-ground-admin deliberately: on the surfaces carrying
+     both classes the admin-neutral override below must still win (decision
+     25). See the .brand-platform block for the full cascade rationale. */
+  .brand-platform {
+    --shadow-card-tint: oklch(92.8% 0.006 264.531);
+  }
+
   .bg-ground-admin {
     --shadow-card-tint: var(--shadow-card-tint-admin);
   }
@@ -301,9 +309,17 @@ html[data-ground='admin'] {
    gray-* vars may not even be emitted at runtime, so var(--color-gray-*)
    references here would silently resolve to nothing).
 
-   The card shadow's brand tint follows along via --shadow-card-tint (a
-   plain custom property, cascade-visible — see the :root note in sit.css
-   for why it must not live in @theme). */
+   WHY THE COLOURS STAY UNLAYERED BUT THE SHADOW TINT DOES NOT (PR #538
+   review). Unlayered declarations beat layered ones outright — layer order
+   is compared BEFORE specificity — which is what makes these brand-*
+   overrides reliably win over the @theme ramp. But --shadow-card-tint has a
+   competitor at the SAME element: decision 25's `.bg-ground-admin` override
+   lives in @layer base, and both ChooseAppPage and AccountLayout carry
+   `brand-platform bg-ground-admin` on one div. Declared here, this class
+   would silently outrank that admin-neutral guarantee. So the tint is
+   declared in @layer base instead, immediately BEFORE `.bg-ground-admin`:
+   same layer, same specificity, earlier source order, so admin still wins
+   where both apply and platform gray applies everywhere else. */
 .brand-platform {
   --color-brand-50: oklch(98.5% 0.002 247.839);
   --color-brand-100: oklch(96.7% 0.003 264.542);
@@ -314,7 +330,6 @@ html[data-ground='admin'] {
   --color-brand-600: oklch(44.6% 0.03 256.802);
   --color-brand-700: oklch(37.3% 0.034 259.733);
   --color-brand-800: oklch(27.8% 0.033 256.848);
-  --shadow-card-tint: oklch(92.8% 0.006 264.531);
 }
 
 /* A11y: collapse animation/transitions for users who ask for reduced
