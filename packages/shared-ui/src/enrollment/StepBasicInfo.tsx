@@ -10,6 +10,7 @@ import {
 import { Button } from '../components/Button.js';
 import { Input } from '../components/Input.js';
 import { Select } from '../components/Select.js';
+import { LanguagePicker } from '../forms/LanguagePicker.js';
 
 export interface BasicInfoData {
   firstName: string;
@@ -17,6 +18,13 @@ export interface BasicInfoData {
   dateOfBirth: string;
   classLevel: string;
   gender: Gender;
+  /**
+   * Languages the student speaks (issue #537 D7). Moved here from sit's
+   * babysitting-preferences step and study's subjects step: it is a fact
+   * about the PERSON, not about one app's offering, so it belongs on the
+   * shared identity screen where every app reads the same answer.
+   */
+  languages: string[];
 }
 
 interface StepBasicInfoProps {
@@ -88,17 +96,27 @@ export function StepBasicInfo({ onNext, initial = null, ejemEmail, serverError =
   const [dateOfBirth, setDateOfBirth] = useState(initial?.dateOfBirth ?? '');
   const [classLevel, setClassLevel] = useState(initial?.classLevel ?? '');
   const [gender, setGender] = useState<Gender | undefined>(initial?.gender);
+  const [languages, setLanguages] = useState<string[]>(initial?.languages ?? []);
 
   const age = getAge(dateOfBirth);
   const ageErrorKey = ageGateErrorKey(dateOfBirth, age, ejemEmail);
   const ageValid = age !== null && ageErrorKey === null;
 
-  const isValid = Boolean(firstName.trim() && lastName.trim() && dateOfBirth && ageValid && classLevel && gender);
+  const isValid = Boolean(
+    firstName.trim() && lastName.trim() && dateOfBirth && ageValid && classLevel && gender && languages.length,
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!isValid || !gender) return;
-    onNext({ firstName: firstName.trim(), lastName: lastName.trim(), dateOfBirth, classLevel, gender });
+    onNext({
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      dateOfBirth,
+      classLevel,
+      gender,
+      languages,
+    });
   };
 
   return (
@@ -168,6 +186,18 @@ export function StepBasicInfo({ onNext, initial = null, ejemEmail, serverError =
           ))}
         </div>
       </div>
+
+      {/* The label goes THROUGH the picker, not around it: LanguagePicker
+          renders its own <label> and defaults it to a hardcoded English
+          'Languages spoken *', so wrapping it would show a French user the
+          translated label followed by the untranslated default (#539
+          review). */}
+      <LanguagePicker
+        selected={languages}
+        onChange={setLanguages}
+        label={t('unifiedEnrollment.languages')}
+      />
+      <p className="mb-4 -mt-3 text-xs text-gray-500">{t('unifiedEnrollment.languagesHint')}</p>
 
       {serverError && <p className="mb-4 text-sm text-error-600">{serverError}</p>}
 

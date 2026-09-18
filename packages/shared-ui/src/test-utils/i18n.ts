@@ -134,6 +134,8 @@ export function createTestI18n(): i18n {
             classLabel: 'Class *',
             selectClass: 'Select class',
             gender: 'Gender *',
+            languages: 'Languages spoken *',
+            languagesHint: 'Mark every language you can speak with families.',
             genderFemale: 'Female',
             genderMale: 'Male',
             genderOther: 'Other',

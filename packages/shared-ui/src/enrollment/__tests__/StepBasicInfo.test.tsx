@@ -26,6 +26,11 @@ describe('StepBasicInfo', () => {
     expect(continueBtn).toBeDisabled(); // gender still missing
 
     fireEvent.click(screen.getByRole('button', { name: 'Female' }));
+    // Languages moved here from the per-app offering steps (issue #537 D7)
+    // and are required, so gender alone no longer completes the form.
+    expect(continueBtn).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'French' }));
     expect(continueBtn).not.toBeDisabled();
   });
 
@@ -45,6 +50,7 @@ describe('StepBasicInfo', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled();
 
     fireEvent.click(screen.getByRole('button', { name: 'Other' }));
+    fireEvent.click(screen.getByRole('button', { name: 'French' }));
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(onNext).toHaveBeenCalledWith({
@@ -53,6 +59,7 @@ describe('StepBasicInfo', () => {
       dateOfBirth: dob,
       classLevel: '1ère',
       gender: 'other',
+      languages: ['French'],
     });
   });
 
@@ -85,6 +92,7 @@ describe('StepBasicInfo', () => {
     fireEvent.change(screen.getByLabelText('Last name *'), { target: { value: 'Cohen' } });
     fireEvent.change(screen.getByLabelText('Class *'), { target: { value: '1ère' } });
     fireEvent.click(screen.getByRole('button', { name: 'Female' }));
+    fireEvent.click(screen.getByRole('button', { name: 'French' })); // required since #537 D7
   }
 
   /** Two-digit EJM grad year whose expected age is `age` today. */
@@ -155,7 +163,7 @@ describe('StepBasicInfo', () => {
       <StepBasicInfo
         onNext={vi.fn()}
         ejemEmail=""
-        initial={{ firstName: 'Amir', lastName: 'Levi', dateOfBirth: isoDaysAgoYears(17), classLevel: 'Terminale', gender: 'male' }}
+        initial={{ firstName: 'Amir', lastName: 'Levi', dateOfBirth: isoDaysAgoYears(17), classLevel: 'Terminale', gender: 'male', languages: ['English'] }}
       />,
     );
     expect(screen.getByDisplayValue('Amir')).toBeInTheDocument();
@@ -172,5 +180,16 @@ describe('StepBasicInfo', () => {
   it('renders a server-side rejection carried back from a later step', () => {
     renderWithProviders(<StepBasicInfo onNext={vi.fn()} ejemEmail="" serverError="Something went wrong." />);
     expect(screen.getByText('Something went wrong.')).toBeInTheDocument();
+  });
+
+  it('renders ONE languages label, from i18n — not the picker\'s hardcoded English default', () => {
+    // LanguagePicker renders its own <label> and defaults it to a hardcoded
+    // English 'Languages spoken *'. Wrapping the picker in a second,
+    // translated <label> showed a French user both — the translated one and
+    // the untranslated default, stacked (#539 review). The label must go
+    // THROUGH the picker, so exactly one renders and it is translatable.
+    renderWithProviders(<StepBasicInfo onNext={vi.fn()} ejemEmail="" />);
+
+    expect(screen.getAllByText('Languages spoken *')).toHaveLength(1);
   });
 });
