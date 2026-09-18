@@ -137,19 +137,6 @@ describe('AuthGuard with no role (the shared hub)', () => {
   });
 });
 
-/**
- * The re-consent gate (issue #488 decision 1). Before role routing: a member
- * whose stored consentVersion is stale sees the gate INSTEAD of any portal;
- * the live version, one of its pre-unification alias labels (study's
- * '2025-12-01', do's '2026-08-28' -- same text, #489), and no field at all
- * (an account older than the field, read as the initial '1.0') all pass.
- */
-describe('re-consent gate (#488)', () => {
-  // These files render no i18n provider, so the gate's heading carries the
-  // raw key; match either that or the English copy.
-  const GATE = /We've updated our terms|consentGate\.title/;
-  const gate = () => screen.queryByRole('heading', { level: 1, name: GATE });
-
 describe('a skipped offering stage does not cost portal access (#537 D8)', () => {
   /* The offering step is skippable by design: "it just means that the account
      is not active on that sub app". This guard used to eject any babysitter
@@ -207,6 +194,19 @@ describe('a skipped offering stage does not cost portal access (#537 D8)', () =>
     expect(screen.getByText('babysitter portal')).toBeInTheDocument();
   });
 });
+
+/**
+ * The re-consent gate (issue #488 decision 1). Before role routing: a member
+ * whose stored consentVersion is stale sees the gate INSTEAD of any portal;
+ * the live version, one of its pre-unification alias labels (study's
+ * '2025-12-01', do's '2026-08-28' -- same text, #489), and no field at all
+ * (an account older than the field, read as the initial '1.0') all pass.
+ */
+describe('re-consent gate (#488)', () => {
+  // These files render no i18n provider, so the gate's heading carries the
+  // raw key; match either that or the English copy.
+  const GATE = /We've updated our terms|consentGate\.title/;
+  const gate = () => screen.queryByRole('heading', { level: 1, name: GATE });
 
   it('a stale consentVersion renders the gate and nothing of the app', () => {
     state.userDoc = { profiles: { parent: { familyId: 'f1' } }, consentVersion: '0.9' };
