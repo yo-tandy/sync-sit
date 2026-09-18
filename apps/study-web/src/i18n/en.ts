@@ -1405,6 +1405,8 @@ export default {
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender *',
+    languages: 'Languages spoken *',
+    languagesHint: 'Mark every language you can use with families.',
     contactInfoTitle: 'How can families reach you?',
     contactInfoSubtitle: 'Provide at least one contact method — email or phone.',
     contactEmail: 'Contact email',

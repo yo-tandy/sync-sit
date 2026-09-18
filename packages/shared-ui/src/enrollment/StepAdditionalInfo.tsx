@@ -2,12 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isAcceptablePhotoType, type Address } from '@ejm/shared-core';
 import { Button } from '../components/Button.js';
-import { Textarea } from '../components/Textarea.js';
 import { Avatar } from '../components/Avatar.js';
 import { AddressAutocomplete } from '../forms/AddressAutocomplete.js';
 
 export interface AdditionalInfoData {
-  bio: string;
   /** A freshly-picked file, or `null` when no (new) photo was chosen. The
    *  orchestrator (PR4) owns actually uploading it to Storage -- this
    *  component makes no API calls. */
@@ -20,7 +18,7 @@ interface StepAdditionalInfoProps {
   /** Previously-entered values, restored on back-navigation. Note there is
    *  no restored `photoFile` -- a `File` cannot round-trip through wizard
    *  state, so a back-then-forward re-selects it if still wanted. */
-  initial?: { bio: string; address: Address | null } | null;
+  initial?: { address: Address | null } | null;
   /** A submit-time server rejection carried back from a later step. */
   serverError?: string | null;
 }
@@ -29,8 +27,14 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 /**
  * Additional-info step of the unified enrollment flow (issue #435
- * milestone, PR3, step 4b "optional extras"): bio/"about me", profile
- * photo, and home address. Every field here is optional, so the button is
+ * milestone, PR3, step 4b "optional extras"): profile photo and home
+ * address.
+ *
+ * "About me" USED to live here and no longer does (issue #537 D4): a bio is
+ * per-app experience copy — what you are like as a babysitter is not what
+ * you are like as a tutor — so it belongs to the per-app experience stage,
+ * not to the one shared identity stage. The avatar stays: #537 lists an
+ * optional avatar as part of stage 1. Every field here is optional, so the button is
  * always enabled -- there is nothing to validate before continuing.
  *
  * No existing photo-UPLOAD component was found in shared-ui (`Avatar`
@@ -46,7 +50,6 @@ const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
  */
 export function StepAdditionalInfo({ onNext, initial = null, serverError = null }: StepAdditionalInfoProps) {
   const { t } = useTranslation();
-  const [bio, setBio] = useState(initial?.bio ?? '');
   const [address, setAddress] = useState<Address | null>(initial?.address ?? null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export function StepAdditionalInfo({ onNext, initial = null, serverError = null 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onNext({ bio: bio.trim(), photoFile, address });
+    onNext({ photoFile, address });
   };
 
   return (
@@ -134,15 +137,6 @@ export function StepAdditionalInfo({ onNext, initial = null, serverError = null 
         </div>
         {photoError && <p className="mt-2 text-sm text-error-600">{photoError}</p>}
       </div>
-
-      <Textarea
-        label={t('unifiedEnrollment.bioLabel')}
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        placeholder={t('unifiedEnrollment.bioPlaceholder')}
-        rows={4}
-        maxLength={1000}
-      />
 
       <AddressAutocomplete value={address} onChange={setAddress} label={t('unifiedEnrollment.addressLabel')} />
       <p className="-mt-3 mb-5 text-xs text-gray-500">{t('unifiedEnrollment.addressHint')}</p>

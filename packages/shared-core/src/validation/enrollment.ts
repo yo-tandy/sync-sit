@@ -134,6 +134,13 @@ export const studentIdentityEnrollmentSchema = z.object({
   contactEmail: z.string().email('Enter a full email address').optional().or(z.literal('')),
   contactPhone: z.string().optional(),
   whatsapp: z.string().nullable().optional(),
+  // Languages moved OUT of the per-app offering steps and into the shared
+  // identity screen (issue #537 D7): which languages a student speaks is a
+  // fact about the person, not about babysitting — every app wants it, and
+  // collecting it once stops sit and study disagreeing about the same
+  // student. Required at the UI; optional here so an older client that
+  // predates the move is not rejected outright.
+  languages: z.array(z.string().min(1)).max(20).optional(),
   bio: z.string().max(1000).optional(),
   address: addressShape.nullable().optional(),
   language: z.enum(['en', 'fr']).optional(),
