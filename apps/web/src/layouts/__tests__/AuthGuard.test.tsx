@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock the authStore with mutable state: the guard's foreign-profile fallback
 // forks on WHICH foreign profile the signed-in user carries (issue #144).
@@ -125,14 +125,73 @@ describe('AuthGuard with no role (the shared hub)', () => {
     expect(screen.queryByText('account hub')).toBeNull();
   });
 
-  it('deliberately SKIPS the incomplete-enrollment redirect', () => {
-    // A half-enrolled babysitter is bounced to /enroll/babysitter inside the
-    // babysitter portal. The hub is not the babysitter portal, and the shared
-    // account is exactly what such a member may still need to reach.
+  it('admits a half-enrolled babysitter (no incomplete-enrollment redirect anywhere)', () => {
+    // Nothing bounces an incomplete babysitter now (#537 D8) — not the hub,
+    // and not the babysitter portal either (pinned in its own test below).
+    // Completeness is a VISIBILITY question, answered by
+    // computeEffectiveSearchable and the dashboard CTA, not an access one.
     state.userDoc = { profiles: { babysitter: { enrollmentComplete: false } } };
     renderRoleless();
     expect(screen.getByText('account hub')).toBeInTheDocument();
     expect(screen.queryByText('enrollment flow')).toBeNull();
+  });
+});
+
+describe('a skipped offering stage does not cost portal access (#537 D8)', () => {
+  /* The offering step is skippable by design: "it just means that the account
+     is not active on that sub app". This guard used to eject any babysitter
+     with `enrollmentComplete === false` straight back to /enroll/babysitter,
+     which made skipping impossible — the step could only escape by writing
+     `enrollmentComplete: true`, a claim that was false and that let a later
+     flip of the user-controlled `searchable` toggle surface a profile with no
+     rate, no kid ages and no area.
+
+     Nothing here asserts the profile stays OUT of search: that is
+     computeEffectiveSearchable's job and is pinned where it lives. This pins
+     only that the member reaches their portal. */
+  function renderBabysitterPortal() {
+    render(
+      <MemoryRouter initialEntries={['/babysitter']}>
+        <Routes>
+          <Route
+            path="/babysitter"
+            element={
+              <AuthGuard role="babysitter">
+                <div>babysitter portal</div>
+              </AuthGuard>
+            }
+          />
+          <Route path="/login" element={<div>login landing</div>} />
+          <Route path="/enroll/babysitter" element={<div>enrollment flow</div>} />
+        </Routes>
+      </MemoryRouter>,
+    );
+  }
+
+  beforeEach(() => {
+    state.loading = false;
+    state.firebaseUser = { uid: 'u1' };
+    state.userDoc = null;
+  });
+  afterEach(cleanup);
+
+  it('admits a babysitter who skipped the offering stage', () => {
+    state.userDoc = {
+      consentVersion: CONSENT_VERSION,
+      profiles: { babysitter: { enrollmentComplete: false } },
+    };
+    renderBabysitterPortal();
+    expect(screen.getByText('babysitter portal')).toBeInTheDocument();
+    expect(screen.queryByText('enrollment flow')).toBeNull();
+  });
+
+  it('admits a fully-enrolled babysitter too (the change is not a blanket bypass)', () => {
+    state.userDoc = {
+      consentVersion: CONSENT_VERSION,
+      profiles: { babysitter: { enrollmentComplete: true } },
+    };
+    renderBabysitterPortal();
+    expect(screen.getByText('babysitter portal')).toBeInTheDocument();
   });
 });
 

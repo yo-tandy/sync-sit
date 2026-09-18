@@ -163,3 +163,52 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     await waitFor(() => expect(about.value).toBe('I love kids!'));
   });
 });
+
+/**
+ * Skipping the offering stage (issue #537 D8: "the user can skip the page —
+ * it just means that the account is not active on that sub app").
+ */
+describe('StepPreferences skip (#537 D8)', () => {
+  beforeEach(() => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      profiles: { babysitter: { enrollmentComplete: false } },
+    };
+    h.updateDoc.mockClear();
+  });
+  afterEach(() => cleanup());
+
+  it('writes NOTHING — enrollmentComplete must stay false', async () => {
+    // It used to write `enrollmentComplete: true` to get past AuthGuard's
+    // ejection of incomplete babysitters. That claim was false: the profile
+    // has no rate, no kid ages and no area, and a later flip of the
+    // user-controlled `searchable` toggle could then surface it in search.
+    // The ejection is gone, so the skip can be honest — and honest is silent.
+    const onComplete = vi.fn();
+    render(
+      <MemoryRouter>
+        <StepPreferences uid="bs1" onComplete={onComplete} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /skip for now/i }));
+
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+
+  it('SAVE still completes the enrollment — skip is the only silent path', async () => {
+    // The complement, so the pin above cannot be satisfied by breaking save.
+    render(
+      <MemoryRouter>
+        <StepPreferences uid="bs1" onComplete={() => {}} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1];
+    expect(payload['profiles.babysitter.enrollmentComplete']).toBe(true);
+  });
+});
