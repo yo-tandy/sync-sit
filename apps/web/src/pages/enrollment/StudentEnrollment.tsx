@@ -279,6 +279,9 @@ export function StudentEnrollment() {
   if (authLoading) return null;
 
   return (
+    // brand-platform (issue #537 D1): the unified student flow is a PLATFORM
+    // surface — it must render gray, not sit red, even though sit hosts it.
+    <div className="brand-platform">
     <AuthColumn>
       <TopNav
         title={t('unifiedEnrollment.studentTitle')}
@@ -288,5 +291,6 @@ export function StudentEnrollment() {
       <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
       {renderStep()}
     </AuthColumn>
+    </div>
   );
 }

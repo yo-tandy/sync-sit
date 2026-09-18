@@ -297,6 +297,12 @@ export default {
     studentTitle: 'Create your account',
     chooseAppTitle: "You're all set — what next?",
     chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    // Role labels, not app names, on the chooser tiles (issue #537 D6):
+    // the user is choosing WHAT THEY DO; the brand mark beside the label
+    // already says which app that leads to.
+    chooseSitRole: 'Babysitter',
+    chooseStudyRole: 'Tutor',
+    chooseDoRole: 'Doer',
     chooseSitDesc: 'Offer babysitting to EJM families.',
     chooseStudyDesc: 'Offer tutoring to EJM families.',
     chooseDoDesc: 'Odd jobs and errands for EJM families.',
