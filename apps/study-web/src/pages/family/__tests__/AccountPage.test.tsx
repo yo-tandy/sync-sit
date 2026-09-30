@@ -94,6 +94,35 @@ describe('family AccountPage', () => {
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
   });
 
+  it('a typed phone number SURVIVES the render it causes (seeded once per mount)', async () => {
+    // `parent` is a fresh object every render (getParentView spreads), so an
+    // unguarded `[parent]` seeding effect re-fires on the very render its own
+    // setters trigger and resets the field to the stored value — the parent
+    // cannot change their phone number at all.
+    renderWithProviders(<AccountPage />);
+
+    const phoneInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    // Seeded from profiles.parent.phone = '+33 600000000' (FR code stripped).
+    expect(phoneInput.value).toBe('600000000');
+
+    fireEvent.change(phoneInput, { target: { value: '612345678' } });
+
+    expect(phoneInput.value).toBe('612345678');
+    await waitFor(() => expect(phoneInput.value).toBe('612345678'));
+  });
+
+  it('saves the TYPED phone, not the value the page was seeded with', async () => {
+    renderWithProviders(<AccountPage />);
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: '612345678' } });
+    fireEvent.click(screen.getByRole('button', { name: /save contact/i }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1];
+    expect(payload['profiles.parent.phone']).toBe('+33 612345678');
+    expect(payload['profiles.parent.whatsapp']).toBe('+33 612345678');
+  });
+
   it('writes notif prefs as per-scenario dot-paths (never the whole object)', async () => {
     renderWithProviders(<AccountPage />);
     // confirmed.email starts true; toggling writes only that email channel.

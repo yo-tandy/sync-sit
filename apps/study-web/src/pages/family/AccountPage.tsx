@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useFlashTimer } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
@@ -68,9 +68,21 @@ export function AccountPage() {
   // Push notifications only function when the app is installed as a PWA.
   const pwaMode = isRunningAsPWA();
 
+  // One-shot seeding guard (same bug/fix as apps/web's StepPreferences.tsx
+  // and the two AccountPages, PR #206 review): `getParentView` returns a
+  // fresh object every render, so an unguarded `[parent]` effect re-fires on
+  // every render this component causes — including the one this effect's own
+  // setters trigger — and immediately resets phone/whatsapp (and prefs)
+  // back to `userDoc`, undoing the keystroke that just happened. The prefs
+  // toggles keep their own local state after a save, so seeding them once
+  // per mount is enough.
+  const seededRef = useRef(false);
+
   // Initialize from userDoc
   useEffect(() => {
     if (!parent) return;
+    if (seededRef.current) return;
+    seededRef.current = true;
     setPhone(parent.phone || '');
     setWhatsapp(parent.whatsapp || '');
     setWhatsappSameAsPhone(parent.whatsapp ? parent.whatsapp === parent.phone : true);
