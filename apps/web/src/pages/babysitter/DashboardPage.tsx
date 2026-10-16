@@ -13,7 +13,7 @@ import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
 import { SupervisionRequestCard } from '@/components/babysitter/SupervisionRequestCard';
-import { Card, Dialog, Button, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
+import { Card, Dialog, Button, Checkbox, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -70,6 +70,16 @@ export function BabysitterDashboard() {
 
   const [toggleDialog, setToggleDialog] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // Contact-visibility consent: activation hands families the contact trio,
+  // so a student who did not tick the enrollment checkbox (or a classic
+  // enrollee who was never asked) must accept it here first. Recorded on the
+  // root doc in the same write as `searchable` — firestore.rules
+  // (contactVisibilityConsentValid) rejects an activation without it.
+  const needsContactConsent = userDoc?.contactVisibilityConsent !== true;
+  const [contactConsent, setContactConsent] = useState(false);
+  useEffect(() => {
+    if (!toggleDialog) setContactConsent(false);
+  }, [toggleDialog]);
 
   // Onboarding state
   const [showWelcome, setShowWelcome] = useState(false);
@@ -125,10 +135,13 @@ export function BabysitterDashboard() {
       return;
     }
 
+    if (!isSearchable && needsContactConsent && !contactConsent) return;
+
     setToggling(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
         'profiles.babysitter.searchable': !isSearchable,
+        ...(!isSearchable && needsContactConsent ? { contactVisibilityConsent: true } : {}),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -265,8 +278,20 @@ export function BabysitterDashboard() {
             : t('babysitterDashboard.activateDesc')
           }
         </p>
+        {!isSearchable && needsContactConsent && (
+          <Checkbox
+            label={t('babysitterDashboard.activateConsent')}
+            checked={contactConsent}
+            onChange={(e) => setContactConsent(e.target.checked)}
+            className="mb-5"
+          />
+        )}
         <div className="flex gap-2">
-          <Button onClick={handleToggleSearchable} disabled={toggling} className="flex-1">
+          <Button
+            onClick={handleToggleSearchable}
+            disabled={toggling || (!isSearchable && needsContactConsent && !contactConsent)}
+            className="flex-1"
+          >
             {toggling ? t('babysitterDashboard.updating') : isSearchable ? t('babysitterDashboard.deactivate') : t('babysitterDashboard.activate')}
           </Button>
           <Button variant="ghost" onClick={() => setToggleDialog(false)} className="flex-1">

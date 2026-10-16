@@ -368,6 +368,28 @@ service cloud.firestore {
              && rootContactFieldValid('whatsapp', 40);
     }
 
+    // Contact-visibility consent (root `contactVisibilityConsent`, first
+    // asked by the unified flow's StepContactInfo). Turning a babysitter or
+    // tutor profile searchable hands its contact trio to families, so an
+    // owner write that flips `profiles.{babysitter,tutor}.searchable` from
+    // not-true to true must leave the doc carrying the consent — either
+    // already recorded at enrollment or written in the SAME update (the
+    // dashboards' activation dialog does exactly that). Without this pin the
+    // dashboard checkbox would be advisory: a bare `searchable: true` write
+    // would bypass it. Turning visibility OFF is never gated. The field
+    // itself, when changed, must be a boolean.
+    function activatingProfile(role) {
+      return request.resource.data.get('profiles', {}).get(role, {}).get('searchable', false) == true
+             && resource.data.get('profiles', {}).get(role, {}).get('searchable', false) != true;
+    }
+    function contactVisibilityConsentValid() {
+      return (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['contactVisibilityConsent'])
+              || request.resource.data.get('contactVisibilityConsent', null) is bool)
+             && (!(activatingProfile('babysitter') || activatingProfile('tutor'))
+                 || request.resource.data.get('contactVisibilityConsent', false) == true);
+    }
+
     function rootIdentitySetOnce() {
       return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['firstName', 'lastName', 'dateOfBirth'])
@@ -410,7 +432,8 @@ service cloud.firestore {
       //   fields nested inside a profile the owner otherwise may edit.
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
-      //   (soft hide from search).
+      //   (soft hide from search) — but turning one ON requires the root
+      //   contactVisibilityConsent (contactVisibilityConsentValid).
       // NOTE: `profiles.tutor.cancellationNoticeHours` and
       //   `profiles.babysitter.cancellationNoticeHours` are also intentionally
       //   editable — enforcement reads the per-booking SNAPSHOT taken at
@@ -456,6 +479,7 @@ service cloud.firestore {
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
                     && rootContactShapeValid()
+                    && contactVisibilityConsentValid()
                     && tutorNumericBoundsValid()
                     && noticeWindowBoundsValid()
                     && tutorAreaShapeValid()

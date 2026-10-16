@@ -159,7 +159,7 @@ describe('StepContactInfo', () => {
 
     expect(
       screen.getByText(
-        "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+        "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
       ),
     ).toBeInTheDocument();
 
@@ -173,7 +173,7 @@ describe('StepContactInfo', () => {
     );
     expect(
       screen.queryByText(
-        "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+        "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
       ),
     ).toBeNull();
 

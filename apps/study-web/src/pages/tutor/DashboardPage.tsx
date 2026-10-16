@@ -15,6 +15,7 @@ import type { StudySessionDoc } from '@/types/studySession';
 import {
   Card,
   Button,
+  Checkbox,
   Dialog,
   Spinner,
   CalendarIcon,
@@ -102,6 +103,14 @@ export function DashboardPage() {
   const [scheduleLoaded, setScheduleLoaded] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [toggleDialog, setToggleDialog] = useState(false);
+  // Contact-visibility consent — same gate as sit's babysitter dashboard:
+  // activation requires the root consent, recorded in the same write when it
+  // was not given at enrollment (firestore.rules contactVisibilityConsentValid).
+  const needsContactConsent = userDoc?.contactVisibilityConsent !== true;
+  const [contactConsent, setContactConsent] = useState(false);
+  useEffect(() => {
+    if (!toggleDialog) setContactConsent(false);
+  }, [toggleDialog]);
   // Null while loading — the sections and the empty state must not paint (and
   // then visibly swap) while a snapshot is still in flight.
   const [requests, setRequests] = useState<StudyContactRequestDoc[] | null>(null);
@@ -203,10 +212,12 @@ export function DashboardPage() {
     if (!uid) return;
     // Guard: activation requires subjects and at least one availability slot.
     if (!isSearchable && !(hasSubjects && hasSlots)) return;
+    if (!isSearchable && needsContactConsent && !contactConsent) return;
     setToggling(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
         'profiles.tutor.searchable': !isSearchable,
+        ...(!isSearchable && needsContactConsent ? { contactVisibilityConsent: true } : {}),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -482,8 +493,20 @@ export function DashboardPage() {
             ? t('tutor.dashboard.deactivateDesc')
             : t('tutor.dashboard.activateDesc')}
         </p>
+        {!isSearchable && needsContactConsent && (
+          <Checkbox
+            label={t('tutor.dashboard.activateConsent')}
+            checked={contactConsent}
+            onChange={(e) => setContactConsent(e.target.checked)}
+            className="mb-5"
+          />
+        )}
         <div className="flex gap-2">
-          <Button onClick={handleToggleSearchable} disabled={toggling} className="flex-1">
+          <Button
+            onClick={handleToggleSearchable}
+            disabled={toggling || (!isSearchable && needsContactConsent && !contactConsent)}
+            className="flex-1"
+          >
             {toggling
               ? t('tutor.dashboard.updating')
               : isSearchable

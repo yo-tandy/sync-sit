@@ -162,8 +162,78 @@ describe('users collection — Plan D owner-update guards', () => {
     await seed('bs1', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false } } });
     const authed = testEnv.authenticatedContext('bs1');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'bs1'), { 'profiles.babysitter.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'bs1'), { 'profiles.babysitter.searchable': true, contactVisibilityConsent: true })
     );
+  });
+
+  // Contact-visibility consent gate (contactVisibilityConsentValid): turning
+  // a babysitter/tutor profile searchable hands families the contact trio,
+  // so the doc must carry root contactVisibilityConsent == true after the
+  // write — recorded at enrollment, or in the same update (the dashboards'
+  // activation dialog). Without this the dialog checkbox is advisory.
+  describe('activation requires contactVisibilityConsent', () => {
+    const bs = (searchable: boolean, root: Record<string, unknown> = {}) => ({
+      status: 'active', email: 'b@ejm.org', ...root,
+      profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable } },
+    });
+    const tu = (searchable: boolean, root: Record<string, unknown> = {}) => ({
+      status: 'active', email: 't@ejm.org', ...root,
+      profiles: { tutor: { ejemEmail: 't@ejm.org', enrollmentComplete: true, searchable, subjects: ['math'] } },
+    });
+
+    it('babysitter activation is DENIED with no consent on the doc (classic enrollee)', async () => {
+      await seed('cvc1', bs(false));
+      const authed = testEnv.authenticatedContext('cvc1');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc1'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('babysitter activation is DENIED when enrollment recorded consent=false', async () => {
+      await seed('cvc2', bs(false, { contactVisibilityConsent: false }));
+      const authed = testEnv.authenticatedContext('cvc2');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc2'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('babysitter activation is DENIED when the same write sets consent=false', async () => {
+      await seed('cvc3', bs(false));
+      const authed = testEnv.authenticatedContext('cvc3');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc3'), {
+        'profiles.babysitter.searchable': true, contactVisibilityConsent: false,
+      }));
+    });
+
+    it('babysitter activation is ALLOWED when consent was given at enrollment', async () => {
+      await seed('cvc4', bs(false, { contactVisibilityConsent: true }));
+      const authed = testEnv.authenticatedContext('cvc4');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc4'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('tutor activation is DENIED with no consent, ALLOWED when written in the same update', async () => {
+      await seed('cvc5', tu(false));
+      const authed = testEnv.authenticatedContext('cvc5');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc5'), { 'profiles.tutor.searchable': true }));
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc5'), {
+        'profiles.tutor.searchable': true, contactVisibilityConsent: true,
+      }));
+    });
+
+    it('deactivation is never gated on consent', async () => {
+      await seed('cvc6', bs(true));
+      const authed = testEnv.authenticatedContext('cvc6');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc6'), { 'profiles.babysitter.searchable': false }));
+    });
+
+    it('an already-searchable legacy profile without consent can still edit other fields', async () => {
+      await seed('cvc7', bs(true));
+      const authed = testEnv.authenticatedContext('cvc7');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc7'), { 'profiles.babysitter.hourlyRate': 18 }));
+    });
+
+    it('contactVisibilityConsent must be a boolean', async () => {
+      await seed('cvc8', bs(false));
+      const authed = testEnv.authenticatedContext('cvc8');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc8'), { contactVisibilityConsent: 'yes' }));
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc8'), { contactVisibilityConsent: true }));
+    });
   });
 
   it('babysitter may edit mutable profile fields (hourlyRate, contactEmail)', async () => {
@@ -299,7 +369,7 @@ describe('users collection — Plan D owner-update guards', () => {
     await seed('bsES3', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false, effectiveSearchable: false } } });
     const authed = testEnv.authenticatedContext('bsES3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'bsES3'), { 'profiles.babysitter.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'bsES3'), { 'profiles.babysitter.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -456,7 +526,7 @@ describe('users collection — Plan D owner-update guards', () => {
     await seedTutor('tu3');
     const authed = testEnv.authenticatedContext('tu3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'tu3'), { 'profiles.tutor.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'tu3'), { 'profiles.tutor.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -562,7 +632,7 @@ describe('users collection — Plan D owner-update guards', () => {
     });
     const authed = testEnv.authenticatedContext('tuES3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'tuES3'), { 'profiles.tutor.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'tuES3'), { 'profiles.tutor.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -2169,6 +2239,7 @@ describe('guardian collections', () => {
       await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU8'), {
         photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png',
         'profiles.babysitter.searchable': true,
+        contactVisibilityConsent: true,
       }));
     });
 
