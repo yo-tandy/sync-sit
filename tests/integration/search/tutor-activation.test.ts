@@ -40,12 +40,17 @@ async function waitForEffectiveSearchable(
   );
 }
 
-/** Rules-enforced client write: set profiles.tutor.searchable via REST. */
+/**
+ * Rules-enforced client write: set profiles.tutor.searchable via REST, with
+ * root contactVisibilityConsent in the same write — the rules require it to
+ * activate (contactVisibilityConsentValid), exactly as the dashboard's
+ * activation dialog sends it.
+ */
 async function ownerToggleSearchable(uid: string, idToken: string): Promise<Response> {
   const url =
     `http://127.0.0.1:${FIRESTORE_PORT}/v1/projects/${PROJECT_ID}` +
     `/databases/(default)/documents/users/${uid}` +
-    `?updateMask.fieldPaths=profiles.tutor.searchable`;
+    `?updateMask.fieldPaths=profiles.tutor.searchable&updateMask.fieldPaths=contactVisibilityConsent`;
   return fetch(url, {
     method: 'PATCH',
     headers: {
@@ -54,6 +59,7 @@ async function ownerToggleSearchable(uid: string, idToken: string): Promise<Resp
     },
     body: JSON.stringify({
       fields: {
+        contactVisibilityConsent: { booleanValue: true },
         profiles: {
           mapValue: {
             fields: {
