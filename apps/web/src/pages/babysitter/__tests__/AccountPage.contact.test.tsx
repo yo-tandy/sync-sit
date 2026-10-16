@@ -178,4 +178,15 @@ describe('BabysitterAccountPage contact (shared identity, issue #203)', () => {
     renderPage();
     expect(screen.getByText('noa.weiss28@ejm.org')).toBeInTheDocument();
   });
+
+  it('a rejected contact save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    renderPage();
+    fireEvent.click(saveButton());
+
+    expect(await screen.findByText(i18n.t('account.contactSaveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
+  });
 });

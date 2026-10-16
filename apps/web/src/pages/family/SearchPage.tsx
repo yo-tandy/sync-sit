@@ -347,8 +347,10 @@ export function SearchPage() {
       setResults((result.data as { results: BabysitterSummary[] }).results);
       setStep('results');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Search failed';
-      setSearchError(message);
+      // Never echo err.message: the callable's refusals are English-only
+      // server text (or a bare `internal`) and none is actionable here.
+      console.error('[search] callable failed', err);
+      setSearchError(t('common.error'));
     } finally {
       setSearching(false);
     }
@@ -377,8 +379,10 @@ export function SearchPage() {
       });
       setSent(true);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to send request';
-      setSearchError(errorMessage);
+      // Not-found is shared by "family not found" and "babysitter not active",
+      // so no single specific wording is true: generic for everything.
+      console.error('[search] callable failed', err);
+      setSearchError(t('common.error'));
     } finally {
       setSending(false);
     }

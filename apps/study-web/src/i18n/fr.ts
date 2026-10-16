@@ -233,6 +233,8 @@ export default {
     resendCode: 'Renvoyer le code',
     verifying: 'Vérification...',
     invalidCode: 'Code de vérification invalide',
+    codeExpired: 'Ce code de vérification a expiré. Veuillez en demander un nouveau.',
+    codeWrongClass: 'Ce code de vérification ne peut pas être utilisé pour cette inscription. Veuillez en demander un nouveau.',
     createPassword: 'Créez votre mot de passe',
     confirmPassword: 'Confirmer le mot de passe',
     passwordMismatch: 'Les mots de passe ne correspondent pas',
@@ -746,6 +748,7 @@ export default {
     settings: {
       saved: 'Détails de la famille enregistrés !',
       saveFailed: 'Échec de l\'enregistrement des détails de la famille',
+      loadFailed: 'Impossible de charger les détails de votre famille. Veuillez réessayer.',
       sharedHint:
         'Les détails de votre famille et vos enfants sont partagés avec l\'application de baby-sitting Sync/Sit — les modifications ici mettent à jour les deux.',
       familyName: 'Nom de famille',
@@ -1017,6 +1020,9 @@ export default {
       approve: 'Approuver',
       approveSuccess: 'Compte approuvé avec succès !',
       communityAlreadyVerified: 'Cette demande n\'est plus valable — cette famille a déjà été vérifiée.',
+      communityCodeInvalid: 'Ce code est introuvable. Vérifiez-le et réessayez.',
+      communityCodeExpired: 'Ce code a expiré. Demandez à la personne d\'en générer un nouveau.',
+      communityApproveFailed: 'Une erreur est survenue. Veuillez réessayer.',
     },
     sessions: {
       title: 'Vos cours',
@@ -1335,6 +1341,7 @@ export default {
     emailLabel: 'Adresse email',
     ejemEmailHint: "Utilisez votre email EJM officiel. Les 2 derniers chiffres doivent correspondre à votre année d'obtention du diplôme.",
     serverError: 'Erreur serveur. Veuillez réessayer.',
+    submitInvalid: "Certaines de vos informations n'ont pas pu être acceptées. Veuillez les vérifier et réessayer.",
     firstName: 'Prénom *',
     lastName: 'Nom *',
     dateOfBirth: 'Date de naissance *',

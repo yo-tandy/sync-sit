@@ -31,7 +31,7 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
 
-import '@/i18n';
+import i18n from '@/i18n';
 import { StepPreferences } from '../StepPreferences';
 
 function renderStep() {
@@ -161,5 +161,39 @@ describe('StepPreferences shared-identity contact (issue #203)', () => {
     expect(about.value).toBe('I love kids');
     fireEvent.change(about, { target: { value: 'I love kids!' } });
     await waitFor(() => expect(about.value).toBe('I love kids!'));
+  });
+});
+
+describe('StepPreferences save failure copy', () => {
+  beforeEach(() => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      firstName: 'Lea',
+      lastName: 'Bernard',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org' } },
+    };
+    h.updateDoc.mockClear();
+  });
+  afterEach(() => cleanup());
+
+  const rejection = () =>
+    Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+
+  it('a rejected save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(rejection());
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
+  });
+
+  it('a rejected skip shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(rejection());
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('enrollment.skipForNow') }));
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
   });
 });

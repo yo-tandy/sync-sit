@@ -95,8 +95,9 @@ export function BabysittingOptionsPage() {
       await refreshUserDoc();
       toast(t('profile.saved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save';
-      setError(message);
+      // Firestore SDK errors are Errors with English text; never echo them.
+      console.error('[babysitting-options] save failed', err);
+      setError(t('common.error'));
     } finally {
       setSaving(false);
     }

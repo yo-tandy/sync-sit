@@ -145,8 +145,9 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       await refreshUserDoc();
       onComplete();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to save';
-      setError(message);
+      console.error('[enrollment] save preferences failed', err);
+      // Firestore SDK errors are Errors with English text; never echo them.
+      setError(t('common.error'));
     } finally {
       setSaving(false);
     }
@@ -163,8 +164,8 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
       onComplete();
     } catch (err: unknown) {
       console.error('[enrollment] save preferences (skip) failed', err);
-      const message = err instanceof Error ? err.message : 'Failed to save';
-      setError(message);
+      // Firestore SDK errors are Errors with English text; never echo them.
+      setError(t('common.error'));
     } finally {
       setSaving(false);
     }

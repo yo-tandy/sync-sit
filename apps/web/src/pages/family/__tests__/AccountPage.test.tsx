@@ -257,4 +257,18 @@ describe('family AccountPage', () => {
     const userCall = h.updateDoc.mock.calls.find((c) => c[0].path === 'users/p1')!;
     expect(userCall[1]['profiles.parent.phone']).toBe('+33 612345678');
   });
+  it('a failed contact save shows the translated failure copy, never the raw error text', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('internal'), { code: 'functions/internal' }),
+    );
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('account.saveContact') }));
+
+    expect(await screen.findByText(i18n.t('account.contactSaveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    consoleErrorSpy.mockRestore();
+  });
 });

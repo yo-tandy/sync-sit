@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The settings page loads families/{id} +
 // its kids subcollection, then writes family fields via updateDoc and syncs
@@ -198,5 +198,33 @@ describe('family FamilySettingsPage', () => {
         expect.objectContaining({ firstName: 'Noa', age: 7 }),
       ),
     );
+  });
+
+  it('shows the translated save failure, never the raw Firestore error text', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    renderWithProviders(<FamilySettingsPage />);
+    await screen.findByLabelText(/family name/i);
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText(i18n.t('family.settings.saveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).not.toBeInTheDocument();
+    consoleError.mockRestore();
+  });
+
+  it('shows the translated load failure, never the raw Firestore error text', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.getDoc.mockImplementation(() =>
+      Promise.reject(
+        Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+      ),
+    );
+    renderWithProviders(<FamilySettingsPage />);
+
+    expect(await screen.findByText(i18n.t('family.settings.loadFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).not.toBeInTheDocument();
+    consoleError.mockRestore();
   });
 });

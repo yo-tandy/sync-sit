@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { callableErrorCode } from '@ejm/shared-ui';
 import { TopNav } from '@/components/ui/TopNav';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -173,14 +174,13 @@ export function AdminUsersPage() {
       closeIdentityDialog();
       loadUsers();
     } catch (err: unknown) {
-      // Callable rejections are always Error instances, so the localized
-      // string leads and the (English) server detail follows — otherwise the
-      // fallback would be dead code and a French admin would see only the
-      // raw HttpsError message.
-      const detail = err instanceof Error ? err.message : '';
+      console.error('[admin] identity correction failed', err);
+      // Never echo the (English) server message. invalid-argument = a
+      // name/DOB the schema rejected: actionable, so it has its own copy;
+      // everything else gets the generic localized failure.
       setIdentityError(
-        detail
-          ? `${t('admin.identityCorrectionFailed')}: ${detail}`
+        callableErrorCode(err) === 'invalid-argument'
+          ? t('admin.identityCorrectionInvalid')
           : t('admin.identityCorrectionFailed'),
       );
     } finally {
@@ -205,8 +205,8 @@ export function AdminUsersPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Export failed';
-      alert(message);
+      console.error('[admin] user data export failed', err);
+      alert(t('admin.exportFailed'));
     }
   };
 

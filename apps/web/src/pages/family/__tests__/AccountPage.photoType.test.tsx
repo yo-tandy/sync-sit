@@ -125,4 +125,18 @@ describe('family AccountPage photo type handling (#452)', () => {
     const metadata = h.uploadBytes.mock.calls[0][2] as { contentType?: string } | undefined;
     expect(metadata?.contentType).toBe('image/heic');
   });
+  it('a failed upload shows the translated failure copy, never the raw SDK error text', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.uploadBytes.mockRejectedValueOnce(
+      Object.assign(new Error('internal'), { code: 'functions/internal' }),
+    );
+    renderPage();
+    fireEvent.change(fileInput(), {
+      target: { files: [new File(['x'], 'photo.jpg', { type: 'image/jpeg' })] },
+    });
+
+    expect(await screen.findByText(i18n.t('account.photoUploadFailed'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    consoleErrorSpy.mockRestore();
+  });
 });

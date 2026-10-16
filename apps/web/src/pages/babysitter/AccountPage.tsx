@@ -315,8 +315,9 @@ export function BabysitterAccountPage() {
       await refreshUserDoc();
       setPhotoFile(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
-      setError(message);
+      // Storage/Firestore SDK errors carry English text; never echo them.
+      console.error('[account] photo upload failed', err);
+      setError(t('account.photoUploadFailed'));
     } finally {
       setPhotoSaving(false);
     }
@@ -348,8 +349,8 @@ export function BabysitterAccountPage() {
       await refreshUserDoc();
       toast(t('account.contactSaved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
-      setError(message);
+      console.error('[account] contact save failed', err);
+      setError(t('account.contactSaveFailed'));
     } finally {
       setContactSaving(false);
     }
@@ -368,8 +369,8 @@ export function BabysitterAccountPage() {
       await refreshUserDoc();
       toast(t('profile.saved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('common.error');
-      setError(message);
+      console.error('[account] about-me save failed', err);
+      setError(t('common.error'));
     } finally {
       setAboutMeSaving(false);
     }
