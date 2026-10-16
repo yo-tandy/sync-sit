@@ -227,6 +227,7 @@ export function DoerEnrollment() {
       if (!applyEnrollmentError(err)) {
         // Never echo err.message: an unexpected fault arrives as the bare token
         // 'internal', and deliberate server messages are English-only.
+        console.error('[enrollment] send verification code failed', err);
         setError(t('enrollment.serverError'));
       }
     } finally {
