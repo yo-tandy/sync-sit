@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isPlausiblePhone } from '@ejm/shared-core';
 import { SUBJECTS } from '../constants/subjects.js';
 import { CLASS_LEVELS } from '../constants/classLevels.js';
 import { SESSION_LENGTHS } from '../constants/sessionLengths.js';
@@ -151,4 +152,26 @@ export function withPrefDefaults(enrollment: TutorEnrollmentInput): TutorEnrollm
     areaMode: enrollment.areaMode ?? 'arrondissement',
     arrondissements: enrollment.arrondissements ?? [],
   };
+}
+
+/**
+ * Shape-checks the phone channels the CLIENT typed (same rule as do's
+ * enrollDoer guard), returning the first error message or null. Run on the
+ * raw client payload, NOT inside tutorEnrollmentSchema: the cross-app path
+ * merges the caller's STORED canonical contact into the schema input, and a
+ * legacy free-text phone on file must not strand a sit user who never
+ * touched that field in this wizard.
+ */
+export function suppliedPhoneError(input: unknown): string | null {
+  if (typeof input !== 'object' || input === null) return null;
+  const source = input as Record<string, unknown>;
+  const checks = [
+    ['contactPhone', 'Invalid contact phone'],
+    ['whatsapp', 'Invalid WhatsApp number'],
+  ] as const;
+  for (const [key, message] of checks) {
+    const v = source[key];
+    if (typeof v === 'string' && v.trim() && !isPlausiblePhone(v)) return message;
+  }
+  return null;
 }

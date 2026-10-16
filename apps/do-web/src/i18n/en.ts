@@ -719,6 +719,7 @@ export default {
     contactSection: 'Contact details',
     contactHint: 'Provide at least one way for families to reach you. You can change these later.',
     contactEmailInvalid: 'Enter a full email address (e.g. name@example.com).',
+    contactPhoneInvalid: 'Enter a valid phone number (digits, optionally starting with +).',
     contactEmail: 'Contact email',
     contactPhone: 'Contact phone',
     completeSignup: 'Complete sign-up',

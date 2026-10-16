@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { CONSENT_VERSION, isBabysitter } from '@ejm/shared-core';
+import { CONSENT_VERSION, isBabysitter, isPlausiblePhone } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
 import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
 import { Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
@@ -145,19 +145,21 @@ export function CrossAppWelcomePage() {
   if (phase === 'details') {
     // Client-side gates mirror the classic StepProfile so a rejection cannot
     // strand the user on the subjects step: entered-DOB 15-18 window and the
-    // server's zod .email() strictness (the native input accepts 'x@y').
+    // server's zod .email() strictness (the native input accepts 'x@y'), and
+    // the shared phone-plausibility rule enrollTutor applies.
     const age = getAge(dateOfBirth);
     const ageValid = age !== null && age >= 15 && age < 19;
     const showAgeError = !!dateOfBirth && !ageValid;
     const emailFormatOk =
       !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
+    const phoneFormatOk = !contactPhone.trim() || isPlausiblePhone(contactPhone);
     const hasContact = !!(contactEmail.trim() || contactPhone.trim());
     const detailsValid =
       (!gaps.firstName || !!firstName.trim()) &&
       (!gaps.lastName || !!lastName.trim()) &&
       (!gaps.dateOfBirth || (!!dateOfBirth && ageValid)) &&
       (!gaps.classLevel || !!classLevel) &&
-      (!gaps.contact || (hasContact && emailFormatOk));
+      (!gaps.contact || (hasContact && emailFormatOk && phoneFormatOk));
 
     return (
       <div className="px-5 pt-8 pb-8">
@@ -271,6 +273,7 @@ export function CrossAppWelcomePage() {
                   type="tel"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
+                  error={contactPhone.trim() && !phoneFormatOk ? t('enrollment.contactPhoneInvalid') : undefined}
                 />
               </>
             )}

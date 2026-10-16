@@ -54,14 +54,14 @@ describe('StepProfile — client validation', () => {
   it('no upper age bound: an adult DOB passes (unlike study\'s 15-19 class gate)', () => {
     renderWithProviders(<StepProfile onNext={vi.fn()} />);
     fillIdentity(40);
-    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 611' } });
+    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 6 11 22 33 44' } });
     expect(continueBtn().disabled).toBe(false);
   });
 
   it('a malformed contact email blocks UNCONDITIONALLY, even with a phone present (server-strictness mirror)', () => {
     renderWithProviders(<StepProfile onNext={vi.fn()} />);
     fillIdentity(16);
-    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 611' } });
+    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 6 11 22 33 44' } });
     fireEvent.change(screen.getByLabelText('Contact email'), { target: { value: 'x@y' } });
     expect(screen.getByText('Enter a full email address (e.g. name@example.com).')).toBeTruthy();
     expect(continueBtn().disabled).toBe(true);
@@ -70,11 +70,23 @@ describe('StepProfile — client validation', () => {
     expect(continueBtn().disabled).toBe(false);
   });
 
+  it('a malformed contact phone blocks UNCONDITIONALLY, even with an email present (server-strictness mirror)', () => {
+    renderWithProviders(<StepProfile onNext={vi.fn()} />);
+    fillIdentity(16);
+    fireEvent.change(screen.getByLabelText('Contact email'), { target: { value: 'x@y.com' } });
+    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: 'call me' } });
+    expect(screen.getByText('Enter a valid phone number (digits, optionally starting with +).')).toBeTruthy();
+    expect(continueBtn().disabled).toBe(true);
+    // Fixing the phone unblocks.
+    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '06 12 34 56 78' } });
+    expect(continueBtn().disabled).toBe(false);
+  });
+
   it('requires at least one contact channel when collectContact is on', () => {
     renderWithProviders(<StepProfile onNext={vi.fn()} />);
     fillIdentity(16);
     expect(continueBtn().disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 611' } });
+    fireEvent.change(screen.getByLabelText('Contact phone'), { target: { value: '+33 6 11 22 33 44' } });
     expect(continueBtn().disabled).toBe(false);
   });
 

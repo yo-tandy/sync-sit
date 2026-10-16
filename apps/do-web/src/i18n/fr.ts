@@ -718,6 +718,7 @@ export default {
     contactSection: 'Coordonnées',
     contactHint: 'Indiquez au moins un moyen pour les familles de vous joindre. Vous pourrez les modifier plus tard.',
     contactEmailInvalid: 'Saisissez une adresse e-mail complète (ex. nom@exemple.com).',
+    contactPhoneInvalid: 'Saisissez un numéro de téléphone valide (chiffres, éventuellement précédés de +).',
     contactEmail: 'Email de contact',
     contactPhone: 'Téléphone de contact',
     completeSignup: "Terminer l'inscription",

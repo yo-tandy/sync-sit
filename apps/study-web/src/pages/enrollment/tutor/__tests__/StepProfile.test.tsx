@@ -117,6 +117,23 @@ describe('StepProfile (tutor)', () => {
     expect(screen.getByRole('button', { name: /Continue/i })).toBeDisabled();
   });
 
+  it('a malformed phone blocks submit even when a valid email is present', () => {
+    renderWithProviders(<StepProfile onNext={vi.fn()} />);
+    fillBasics();
+    fireEvent.change(screen.getByLabelText(/Date of birth/i), { target: { value: validDob } });
+    fireEvent.change(screen.getByLabelText(/Contact email/i), { target: { value: 't@ejm.org' } });
+    fireEvent.change(screen.getByLabelText(/Contact phone/i), { target: { value: '12ab' } });
+
+    // enrollTutor shape-checks the phone; the rejection would otherwise land
+    // on the subjects step.
+    expect(screen.getByText(/valid phone number/i)).toBeInTheDocument();
+    expect(submitBtn()).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Contact phone/i), { target: { value: '+33 6 12 34 56 78' } });
+    expect(screen.queryByText(/valid phone number/i)).not.toBeInTheDocument();
+    expect(submitBtn()).toBeEnabled();
+  });
+
   it('restores previously-entered values via initial (back-navigation)', () => {
     const onNext = vi.fn();
     renderWithProviders(

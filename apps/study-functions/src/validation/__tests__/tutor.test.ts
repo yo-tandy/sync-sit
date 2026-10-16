@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  suppliedPhoneError,
   tutorEnrollmentSchema,
   tutorImmutableProfileSchema,
   tutorSessionPrefsSchema,
@@ -193,5 +194,25 @@ describe('toDobDate — the stored-DOB normalizer the age gate depends on', () =
     expect(toDobDate(null)).toBeNull();
     expect(toDobDate(undefined)).toBeNull();
     expect(toDobDate(42)).toBeNull();
+  });
+});
+
+describe('suppliedPhoneError', () => {
+  it('passes plausible or absent phones', () => {
+    expect(suppliedPhoneError({ contactPhone: '+33 6 12 34 56 78', whatsapp: '0612345678' })).toBeNull();
+    expect(suppliedPhoneError({ contactEmail: 'a@b.com' })).toBeNull();
+    expect(suppliedPhoneError({ contactPhone: '   ' })).toBeNull();
+    expect(suppliedPhoneError(undefined)).toBeNull();
+  });
+
+  it('flags a junk contact phone', () => {
+    expect(suppliedPhoneError({ contactPhone: 'x' })).toBe('Invalid contact phone');
+    expect(suppliedPhoneError({ contactPhone: '12345' })).toBe('Invalid contact phone');
+  });
+
+  it('flags a junk WhatsApp number', () => {
+    expect(suppliedPhoneError({ contactPhone: '0612345678', whatsapp: 'call me' })).toBe(
+      'Invalid WhatsApp number',
+    );
   });
 });
