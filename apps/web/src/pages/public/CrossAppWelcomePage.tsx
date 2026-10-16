@@ -4,11 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { CONSENT_VERSION, isTutor } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
-import { enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { Button, Card, Spinner } from '@/components/ui';
 
 /**
@@ -18,8 +19,21 @@ import { Button, Card, Spinner } from '@/components/ui';
  * sit-specific. Continue enrolls via the crossApp callable (no email, no
  * code, no password) and hands over to the wizard's resume routing, which
  * lands on availability (classLevel/gender/contact were copied server-side).
+ *
+ * Wrapped in the same post-auth enrollment chrome (`AuthColumn` +
+ * `EnrollmentAppBar`) the classic wizard shows once the account exists —
+ * PublicLayout carries no header of its own.
  */
 export function CrossAppWelcomePage() {
+  return (
+    <AuthColumn>
+      <EnrollmentAppBar />
+      <CrossAppWelcomeContent />
+    </AuthColumn>
+  );
+}
+
+function CrossAppWelcomeContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
