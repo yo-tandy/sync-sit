@@ -171,7 +171,9 @@ export function TutorEnrollment() {
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+        // Never echo err.message: an unexpected fault arrives as the bare token
+        // 'internal', and deliberate server messages are English-only.
+        setError(t('enrollment.serverError'));
       }
     } finally {
       setLoading(false);

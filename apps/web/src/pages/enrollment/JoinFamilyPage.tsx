@@ -131,9 +131,10 @@ export function JoinFamilyPage() {
       armedWithRef.current = resendCooldownS;
       setResendCooldown(resendCooldownS);
       setStep(1);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(message);
+    } catch {
+      // Never echo err.message: an unexpected fault arrives as the bare token
+      // 'internal', and deliberate server messages are English-only.
+      setError(t('enrollment.serverError'));
     } finally {
       setSubmitting(false);
     }

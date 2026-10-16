@@ -13,7 +13,7 @@ const h = vi.hoisted(() => ({
   refreshUserDoc: () => Promise.resolve(),
   // Controllable verifyEjmEmail rejection so tests can drive the send-cap
   // (issue #155 bypass allowance) branch. Default null = send succeeds.
-  verifyError: null as { code: string; details: { reason: string } } | null,
+  verifyError: null as unknown,
   // Admin-config values the reader stub serves (issue #250) -- empty means
   // every key resolves to its caller-supplied fallback (code default).
   configValues: {} as Record<string, number>,
@@ -173,6 +173,20 @@ describe('BabysitterEnrollment send-cap surfacing (issue #155)', () => {
     expect(
       screen.queryByText(/Too many verification emails requested for this account/),
     ).toBeNull();
+  });
+});
+
+describe('BabysitterEnrollment unexpected send-code failure', () => {
+  it("an 'internal' rejection renders the translated server-error copy, never the bare token", async () => {
+    // What the client SDK hands back for an uncaught server throw: a
+    // FunctionsError whose message is literally 'internal'.
+    h.verifyError = Object.assign(new Error('internal'), { code: 'functions/internal' });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+    expect(screen.queryByText('verify-submit')).toBeNull();
   });
 });
 
