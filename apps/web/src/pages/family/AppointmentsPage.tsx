@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { callableErrorCode } from '@ejm/shared-ui';
 import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/utils/cancellationPolicy';
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
@@ -102,8 +103,15 @@ export function FamilyAppointmentsPage() {
       await fn({ appointmentId: respondTarget.appointmentId, action: respondTarget.action });
       setRespondTarget(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to respond';
-      alert(message);
+      console.error('[appointments] respond to request failed', err);
+      // Never echo err.message (English-only server text, or a bare
+      // `internal`). respondToRequest's one deliberate state conflict is
+      // failed-precondition "no longer pending"; everything else is generic.
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('appointment.respondErrorNotPending')
+          : t('common.error'),
+      );
     } finally {
       setResponding(false);
     }
@@ -119,8 +127,14 @@ export function FamilyAppointmentsPage() {
       setCancelReason('');
       // Refresh will happen via Firestore listener
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel';
-      alert(message);
+      console.error('[appointments] cancel appointment failed', err);
+      // cancelAppointment's only failed-precondition is "only confirmed or
+      // pending appointments can be cancelled".
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('appointment.cancelErrorState')
+          : t('common.error'),
+      );
     } finally {
       setCancelling(false);
     }
@@ -148,12 +162,24 @@ export function FamilyAppointmentsPage() {
       });
       setEditTarget(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to modify';
+      console.error('[appointments] modify appointment failed', err);
       // modifyAppointment refuses time changes inside the sitter's notice
       // window (issue #237); surface the policy copy, not the raw code. This
       // mapping was dropped in the move from DashboardPage (PR #256 review) —
       // the raw `inside_notice_window` string reached parents for a round.
-      alert(message.includes('inside_notice_window') ? t('appointment.modifyInsideWindow') : message);
+      //
+      // The server reuses failed-precondition for two meanings: the policy
+      // refusal (message is the token `inside_notice_window`, detected here
+      // but never shown) and "only pending or confirmed can be modified".
+      const insideWindow =
+        err instanceof Error && err.message.includes('inside_notice_window');
+      alert(
+        insideWindow
+          ? t('appointment.modifyInsideWindow')
+          : callableErrorCode(err) === 'failed-precondition'
+            ? t('appointment.modifyErrorState')
+            : t('common.error'),
+      );
     } finally {
       setEditing(false);
     }
@@ -181,8 +207,14 @@ export function FamilyAppointmentsPage() {
       });
       setResubmitTarget(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to resubmit';
-      alert(message);
+      console.error('[appointments] resubmit appointment failed', err);
+      // resubmitAppointment's only failed-precondition is "only declined
+      // requests can be resubmitted".
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('appointment.resubmitErrorState')
+          : t('common.error'),
+      );
     } finally {
       setResubmitting(false);
     }

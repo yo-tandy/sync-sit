@@ -145,6 +145,22 @@ describe('BabysitterAccountPage photo lifecycle', () => {
     expect(await screen.findByText(/could not remove the photo/i)).toBeInTheDocument();
     expect(h.deleteObject).not.toHaveBeenCalled();
   });
+
+  it('a failed photo upload shows translated copy, never the raw storage message', async () => {
+    h.uploadBytes.mockRejectedValueOnce(
+      Object.assign(new Error('User does not have permission to access this object.'), {
+        code: 'storage/unauthorized',
+      }),
+    );
+    renderPage();
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(['x'], 'me.jpg', { type: 'image/jpeg' })] },
+    });
+
+    expect(await screen.findByText(i18n.t('account.photoUploadFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/does not have permission/i)).toBeNull();
+  });
 });
 
 // Issue #452: File.type was gated on an ALLOWLIST, which rejected real

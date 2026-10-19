@@ -227,3 +227,19 @@ describe('StepProfile with identity on file (issue #144, set-once identity)', ()
     expect(payload.dateOfBirth).toBe('2010-01-15');
   });
 });
+
+describe('StepProfile save failure copy', () => {
+  it('a rejected save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    const { onNext } = renderStep({ email: 'student28@ejm.org' });
+    fillOtherFields();
+    setDob('2010-01-15');
+    fireEvent.click(continueButton());
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
+    expect(onNext).not.toHaveBeenCalled();
+  });
+});

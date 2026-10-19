@@ -20,6 +20,7 @@ import {
   type ContactInfoData,
   type AdditionalInfoData,
   AuthColumn,
+  enrollmentSubmitErrorKey,
 } from '@ejm/shared-ui';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
 import { auth, db, functions, storage } from '@/config/firebase';
@@ -207,8 +208,10 @@ export function StudentEnrollment() {
 
       navigate('/enroll/choose-app');
     } catch (err: unknown) {
+      console.error('[enrollment] student enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to create account');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

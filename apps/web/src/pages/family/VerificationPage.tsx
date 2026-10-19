@@ -13,7 +13,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { getParentProfile } from '@ejm/sit-core';
 import { uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
-import { putToSignedUrl, type SignedUploadResponse } from '@ejm/shared-ui';
+import { putToSignedUrl, callableErrorCode, type SignedUploadResponse } from '@ejm/shared-ui';
 
 interface CreateVerificationDocumentUploadUrlRequest {
   familyId: string;
@@ -144,10 +144,17 @@ export function VerificationPage() {
 
   // The server discriminates actionable failures with details.reason; a stale
   // request gets its own copy rather than the raw server message (#218).
-  const approveErrorMessage = (err: unknown, fallback: string) => {
+  const approveErrorMessage = (err: unknown) => {
     const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
     if (reason === 'already_verified') return t('verification.communityAlreadyVerified');
-    return err instanceof Error ? err.message : fallback;
+    // Never echo err.message (English-only server text or a bare `internal`).
+    // Both callables use not-found for an unknown code and deadline-exceeded
+    // for an expired one; failed-precondition is shared by several different
+    // refusals (already used, own family, no family), so it stays generic.
+    const code = callableErrorCode(err);
+    if (code === 'not-found') return t('verification.communityCodeInvalid');
+    if (code === 'deadline-exceeded') return t('verification.communityCodeExpired');
+    return t('common.error');
   };
 
   const handleLookup = async () => {
@@ -155,7 +162,8 @@ export function VerificationPage() {
     try {
       await lookupCommunityCode(approveCode.trim());
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Invalid code'));
+      console.error('[verification] community code lookup failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 
@@ -168,7 +176,8 @@ export function VerificationPage() {
       setKnowPerson(false);
       setConfirmEjm(false);
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Approval failed'));
+      console.error('[verification] community code approval failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 

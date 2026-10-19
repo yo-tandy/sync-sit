@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 
 // Hoisted, test-controllable state. The family account page reads the auth
 // store for identity (read-only) and contact (editable) fields, writes contact
@@ -273,5 +273,20 @@ describe('family AccountPage', () => {
 
     expect(phoneInput.value).toBe('612345678');
     await waitFor(() => expect(phoneInput.value).toBe('612345678'));
+  });
+
+  // A FunctionsError-like / Firestore rejection IS an Error, so the old
+  // `err instanceof Error ? err.message : fallback` always echoed the raw text.
+  it('shows the translated contact-save failure, never the raw SDK error text', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    renderWithProviders(<AccountPage />);
+    fireEvent.click(screen.getByRole('button', { name: /save contact/i }));
+
+    expect(await screen.findByText(i18n.t('account.contactSaveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).not.toBeInTheDocument();
+    consoleError.mockRestore();
   });
 });

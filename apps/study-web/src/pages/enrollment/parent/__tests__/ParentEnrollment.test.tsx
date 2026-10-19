@@ -29,7 +29,7 @@ const h = vi.hoisted(() => ({
   // Controllable raw rejection (no machine-readable reason) so tests can
   // drive the plain-error fallback, e.g. the createUser already-exists race
   // backstop.
-  rawError: null as { message: string } | null,
+  rawError: null as unknown,
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -64,9 +64,9 @@ vi.mock('firebase/functions', () => ({
       return Promise.reject({ details: { reason: h.errorReason } });
     }
     // Model a reason-less rejection (e.g. the createUser race backstop):
-    // the SDK surfaces an Error whose message is the HttpsError message.
+    // the SDK surfaces a FunctionsError: an Error carrying the callable code.
     if (name === 'enrollFamily' && h.rawError) {
-      return Promise.reject(new Error(h.rawError.message));
+      return Promise.reject(h.rawError);
     }
     return Promise.resolve({ data: { uid: 'u1', familyId: 'f1' } });
   },
@@ -132,7 +132,9 @@ vi.mock('@ejm/study-core', () => ({
 
 // Lightweight stand-ins for the shared step components: each exposes a button
 // that fires its callback so we can drive the orchestrator deterministically.
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
   // Layout-only column (issue #528): pass children through.
   AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
@@ -544,14 +546,17 @@ describe('ParentEnrollment orchestrator', () => {
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });
 
-  it('a reason-less enrollFamily rejection (race backstop) shows the plain message', async () => {
+  it('a reason-less enrollFamily rejection (race backstop) shows the generic translated error', async () => {
     // Issue #148: an existing account produces no special client branch. The
     // only remaining already-exists surface is the createUser race backstop,
-    // which arrives reason-less and renders as a plain error string.
-    h.rawError = { message: 'An account with this email already exists' };
+    // which arrives reason-less and renders the generic translated error.
+    h.rawError = Object.assign(new Error('An account with this email already exists'), {
+      code: 'functions/already-exists',
+    });
     await driveToEnrollFamily();
 
-    expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('An account with this email already exists')).toBeNull();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
     // A GENUINE enrollment failure keeps reading as one — never the
@@ -560,6 +565,23 @@ describe('ParentEnrollment orchestrator', () => {
     // the rejection).
     expect(screen.queryByText(i18n.t('enrollment.parent.readyLoginTitle'))).toBeNull();
     expect(h.signIn).not.toHaveBeenCalled();
+  });
+
+  // The final-step catch used to render err.message: an unexpected fault
+  // showed the bare token 'internal', and server messages were English-only.
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.rawError = Object.assign(new Error(message), { code: `functions/${code}` });
+    await driveToEnrollFamily();
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });
 });
 
@@ -712,3 +734,4 @@ describe('ParentEnrollment post-enrollment session gate (issue #264)', () => {
     expect(h.refreshUserDoc).not.toHaveBeenCalled();
   });
 });
+
