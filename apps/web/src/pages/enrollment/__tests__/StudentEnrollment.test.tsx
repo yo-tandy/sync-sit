@@ -246,4 +246,11 @@ describe('StudentEnrollment account creation', () => {
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/enroll/choose-app');
   });
+
+  it('renders inside the gray platform brand scope (issue #537 D1)', () => {
+    // Sit hosts the unified student flow, but it is a PLATFORM surface and
+    // must not wear sit red — the .brand-platform ancestor is the mechanism.
+    const { container } = renderFlow();
+    expect(container.querySelector('.brand-platform')).not.toBeNull();
+  });
 });
