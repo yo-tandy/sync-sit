@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Spinner } from './Spinner.js';
 import { APP_NAME, type AppMark, type SyncApp } from '../lib/brandMarks.js';
 import { AccountGlyph } from './AccountGlyph.js';
-import { useAppSwitchState, type AppSwitchEntryProps } from './appSwitchShared.js';
+import { useAppSwitchState, type AppSwitchAccount, type AppSwitchEntryProps } from './appSwitchShared.js';
 
 /**
  * `AppSwitchBarProps` == `AppSwitchEntryProps` (#417): the field-by-field
@@ -45,13 +45,11 @@ export interface AppSwitchBarProps extends AppSwitchEntryProps {
    */
   mintHandoffCode: () => Promise<string>;
   /**
-   * The account tab: where it goes within THIS app, and how to get there.
+   * The account tab: the suite's ONE account hub (sync-sit `/account`) --
+   * an in-app route on sit, a handoff from study and do. See
+   * `AppSwitchAccount` for the two forms.
    *
-   * OMIT IT AND THE TAB IS NOT RENDERED. sync-do has no account route by
-   * design (platform plan §3 -- do-web ships no account page; the shared hub
-   * owns identity and do contributes only a doer-settings screen), so until
-   * the hub exists (#367) there is nowhere for that tab to go. A tab pointing
-   * at a route that does not exist is worse than an absent one.
+   * OMIT IT AND THE TAB IS NOT RENDERED.
    *
    * ONE OBJECT, not an href plus a handler, so the two cannot be
    * half-supplied. An href without a handler renders a visible, enabled,
@@ -60,7 +58,7 @@ export interface AppSwitchBarProps extends AppSwitchEntryProps {
    * Same reasoning that made `pathname` required: unforgettable beats
    * conventional (PR #385 round 4).
    */
-  account?: { href: string; onNavigate: (href: string) => void };
+  account?: AppSwitchAccount;
   /**
    * The route currently on screen in THIS app.
    *
@@ -238,7 +236,7 @@ export function AppSwitchBar({
             }`}
           >
             <span className="flex h-6 w-6 items-center justify-center">
-              <AccountGlyph className="h-5 w-5" />
+              {busyApp === 'account' ? <Spinner className="h-5 w-5" /> : <AccountGlyph className="h-5 w-5" />}
             </span>
             <span className="truncate">{t('appSwitch.account')}</span>
           </button>

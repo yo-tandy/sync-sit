@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
-import { AppSwitchInline } from '@ejm/shared-ui';
+import { ACCOUNT_HUB_PATH, AppSwitchInline } from '@ejm/shared-ui';
 import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
 import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
@@ -22,11 +22,9 @@ const STUDY_MARK = { sm: studySm, md: studyMd };
  * of per-portal host duplication.
  */
 export function AppSwitchInlineHost({
-  accountHref,
   homeHref,
   tone,
 }: {
-  accountHref: string;
   /** This portal's dashboard route -- where the current-app entry goes. */
   homeHref: string;
   /** 'onBrand' from a portal's own bg-brand-600 strip; omitted (light) elsewhere. */
@@ -50,7 +48,9 @@ export function AppSwitchInlineHost({
       currentMark={STUDY_MARK}
       siblings={[{ app: 'sit', url: SIT_APP_URL, mark: SIT_MARK }]}
       mintHandoffCode={mintHandoffCode}
-      account={{ href: accountHref, onNavigate: (href) => void navigate(href) }}
+      // The ONE account hub lives on sync-sit: hand off there, never to a
+      // study route (study's own profile pages stay in its burger menu).
+      account={{ href: ACCOUNT_HUB_PATH, handoffUrl: SIT_APP_URL }}
       pathname={pathname}
       home={{ href: homeHref, onNavigate: (href) => void navigate(href) }}
       tone={tone}

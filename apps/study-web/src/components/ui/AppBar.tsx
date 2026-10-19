@@ -116,7 +116,7 @@ export function AppBar() {
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-white">Sync/Study</span>
           {/* Desktop app switch (#417, plan Q9), next to the app name. */}
-          <AppSwitchInlineHost accountHref="/tutor/account" homeHref="/tutor" tone="onBrand" />
+          <AppSwitchInlineHost homeHref="/tutor" tone="onBrand" />
         </div>
         <div className="flex items-center gap-2">
           {userDoc?.governedBy && (
