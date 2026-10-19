@@ -152,22 +152,22 @@ export function StepPreferences({ uid, onComplete }: StepPreferencesProps) {
     }
   };
 
-  const handleSkip = async () => {
-    setSaving(true);
-    try {
-      await updateDoc(doc(db, 'users', uid), {
-        'profiles.babysitter.enrollmentComplete': true,
-        updatedAt: serverTimestamp(),
-      });
-      await refreshUserDoc();
-      onComplete();
-    } catch (err: unknown) {
-      console.error('[enrollment] save preferences (skip) failed', err);
-      const message = err instanceof Error ? err.message : 'Failed to save';
-      setError(message);
-    } finally {
-      setSaving(false);
-    }
+  /**
+   * Skip the offering stage (issue #537 D8: "the user can skip the page — it
+   * just means that the account is not active on that sub app").
+   *
+   * This used to write `enrollmentComplete: true`, which was a LIE told to
+   * get past AuthGuard's ejection of incomplete babysitters: the profile had
+   * no rate, no kid ages and no area, but claimed to be finished, so a later
+   * flip of the user-controlled `searchable` toggle could surface it in
+   * search. That ejection is gone (see AuthGuard), so skipping can now be
+   * honest — and honest means writing NOTHING. `enrollmentComplete` stays
+   * false exactly as the profile was created, `computeEffectiveSearchable`
+   * keeps the profile out of search whatever the toggle says, and the
+   * dashboard's "Complete your profile" CTA is the way back.
+   */
+  const handleSkip = () => {
+    onComplete();
   };
 
   return (
