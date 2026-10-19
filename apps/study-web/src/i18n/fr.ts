@@ -1392,6 +1392,8 @@ export default {
     classLabel: 'Classe *',
     selectClass: 'Choisir la classe',
     gender: 'Genre *',
+    languages: 'Langues parlées *',
+    languagesHint: 'Indiquez toutes les langues que vous pouvez parler avec les familles.',
     contactInfoTitle: 'Comment les familles peuvent-elles vous contacter ?',
     contactInfoSubtitle: 'Indiquez au moins un moyen de contact — email ou téléphone.',
     contactEmail: 'Email de contact',

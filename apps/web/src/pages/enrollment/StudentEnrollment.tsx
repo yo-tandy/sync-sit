@@ -154,11 +154,11 @@ export function StudentEnrollment() {
         dateOfBirth: basicInfo.dateOfBirth,
         classLevel: basicInfo.classLevel,
         gender: basicInfo.gender,
+        languages: basicInfo.languages,
         contactEmail: contactInfo.contactEmail,
         contactPhone: contactInfo.contactPhone,
         whatsapp: contactInfo.whatsapp,
         contactVisibilityConsent: contactInfo.contactVisibilityConsent,
-        bio: additional.bio,
         address: additional.address,
         language: i18n.language?.startsWith('fr') ? 'fr' : 'en',
       });

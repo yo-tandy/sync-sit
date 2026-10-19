@@ -147,6 +147,7 @@ export const enrollStudentIdentity = onCall(
       ...(data.contactEmail ? { contactEmail: data.contactEmail } : {}),
       ...(data.contactPhone ? { contactPhone: data.contactPhone } : {}),
       ...(data.whatsapp ? { whatsapp: data.whatsapp } : {}),
+      ...(data.languages?.length ? { languages: data.languages } : {}),
       ...(data.bio ? { bio: data.bio } : {}),
       ...(data.address !== undefined ? { address: data.address } : {}),
       // Recorded unconditionally (even `false`), unlike the optional fields

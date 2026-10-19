@@ -18,16 +18,22 @@ describe('StepAdditionalInfo', () => {
 
     expect(screen.getByRole('button', { name: 'Continue' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onNext).toHaveBeenCalledWith({ bio: '', photoFile: null, address: null });
+    expect(onNext).toHaveBeenCalledWith({ photoFile: null, address: null });
   });
 
-  it('trims and forwards the bio text', () => {
+  it('no longer renders an About-me field — it belongs to the per-app experience stage (#537 D4)', () => {
+    // A bio is per-app copy: what you are like as a babysitter is not what
+    // you are like as a tutor. Stage 1 is the ONE shared identity screen, so
+    // the field moved out. The avatar stays — #537 lists it in stage 1.
     const onNext = vi.fn();
     renderWithProviders(<StepAdditionalInfo onNext={onNext} />);
 
-    fireEvent.change(screen.getByLabelText('About me (optional)'), { target: { value: '  Loves math.  ' } });
+    expect(screen.queryByLabelText('About me (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: /about me/i })).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onNext).toHaveBeenCalledWith(expect.objectContaining({ bio: 'Loves math.' }));
+    expect(onNext).toHaveBeenCalledWith({ photoFile: null, address: null });
+    expect(onNext.mock.calls[0][0]).not.toHaveProperty('bio');
   });
 
   it('accepts a valid photo, forwards it on submit, and lets it be removed', () => {
@@ -96,22 +102,12 @@ describe('StepAdditionalInfo', () => {
     expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
   });
 
-  it('restores bio and address from initial on back-navigation', () => {
+  it('restores address from initial on back-navigation', () => {
     const onNext = vi.fn();
-    renderWithProviders(
-      <StepAdditionalInfo
-        onNext={onNext}
-        initial={{ bio: 'I tutor maths on Saturdays.', address: null }}
-      />,
-    );
-    expect(screen.getByDisplayValue('I tutor maths on Saturdays.')).toBeInTheDocument();
+    renderWithProviders(<StepAdditionalInfo onNext={onNext} initial={{ address: null }} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(onNext).toHaveBeenCalledWith({
-      bio: 'I tutor maths on Saturdays.',
-      photoFile: null,
-      address: null,
-    });
+    expect(onNext).toHaveBeenCalledWith({ photoFile: null, address: null });
   });
 
   it('rejects a file over 5 MB', () => {
