@@ -12,12 +12,16 @@ const h = vi.hoisted(() => ({
   },
   refreshUserDoc: () => Promise.resolve(),
   enrollError: null as { code: string; message?: string; details?: Record<string, unknown> } | null,
+  verifyError: null as unknown,
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {}, storage: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
+    if (name === 'verifyEjmEmail' && h.verifyError) {
+      return Promise.reject(h.verifyError);
+    }
     if (name === 'enrollStudentIdentity' && h.enrollError) {
       return Promise.reject(h.enrollError);
     }
@@ -169,6 +173,21 @@ beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = () => Promise.resolve();
   h.enrollError = null;
+  h.verifyError = null;
+});
+
+describe('StudentEnrollment unexpected send-code failure', () => {
+  it("an 'internal' rejection renders the translated server-error copy, never the bare token", async () => {
+    // What the client SDK hands back for an uncaught server throw: a
+    // FunctionsError whose message is literally 'internal'.
+    h.verifyError = Object.assign(new Error('internal'), { code: 'functions/internal' });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+    expect(screen.queryByText('verify-submit')).toBeNull();
+  });
 });
 
 describe('StudentEnrollment step order and back-navigation', () => {

@@ -132,8 +132,10 @@ export function JoinFamilyPage() {
       setResendCooldown(resendCooldownS);
       setStep(1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(message);
+      // Never echo err.message: an unexpected fault arrives as the bare token
+      // 'internal', and deliberate server messages are English-only.
+      console.error('[enrollment] send verification code failed', err);
+      setError(t('enrollment.serverError'));
     } finally {
       setSubmitting(false);
     }
