@@ -5,11 +5,12 @@ import { httpsCallable } from 'firebase/functions';
 import { CONSENT_VERSION, isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
 import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
-import { Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, Button, Card, Input, Select, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { crossAppTutorGaps, hasCrossAppTutorGaps, postLoginRouter } from '@/utils/postLoginRouter';
 import { SIT_APP_URL } from '@/utils/appSwitch';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
 import { CLASS_LEVELS_TUTOR, GENDER_OPTIONS, getAge } from '@/pages/enrollment/tutor/profileFields';
 
@@ -24,8 +25,21 @@ import { CLASS_LEVELS_TUTOR, GENDER_OPTIONS, getAge } from '@/pages/enrollment/t
  * submitting enrolls via the crossApp callable (no email, no code, no
  * password) — every field the babysitter profile DOES carry is copied
  * server-side and always wins over the supplement.
+ *
+ * Wrapped in the same post-auth enrollment chrome (`AuthColumn` +
+ * `EnrollmentAppBar`) the classic wizard shows once the account exists —
+ * PublicLayout carries no header of its own.
  */
 export function CrossAppWelcomePage() {
+  return (
+    <AuthColumn>
+      <EnrollmentAppBar />
+      <CrossAppWelcomeContent />
+    </AuthColumn>
+  );
+}
+
+function CrossAppWelcomeContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();

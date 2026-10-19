@@ -5,11 +5,12 @@ import { httpsCallable } from 'firebase/functions';
 import { CONSENT_VERSION, getEjemEmail, isBabysitter } from '@ejm/shared-core';
 import { getStudyRole, type SubjectOffering } from '@ejm/study-core';
 import { ensureTutorProfileLoaded } from '@/lib/ensureTutorProfileLoaded';
-import { Button, Card, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, Button, Card, Spinner, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
 import { functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { crossAppTutorGaps, hasCrossAppTutorGaps, postLoginRouter } from '@/utils/postLoginRouter';
 import { SIT_APP_URL } from '@/utils/appSwitch';
+import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
 import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
 
 /**
@@ -38,8 +39,21 @@ import { StepSubjects } from '@/pages/enrollment/tutor/StepSubjects';
  * subjects, ...})`, which resolves classLevel/gender/contact off the
  * caller's OWN root doc — exactly the same "canonical root, resolved
  * server-side" pattern PR1 established.
+ *
+ * Wrapped in the same post-auth enrollment chrome (`AuthColumn` +
+ * `EnrollmentAppBar`) the classic wizard shows once the account exists —
+ * PublicLayout carries no header of its own.
  */
 export function StudentCrossAppWelcomePage() {
+  return (
+    <AuthColumn>
+      <EnrollmentAppBar />
+      <StudentCrossAppWelcomeContent />
+    </AuthColumn>
+  );
+}
+
+function StudentCrossAppWelcomeContent() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { firebaseUser, userDoc, loading: authLoading, refreshUserDoc } = useAuthStore();
