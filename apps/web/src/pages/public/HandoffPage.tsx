@@ -6,14 +6,16 @@ import { httpsCallable } from 'firebase/functions';
 import { signInWithCustomToken } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { getSitRole, type SitUser } from '@ejm/sit-core';
+import { safeNext } from '@ejm/shared-core';
 import { auth, db, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { postLoginRouter } from '@/lib/postLoginRouter';
 import { Card, Spinner } from '@/components/ui';
 
 /**
- * PUBLIC cross-app arrival page (/handoff#code=…&lang=…). The one-time code
- * minted on the other app is the capability — no auth guard wraps this route.
+ * PUBLIC cross-app arrival page (/handoff#code=…&lang=…&next=…). The one-time
+ * code minted on the other app is the capability — no auth guard wraps this
+ * route.
  * It arrives in the URL FRAGMENT (fragments never reach servers or logs) and
  * is stripped from the address bar as soon as the page mounts.
  *
@@ -28,7 +30,24 @@ import { Card, Spinner } from '@/components/ui';
  * the one-time code and land on the error screen). Once the attempt settles,
  * the stash and attempt are cleared — a later visit with no fragment takes the
  * pure no-code path.
+ *
+ * `next` (one shared account hub): sync-sit hosts the ONE account hub for the
+ * whole suite, so study's and do's app-switch "My account" entries hand off
+ * here with `next=/account`. Same SECURITY rule as study's receiver (#426):
+ * this page mints a session, so an unvalidated `next` would be an open
+ * redirect against a freshly signed-in member. The fragment is
+ * attacker-controllable whoever minted it, so `next` is re-validated HERE via
+ * `safeNext` against `ALLOWED_NEXT_PREFIXES` and never trusted as-is. An
+ * invalid `next` silently falls back to `postLoginRouter`; the rejected raw
+ * value is never rendered or echoed.
+ *
+ * Only the hub is allowed. `/account` admits ANY signed-in member
+ * (AccountLayout's guard is not role-scoped), so a study-only tutor or a
+ * do-only doer lands on a hub that renders just the sections that apply to
+ * them -- whereas a role-scoped portal path would bounce them through a guard.
  */
+const ALLOWED_NEXT_PREFIXES = ['/account'] as const;
+
 function hashParams(): URLSearchParams {
   const hash = window.location.hash;
   return new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
@@ -61,6 +80,10 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
     // unknown or absent value leaves the language untouched.
     const lang = params.get('lang');
     if (lang === 'en' || lang === 'fr') void i18nInstance.changeLanguage(lang);
+    // Validated ONCE against the route table (see the module doc). Preferred
+    // over postLoginRouter on every landing below, but never over the
+    // redemption itself: a failed redeem still shows the "switch again" screen.
+    const validNext = safeNext(params.get('next'), ALLOWED_NEXT_PREFIXES);
     if (!code) return null;
     try {
       const redeem = httpsCallable<{ code: string }, { token: string }>(
@@ -75,18 +98,19 @@ function runHandoffOnce(params: URLSearchParams, i18nInstance: I18n): Promise<st
       const cred = await signInWithCustomToken(auth, res.data.token);
       try {
         // Mirror the login flow: load the user doc, prime the store, then
-        // land exactly where the login page would.
+        // land exactly where the login page would -- or at the validated
+        // `next`, if the handoff carried one.
         const snap = await getDoc(doc(db, 'users', cred.user.uid));
         const userDoc = snap.exists() ? (snap.data() as SitUser) : null;
         useAuthStore.setState({ firebaseUser: cred.user, userDoc, loading: false });
-        return postLoginRouter(getSitRole(userDoc), userDoc);
+        return validNext ?? postLoginRouter(getSitRole(userDoc), userDoc);
       } catch (err) {
         console.error('[handoff] post-login user doc load failed', err);
         // Past sign-in the user IS authenticated and the code is consumed —
         // the "switch again" screen would strand them. Land on the default
         // entrance instead; the app re-reads the user doc from there.
         useAuthStore.setState({ firebaseUser: cred.user, userDoc: null, loading: false });
-        return postLoginRouter(getSitRole(null));
+        return validNext ?? postLoginRouter(getSitRole(null));
       }
     } catch (err) {
       console.error('[handoff] token exchange failed', err);

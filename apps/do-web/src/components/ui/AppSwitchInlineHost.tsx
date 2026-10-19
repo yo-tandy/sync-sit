@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
-import { AppSwitchInline } from '@ejm/shared-ui';
+import { ACCOUNT_HUB_PATH, AppSwitchInline } from '@ejm/shared-ui';
 import doSm from '@ejm/shared-ui/brand-marks/sync-do-48.png';
 import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
 import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
@@ -20,8 +20,9 @@ const STUDY_MARK = { sm: studySm, md: studyMd };
 
 /**
  * sync/do's binding of the shared desktop app switch (#417, plan Q9) --
- * mirrors `AppSwitchBarHost`'s asymmetric shape (both siblings offered, NO
- * account entry -- do-web ships no account page by design, plan §18.3),
+ * mirrors `AppSwitchBarHost`'s asymmetric shape (both siblings offered, the
+ * account entry a handoff to sync-sit's hub -- do-web ships no account page
+ * by design, plan §18.3),
  * rendering `AppSwitchInline` instead of `AppSwitchBar`. Its own host file
  * rather than a shared hook, matching this codebase's convention of
  * per-portal host duplication.
@@ -56,6 +57,9 @@ export function AppSwitchInlineHost({
         { app: 'study', url: STUDY_APP_URL, mark: STUDY_MARK },
       ]}
       mintHandoffCode={mintHandoffCode}
+      // do ships no account page: the tab hands off to the suite's one
+      // account hub on sync-sit.
+      account={{ href: ACCOUNT_HUB_PATH, handoffUrl: SIT_APP_URL }}
       pathname={pathname}
       home={{ href: homeHref, onNavigate: (href) => void navigate(href) }}
       tone={tone}

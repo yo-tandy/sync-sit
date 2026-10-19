@@ -44,6 +44,9 @@ function renderHandoff() {
         <Routes>
           <Route path="/handoff" element={<HandoffPage />} />
           <Route path="/babysitter" element={<div>sitter landing</div>} />
+          <Route path="/account" element={<div>account hub</div>} />
+          <Route path="/babysitter/account" element={<div>sitter profile</div>} />
+          <Route path="/account/*" element={<div>account hub subpath</div>} />
           <Route path="/signup" element={<div>signup page</div>} />
           <Route path="/login" element={<div>login page</div>} />
         </Routes>
@@ -212,5 +215,79 @@ describe('HandoffPage (sit)', () => {
     await waitFor(() => expect(screen.getByText(/this link has expired/i)).toBeInTheDocument());
     expect(missing.innerHTML).toBe(failedHtml);
     expect(h.callable).not.toHaveBeenCalled();
+  });
+
+  /**
+   * sync-sit hosts the suite's ONE account hub, so study's and do's "My
+   * account" tabs hand off here with `next=/account`. Same open-redirect rule
+   * as study's receiver (#426): `next` is validated HERE against a fixed
+   * table, and only the hub is on it.
+   */
+  describe('the `next` destination (one account hub)', () => {
+    function mockSuccessfulRedemption() {
+      h.callable.mockResolvedValue({ data: { token: 'custom-tok' } });
+      h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+      h.getDoc.mockResolvedValue({
+        exists: () => true,
+        data: () => ({ uid: 'u1', profiles: { babysitter: { enrollmentComplete: true } } }),
+      });
+    }
+
+    it('lands on the account hub when the handoff carries next=/account', async () => {
+      window.location.hash = '#code=xyz&next=%2Faccount';
+      mockSuccessfulRedemption();
+      renderHandoff();
+      await waitFor(() => expect(screen.getByText('account hub')).toBeInTheDocument());
+      expect(screen.queryByText('sitter landing')).not.toBeInTheDocument();
+    });
+
+    it('accepts a path UNDER the hub (prefix rule)', async () => {
+      window.location.hash = '#code=xyz&next=%2Faccount%2Fx';
+      mockSuccessfulRedemption();
+      renderHandoff();
+      await waitFor(() => expect(screen.getByText('account hub subpath')).toBeInTheDocument());
+    });
+
+    it.each([
+      // A REAL sit route, distinct from the default landing, so widening the
+      // table to it would visibly change where the member lands.
+      ['a real sit route not on the table', '%2Fbabysitter%2Faccount'],
+      ['a lookalike prefix', '%2Faccounts'],
+      ['scheme-relative', '%2F%2Fevil.com'],
+      ['absolute URL with scheme', 'https%3A%2F%2Fevil.com'],
+      ['javascript: URL', 'javascript%3Aalert(1)'],
+      ['backslash-prefixed', '%2F%5Cevil.com'],
+      ['percent-encoded scheme-relative', '/%252Fevil.com'],
+      ['traversal out of the hub', '%2Faccount%2F..%2Fadmin'],
+    ])('falls back to postLoginRouter when `next` is not allowed (%s)', async (_label, encodedNext) => {
+      window.location.hash = `#code=xyz&next=${encodedNext}`;
+      mockSuccessfulRedemption();
+      renderHandoff();
+      await waitFor(() => expect(screen.getByText('sitter landing')).toBeInTheDocument());
+      expect(screen.queryByText('sitter profile')).not.toBeInTheDocument();
+      expect(document.body.innerHTML).not.toContain('evil.com');
+      expect(document.body.innerHTML).not.toContain('javascript:');
+      expect(window.location.hash).toBe('');
+    });
+
+    it('honours next=/account even when the user-doc read fails after sign-in', async () => {
+      // A study-only or do-only member, or a transient read failure: the hub
+      // admits any signed-in member, so the deep link still applies.
+      window.location.hash = '#code=xyz&next=%2Faccount';
+      h.callable.mockResolvedValue({ data: { token: 'tok' } });
+      h.signInWithCustomToken.mockResolvedValue({ user: { uid: 'u1' } });
+      h.getDoc.mockRejectedValue(new Error('transient'));
+      renderHandoff();
+      await waitFor(() => expect(screen.getByText('account hub')).toBeInTheDocument());
+    });
+
+    it('a valid next never overrides a FAILED redemption', async () => {
+      window.location.hash = '#code=bad&next=%2Faccount';
+      h.callable.mockRejectedValue(new Error('nope'));
+      renderHandoff();
+      await waitFor(() => expect(screen.getByText(/this link has expired/i)).toBeInTheDocument());
+      expect(screen.queryByText('account hub')).not.toBeInTheDocument();
+      expect(h.signInWithCustomToken).not.toHaveBeenCalled();
+    });
   });
 });

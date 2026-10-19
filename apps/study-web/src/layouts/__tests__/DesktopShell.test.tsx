@@ -1,10 +1,13 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, within, cleanup, fireEvent } from '@testing-library/react';
+import { screen, within, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
+// Pending forever unless a test resolves it -- the default every other pin
+// in this file relies on (no handoff ever completes by accident).
+const h = vi.hoisted(() => ({ mint: vi.fn(() => new Promise(() => {})) }));
 vi.mock('firebase/functions', () => ({
-  httpsCallable: () => () => new Promise(() => {}),
+  httpsCallable: () => () => h.mint(),
 }));
 
 vi.mock('../AuthGuard', () => ({
@@ -16,6 +19,36 @@ vi.mock('@/components/ui/FamilyAppBar', () => ({ FamilyAppBar: () => <div data-t
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { TutorLayout } from '../TutorLayout';
 import { FamilyLayout } from '../FamilyLayout';
+import { SIT_APP_URL } from '@/utils/appSwitch';
+
+/**
+ * The suite has ONE account hub, on sync-sit. A shell's account tab must
+ * HAND OFF there (`next=/account`), never route to this app's own profile
+ * page -- the inconsistency this pin exists for: sit's tab opened the hub
+ * while study's opened `/tutor/account` or `/family/account`.
+ */
+async function accountTabHandsOffToHub(bar: HTMLElement) {
+  const assign = vi.fn();
+  const original = window.location;
+  Object.defineProperty(window, 'location', {
+    value: { ...original, assign, hash: '' },
+    writable: true,
+    configurable: true,
+  });
+  try {
+    h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
+    const tab = within(bar).getByRole('button', { name: /my account/i });
+    // Never the active tab: the hub is never on screen in this app.
+    expect(tab).not.toHaveAttribute('aria-current');
+    fireEvent.click(tab);
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(assign.mock.calls[0][0]).toBe(
+      `${SIT_APP_URL}/handoff#code=c1&lang=en&next=%2Faccount`,
+    );
+  } finally {
+    Object.defineProperty(window, 'location', { value: original, writable: true, configurable: true });
+  }
+}
 
 function shellPin(pageText: string) {
   // The routed page must sit inside the PageContainer cap (issue #119) —
@@ -93,25 +126,26 @@ function currentAppTabNavigatesHome(bar: HTMLElement, app: RegExp, homeText: str
  * this block existed deleting <AppSwitchBarHost /> from either shell left the
  * whole suite green — every other bar test renders a host in isolation.
  *
- * study is the app whose two shells pass DIFFERENT account paths, so both are
- * exercised: a typo'd tutor path would otherwise ship silently.
+ * Both shells are exercised, and both must send "My account" to the ONE hub
+ * on sync-sit -- they used to pass two different study profile paths.
  */
 describe('the app-switch bar is mounted in study’s shells (#365)', () => {
   afterEach(cleanup);
 
-  const shellPins = (homeText: string) => {
+  const shellPins = async (homeText: string) => {
     const bar = screen.getByRole('navigation', { name: /switch app/i });
     shellReservesBarHeight(bar);
-    // aria-current proves the host passed THIS path: the bar derives the
-    // active tab from the route it is given.
-    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+    // Rendered ON the study profile page: a host still pointing the account
+    // tab there would mark it aria-current.
+    expect(within(bar).getByRole('button', { name: /my account/i })).not.toHaveAttribute(
       'aria-current',
-      'page',
     );
     currentAppTabNavigatesHome(bar, /sync\/study/, homeText);
+    // Last: a completed handoff leaves the bar busy (the page is leaving).
+    await accountTabHandsOffToHub(bar);
   };
 
-  it('TutorLayout renders the bar, with the TUTOR account path', () => {
+  it('TutorLayout renders the bar, and its account tab hands off to the sit hub', async () => {
     renderWithProviders(
       <Routes>
         <Route element={<TutorLayout />}>
@@ -121,10 +155,10 @@ describe('the app-switch bar is mounted in study’s shells (#365)', () => {
       </Routes>,
       '/tutor/account',
     );
-    shellPins('tutor home');
+    await shellPins('tutor home');
   });
 
-  it('FamilyLayout renders the bar, with the FAMILY account path', () => {
+  it('FamilyLayout renders the bar, and its account tab hands off to the sit hub', async () => {
     renderWithProviders(
       <Routes>
         <Route element={<FamilyLayout />}>
@@ -134,6 +168,6 @@ describe('the app-switch bar is mounted in study’s shells (#365)', () => {
       </Routes>,
       '/family/account',
     );
-    shellPins('family home');
+    await shellPins('family home');
   });
 });

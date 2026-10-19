@@ -1,12 +1,14 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { I18nextProvider } from 'react-i18next';
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+const h = vi.hoisted(() => ({ mint: vi.fn(), assign: vi.fn() }));
+vi.mock('firebase/functions', () => ({ httpsCallable: () => () => h.mint() }));
 
 import i18n from '@/i18n';
+import { SIT_APP_URL } from '@/utils/appSwitch';
 import { AppSwitchInlineHost } from '../AppSwitchInlineHost';
 
 /**
@@ -21,7 +23,7 @@ describe('AppSwitchInlineHost (study)', () => {
     render(
       <MemoryRouter initialEntries={[path]}>
         <I18nextProvider i18n={i18n}>
-          <AppSwitchInlineHost accountHref="/family/account" homeHref="/family" />
+          <AppSwitchInlineHost homeHref="/family" />
         </I18nextProvider>
       </MemoryRouter>,
     );
@@ -42,5 +44,26 @@ describe('AppSwitchInlineHost (study)', () => {
     const nav = screen.getByRole('navigation', { name: /switch app/i });
     expect(nav.className).toMatch(/\bhidden\b/);
     expect(nav.className).toMatch(/\bmd:flex\b/);
+  });
+
+  it('"My account" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
+    h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
+    h.assign.mockReset();
+    const original = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { ...original, assign: h.assign, hash: '' },
+      writable: true,
+      configurable: true,
+    });
+    try {
+      renderHost();
+      const tab = screen.getByRole('button', { name: /my account/i });
+      expect(tab).not.toHaveAttribute('aria-current');
+      fireEvent.click(tab);
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(h.assign).toHaveBeenCalledWith(`${SIT_APP_URL}/handoff#code=c1&lang=en&next=%2Faccount`);
+    } finally {
+      Object.defineProperty(window, 'location', { value: original, writable: true, configurable: true });
+    }
   });
 });

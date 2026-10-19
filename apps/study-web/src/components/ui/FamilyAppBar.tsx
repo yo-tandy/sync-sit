@@ -92,7 +92,7 @@ export function FamilyAppBar() {
         <div className="flex items-center gap-3">
           <span className="text-sm font-semibold text-white">Sync/Study</span>
           {/* Desktop app switch (#417, plan Q9), next to the app name. */}
-          <AppSwitchInlineHost accountHref="/family/account" homeHref="/family" tone="onBrand" />
+          <AppSwitchInlineHost homeHref="/family" tone="onBrand" />
         </div>
         <div className="flex items-center gap-2">
           <NotificationBell to="/family/notifications" />

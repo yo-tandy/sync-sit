@@ -1,17 +1,20 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { I18nextProvider } from 'react-i18next';
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+const h = vi.hoisted(() => ({ mint: vi.fn(), assign: vi.fn() }));
+vi.mock('firebase/functions', () => ({ httpsCallable: () => () => h.mint() }));
 
 import i18n from '@/i18n';
+import { SIT_APP_URL } from '@/utils/appSwitch';
 import { AppSwitchBarHost } from '../AppSwitchBarHost';
 
 /**
  * do-web's bar is the asymmetric one, and both asymmetries are deliberate
- * (#365, plan §18.2 and §18.3). Pinned because both read as bugs otherwise.
+ * (#365, plan §18.2 and §18.3): it offers BOTH siblings, and its account tab
+ * leaves the app for the suite's one hub on sync-sit (do has no account page).
  */
 describe('AppSwitchBarHost (do)', () => {
   afterEach(() => cleanup());
@@ -31,11 +34,24 @@ describe('AppSwitchBarHost (do)', () => {
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeInTheDocument();
   });
 
-  it('renders NO account tab — do-web ships no account page (§18.3)', () => {
-    // The shared hub owns identity; do contributes only a doer-settings
-    // screen reached from a row in it. Until #367 exists there is no route
-    // here to point at. Passing accountHref is the whole change then.
-    renderHost();
-    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+  it('"My account" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
+    h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
+    h.assign.mockReset();
+    const original = window.location;
+    Object.defineProperty(window, 'location', {
+      value: { ...original, assign: h.assign, hash: '' },
+      writable: true,
+      configurable: true,
+    });
+    try {
+      renderHost();
+      const tab = screen.getByRole('button', { name: /my account/i });
+      expect(tab).not.toHaveAttribute('aria-current');
+      fireEvent.click(tab);
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(h.assign).toHaveBeenCalledWith(`${SIT_APP_URL}/handoff#code=c1&lang=en&next=%2Faccount`);
+    } finally {
+      Object.defineProperty(window, 'location', { value: original, writable: true, configurable: true });
+    }
   });
 });

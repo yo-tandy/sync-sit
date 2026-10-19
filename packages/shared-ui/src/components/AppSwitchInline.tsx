@@ -151,7 +151,11 @@ export function AppSwitchInline({
           }`}
         >
           <span className="flex h-4 w-4 items-center justify-center">
-            <AccountGlyph className="h-3.5 w-3.5" />
+            {busyApp === 'account' ? (
+              <Spinner className="h-3.5 w-3.5" />
+            ) : (
+              <AccountGlyph className="h-3.5 w-3.5" />
+            )}
           </span>
           <span>{t('appSwitch.account')}</span>
         </button>
