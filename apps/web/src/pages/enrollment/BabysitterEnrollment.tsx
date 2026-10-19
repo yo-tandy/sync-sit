@@ -9,7 +9,7 @@ import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
-import { AuthColumn, StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
+import { AuthColumn, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, enrollmentSubmitErrorKey } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import { getBabysitterProfile } from '@ejm/sit-core';
@@ -163,8 +163,10 @@ export function BabysitterEnrollment() {
 
       setStep(3);
     } catch (err: unknown) {
+      console.error('[enrollment] babysitter account creation failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to create account');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

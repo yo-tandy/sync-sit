@@ -8,6 +8,9 @@ import { MemoryRouter } from 'react-router';
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   exemptions: [] as { email: string; note: string | null; createdByUid: string; createdAt: string | null }[],
+  // The next call to this NAMED callable rejects with a FunctionsError-shaped Error.
+  rejectNext: null as null | { name: string; code: string; message: string },
+  preapproved: [] as { email: string; used: boolean }[],
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {}, auth: {}, db: {} }));
@@ -19,9 +22,14 @@ vi.mock('@/stores/authStore', () => ({
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
+    if (h.rejectNext && h.rejectNext.name === name) {
+      const { code, message } = h.rejectNext;
+      h.rejectNext = null;
+      return Promise.reject(Object.assign(new Error(message), { code }));
+    }
     switch (name) {
       case 'listPreapprovedEmails':
-        return Promise.resolve({ data: { emails: [] } });
+        return Promise.resolve({ data: { emails: [...h.preapproved] } });
       case 'listEnrollmentExemptions':
         return Promise.resolve({ data: { exemptions: [...h.exemptions] } });
       default:
@@ -54,6 +62,8 @@ beforeEach(() => {
   i18n.changeLanguage('en');
   h.calls.length = 0;
   h.exemptions = [];
+  h.rejectNext = null;
+  h.preapproved = [];
 });
 
 afterEach(() => {
@@ -141,5 +151,96 @@ describe('AdminEnrollmentAccessPage — enrollment exemptions panel', () => {
     expect(exemptionCalls('listEnrollmentExemptions')).toHaveLength(2);
     // Confirmation toast (shared idiom) after the refetch resolved.
     expect(await screen.findByRole('status')).toHaveTextContent(i18n.t('admin.exemptions.removed'));
+  });
+});
+
+describe('AdminEnrollmentAccessPage — callable failure copy', () => {
+  let alertSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+  });
+  afterEach(() => alertSpy.mockRestore());
+
+  function typeExemption() {
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('admin.exemptions.email')), {
+      target: { value: 'kid28@ejm.org' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.exemptions.add') }));
+  }
+
+  it('add pre-approved email: an unexpected fault alerts generic copy, never the raw token', async () => {
+    h.rejectNext = { name: 'addPreapprovedEmail', code: 'functions/internal', message: 'internal' };
+    renderPage();
+    await screen.findByText(i18n.t('admin.noPreapprovedEmails'));
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('common.email')), {
+      target: { value: 'x@ejm.org' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.addEmail') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('common.error'));
+    expect(alertSpy).not.toHaveBeenCalledWith('internal');
+  });
+
+  it('remove pre-approved email: an unexpected fault alerts generic copy', async () => {
+    h.rejectNext = { name: 'removePreapprovedEmail', code: 'functions/internal', message: 'internal' };
+    h.preapproved = [{ email: 'p@ejm.org', used: false }];
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('common.remove') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('common.error'));
+  });
+
+  it('add exemption: an unexpected fault alerts generic copy, never the raw token', async () => {
+    h.rejectNext = { name: 'setEnrollmentExemption', code: 'functions/internal', message: 'internal' };
+    renderPage();
+    await screen.findByText(i18n.t('admin.exemptions.empty'));
+    typeExemption();
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('common.error'));
+    expect(alertSpy).not.toHaveBeenCalledWith('internal');
+  });
+
+  it('add exemption: invalid-argument maps to the check-the-email copy, not the server text', async () => {
+    h.rejectNext = {
+      name: 'setEnrollmentExemption',
+      code: 'functions/invalid-argument',
+      message: 'A valid email is required',
+    };
+    renderPage();
+    await screen.findByText(i18n.t('admin.exemptions.empty'));
+    typeExemption();
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('admin.enrollmentAccess.invalidInput'));
+  });
+
+  it('add pre-approved email: invalid-argument maps to the check-the-email copy', async () => {
+    h.rejectNext = {
+      name: 'addPreapprovedEmail',
+      code: 'functions/invalid-argument',
+      message: 'Email is required',
+    };
+    renderPage();
+    await screen.findByText(i18n.t('admin.noPreapprovedEmails'));
+    fireEvent.change(screen.getByPlaceholderText(i18n.t('common.email')), {
+      target: { value: 'x@ejm.org' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.addEmail') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('admin.enrollmentAccess.invalidInput'));
+  });
+
+  it('remove exemption: an unexpected fault alerts generic copy', async () => {
+    h.rejectNext = { name: 'removeEnrollmentExemption', code: 'functions/internal', message: 'internal' };
+    h.exemptions = [{ email: 'e@ejm.org', note: null, createdByUid: 'a', createdAt: null }];
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: i18n.t('admin.exemptions.remove') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('common.error'));
   });
 });

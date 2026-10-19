@@ -5,12 +5,37 @@ import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { AuthColumn, enrollmentErrorReason } from '@ejm/shared-ui';
+import { AuthColumn, callableErrorCode, enrollmentErrorReason, verificationCodeError } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
+
+// Credentialed joinFamily rejections → i18n keys. Never err.message: an
+// unexpected fault arrives as the bare token 'internal' and the deliberate
+// messages are English-only. The code is first checked HERE (the code step
+// does not call verifyCode), and joinFamily reuses codes across the invite
+// and the code: not-found is 'Invalid invite link' / 'No verification code
+// found' / 'Family not found', deadline-exceeded is either expiry, and
+// invalid-argument is a wrong code or a refused field -- so those keys word
+// both causes. No account-exists copy (issue #148).
+function joinErrorKey(err: unknown): string {
+  const codeError = verificationCodeError(err);
+  if (codeError === 'wrong-class') return 'auth.codeWrongClass';
+  if (codeError === 'too-many-attempts') return 'auth.tooManyAttempts';
+  switch (callableErrorCode(err)) {
+    case 'not-found':
+    case 'deadline-exceeded':
+      return 'enrollment.joinExpired';
+    case 'failed-precondition':
+      return 'invite.invalidLinkDesc';
+    case 'invalid-argument':
+      return 'enrollment.joinInvalid';
+    default:
+      return 'enrollment.serverError';
+  }
+}
 
 export function JoinFamilyPage() {
   const { t } = useTranslation();
@@ -114,8 +139,16 @@ export function JoinFamilyPage() {
       await refreshUserDoc();
       navigate('/family');
     } catch (err: unknown) {
+      console.error('[enrollment] confirm join family failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to join family');
+        // Token-only join: not-found / deadline-exceeded / failed-precondition
+        // are all the invite (invalid, expired, used). Never echo err.message.
+        const code = callableErrorCode(err);
+        setError(
+          code === 'not-found' || code === 'deadline-exceeded' || code === 'failed-precondition'
+            ? t('invite.invalidLinkDesc')
+            : t('enrollment.serverError'),
+        );
       }
       setSubmitting(false);
     }
@@ -185,8 +218,9 @@ export function JoinFamilyPage() {
 
       navigate('/family');
     } catch (err: unknown) {
+      console.error('[enrollment] join family failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to join family');
+        setError(t(joinErrorKey(err)));
       }
     } finally {
       setSubmitting(false);

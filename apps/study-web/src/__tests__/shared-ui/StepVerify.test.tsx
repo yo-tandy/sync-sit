@@ -173,3 +173,59 @@ describe('StepVerify configured resend cooldown (issue #250)', () => {
     expect(screen.getByText(i18n.t('auth.resendIn', { seconds: 90 }))).toBeInTheDocument();
   });
 });
+
+// verifyCode failures used to render err.message: an unexpected fault showed
+// the bare token 'internal', and the deliberate messages were English-only.
+describe('StepVerify code-check error copy', () => {
+  async function submitCode(rejection: unknown) {
+    const onVerify = vi.fn().mockRejectedValue(rejection);
+    render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <StepVerify
+            ejemEmail="someone28@ejm.org"
+            onVerify={onVerify}
+            onResend={async () => {}}
+            error={null}
+          />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+    const [first] = screen.getAllByRole('textbox');
+    await act(async () => {
+      fireEvent.paste(first, { clipboardData: { getData: () => '123456' } });
+    });
+    expect(onVerify).toHaveBeenCalledWith('123456');
+  }
+
+  const fnErr = (code: string, message: string, details?: Record<string, unknown>) =>
+    Object.assign(new Error(message), { code: `functions/${code}`, details });
+
+  it("an 'internal' rejection shows the translated server error, never the bare token", async () => {
+    await submitCode(fnErr('internal', 'internal'));
+    expect(screen.getByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+  });
+
+  it.each([
+    ['invalid-argument', 'Invalid verification code', undefined, 'auth.invalidCode'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', undefined, 'auth.codeExpired'],
+    ['not-found', 'No verification code found. Please request a new one.', undefined, 'auth.codeExpired'],
+    ['resource-exhausted', 'Too many failed attempts. Please request a new verification code.', undefined, 'auth.tooManyAttempts'],
+    [
+      'failed-precondition',
+      'This verification code cannot be used for this enrollment. Please request a new one.',
+      { reason: 'code_identity_class' },
+      'auth.codeWrongClass',
+    ],
+  ])('maps %s to its translated copy', async (code, message, details, key) => {
+    await i18n.changeLanguage('fr');
+    try {
+      await submitCode(fnErr(code, message, details));
+      expect(screen.getByText(i18n.t(key))).toBeInTheDocument();
+      expect(screen.queryByText(message)).toBeNull();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
+  });
+});

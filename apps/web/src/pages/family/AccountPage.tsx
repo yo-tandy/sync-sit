@@ -256,8 +256,9 @@ export function AccountPage() {
       await refreshUserDoc();
       setPhotoFile(null);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.photoUploadFailed');
-      setError(message);
+      // Storage/Firestore SDK errors are raw English; show translated copy.
+      console.error('[account] photo upload failed', err);
+      setError(t('account.photoUploadFailed'));
     } finally {
       setPhotoSaving(false);
     }
@@ -290,8 +291,8 @@ export function AccountPage() {
       await refreshUserDoc();
       toast(t('account.contactSaved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
-      setError(message);
+      console.error('[account] contact save failed', err);
+      setError(t('account.contactSaveFailed'));
     } finally {
       setContactSaving(false);
     }

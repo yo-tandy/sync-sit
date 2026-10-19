@@ -28,7 +28,7 @@ const h = vi.hoisted(() => ({
   // Controllable raw rejection (no machine-readable reason) so tests can
   // drive the plain-error fallback, e.g. the enroll-step already-exists
   // race backstop.
-  rawError: null as { message: string } | null,
+  rawError: null as unknown,
   // Controllable age-gate code so tests can drive the under-15 / mismatch
   // rejection branches. Default null = no age-gate rejection.
   ageCode: null as 'age/under-15' | 'age/mismatch' | null,
@@ -46,9 +46,9 @@ vi.mock('firebase/functions', () => ({
       return Promise.reject({ details: { reason: h.errorReason } });
     }
     // Model a reason-less rejection (e.g. the createUser race backstop):
-    // the SDK surfaces an Error whose message is the HttpsError message.
+    // the SDK surfaces a FunctionsError: an Error carrying the callable code.
     if (name === 'enrollTutor' && h.rawError) {
-      return Promise.reject(new Error(h.rawError.message));
+      return Promise.reject(h.rawError);
     }
     // Model the age-gate rejection: HttpsError('failed-precondition', msg,
     // { code }) reaches the client as FunctionsError with details.code.
@@ -111,7 +111,9 @@ vi.mock('@ejm/study-core', () => ({
 
 // Lightweight stand-ins for the child step components: each exposes a button
 // that fires its callback so we can drive the orchestrator deterministically.
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
   // Layout-only column (issue #528): pass children through.
   AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
@@ -552,17 +554,37 @@ describe('TutorEnrollment orchestrator', () => {
     });
   });
 
-  it('a reason-less enrollTutor rejection (race backstop) shows the plain message, never a login CTA', async () => {
+  it('a reason-less enrollTutor rejection (race backstop) shows the generic translated error, never a login CTA', async () => {
     // Issue #148: the account-exists CTA is gone — an existing account no
     // longer produces any special client branch. The only remaining
     // already-exists surface is the createUser race backstop, which arrives
-    // reason-less and renders as a plain error string.
-    h.rawError = { message: 'An account with this email already exists' };
+    // reason-less and renders the generic translated error.
+    h.rawError = Object.assign(new Error('An account with this email already exists'), {
+      code: 'functions/already-exists',
+    });
     await driveToEnrollTutor();
 
-    expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('An account with this email already exists')).toBeNull();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     // No success navigation on failure.
+    expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
+  });
+
+  // The final-step catch used to render err.message: an unexpected fault
+  // showed the bare token 'internal', and server messages were English-only.
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.rawError = Object.assign(new Error(message), { code: `functions/${code}` });
+    await driveToEnrollTutor();
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 
@@ -611,3 +633,4 @@ describe('TutorEnrollment orchestrator', () => {
     expect(h.navigate).not.toHaveBeenCalledWith('/tutor');
   });
 });
+

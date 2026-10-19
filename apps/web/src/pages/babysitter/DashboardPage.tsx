@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useFlashTimer, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
+import { useFlashTimer, DashboardGreeting, DashboardSection, callableErrorCode } from '@ejm/shared-ui';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -61,8 +61,14 @@ export function BabysitterDashboard() {
       setCancelTarget(null);
       setCancelReason('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel';
-      alert(message);
+      console.error('[request] cancel appointment failed', err);
+      // failed-precondition = the appointment is no longer confirmed/pending
+      // (already cancelled, declined, ...). Everything else is generic.
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('request.cancelUnavailable')
+          : t('common.error'),
+      );
     } finally {
       setCancelling(false);
     }

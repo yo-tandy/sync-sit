@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 import { MailIcon } from '../components/Icons.js';
 import { CodeInput } from '../forms/CodeInput.js';
 import { enrollmentErrorReason } from '../utils/callableErrors.js';
+import { verifyCodeErrorKey } from './errorKeys.js';
 import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
 
 interface StepVerifyProps {
@@ -65,8 +66,9 @@ export function StepVerify({
     try {
       await onVerify(code);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('auth.invalidCode');
-      setCodeError(message);
+      console.error('[enrollment] verify code failed', err);
+      // onVerify calls verifyCode; never echo err.message (see errorKeys.ts).
+      setCodeError(t(verifyCodeErrorKey(err)));
     } finally {
       setVerifying(false);
     }

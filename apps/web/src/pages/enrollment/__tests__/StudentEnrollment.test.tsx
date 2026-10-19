@@ -11,7 +11,7 @@ const h = vi.hoisted(() => ({
     loading: false,
   },
   refreshUserDoc: () => Promise.resolve(),
-  enrollError: null as { code: string; message?: string; details?: Record<string, unknown> } | null,
+  enrollError: null as unknown,
   verifyError: null as unknown,
 }));
 
@@ -77,7 +77,9 @@ vi.mock('@ejm/sit-core', () => ({
   },
 }));
 
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
   // Layout-only column (issue #528): pass children through.
   AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   createAdminConfigReader: () => ({
@@ -283,5 +285,25 @@ describe('StudentEnrollment account creation', () => {
     // must not wear sit red — the .brand-platform ancestor is the mechanism.
     const { container } = renderFlow();
     expect(container.querySelector('.brand-platform')).not.toBeNull();
+  });
+});
+
+// The final-step catch used to render err.message: an unexpected fault showed
+// the bare token 'internal', and deliberate server messages were English-only.
+describe('StudentEnrollment account-creation error copy', () => {
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.enrollError = Object.assign(new Error(message), { code: `functions/${code}` });
+    renderFlow();
+    await driveToAccountCreation();
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/choose-app');
   });
 });
