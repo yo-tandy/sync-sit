@@ -272,6 +272,8 @@ export default {
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender *',
+    languages: 'Languages spoken *',
+    languagesHint: 'Mark every language you can speak with families.',
     contactInfoTitle: 'How can families reach you?',
     contactInfoSubtitle: 'Provide at least one contact method — email or phone.',
     contactEmail: 'Contact email',
@@ -282,7 +284,7 @@ export default {
     whatsappLabel: 'WhatsApp',
     whatsappSameAsPhone: 'Same as my phone number',
     contactVisibilityConsent: "I'm aware that families who want to reach me will get access to this contact information once I'm visible in search.",
-    contactVisibilityWarning: "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+    contactVisibilityWarning: "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
     additionalInfoTitle: 'A few optional extras',
     additionalInfoSubtitle: 'All of this is optional — you can fill it in, or skip it and add it later.',
     bioLabel: 'About me (optional)',
@@ -302,6 +304,12 @@ export default {
     studentTitle: 'Create your account',
     chooseAppTitle: "You're all set — what next?",
     chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    // Role labels, not app names, on the chooser tiles (issue #537 D6):
+    // the user is choosing WHAT THEY DO; the brand mark beside the label
+    // already says which app that leads to.
+    chooseSitRole: 'Babysitter',
+    chooseStudyRole: 'Tutor',
+    chooseDoRole: 'Doer',
     chooseSitDesc: 'Offer babysitting to EJM families.',
     chooseStudyDesc: 'Offer tutoring to EJM families.',
     chooseDoDesc: 'Odd jobs and errands for EJM families.',
@@ -321,6 +329,7 @@ export default {
     rejected: 'Rejected',
     activateTitle: 'Activate your profile?',
     activateDesc: 'Families will be able to find you in search results and send you babysitting requests.',
+    activateConsent: "I'm aware that families who want to reach me will get access to my contact information (email, phone, WhatsApp) once I'm visible in search.",
     deactivateTitle: 'Deactivate your profile?',
     deactivateDesc: "You won't appear in search results and families won't be able to find you.",
     activate: 'Activate',

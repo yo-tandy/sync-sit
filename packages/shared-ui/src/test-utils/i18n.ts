@@ -134,6 +134,8 @@ export function createTestI18n(): i18n {
             classLabel: 'Class *',
             selectClass: 'Select class',
             gender: 'Gender *',
+            languages: 'Languages spoken *',
+            languagesHint: 'Mark every language you can speak with families.',
             genderFemale: 'Female',
             genderMale: 'Male',
             genderOther: 'Other',
@@ -150,7 +152,7 @@ export function createTestI18n(): i18n {
             contactVisibilityConsent:
               "I'm aware that families who want to reach me will get access to this contact information once I'm visible in search.",
             contactVisibilityWarning:
-              "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+              "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
             additionalInfoTitle: 'A few optional extras',
             additionalInfoSubtitle:
               'All of this is optional — you can fill it in, or skip it and add it later.',

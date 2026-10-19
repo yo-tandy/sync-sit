@@ -146,6 +146,16 @@ describe('StudentCrossAppWelcomePage', () => {
     expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeInTheDocument();
   });
 
+  // PublicLayout has no header — the page brings the enrollment app bar
+  // itself, on both the welcome card and the subjects step.
+  it('renders the enrollment app bar on the welcome card and the subjects step', async () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: i18n.t('menu.openMenu') })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    await screen.findByText('subjects-next');
+    expect(screen.getByRole('button', { name: i18n.t('menu.openMenu') })).toBeInTheDocument();
+  });
+
   it('Continue -> subjects -> enrollTutor(crossApp:true, subjects) with no gap supplement, then /tutor', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));

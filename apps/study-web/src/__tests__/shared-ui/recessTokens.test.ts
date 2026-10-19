@@ -559,4 +559,55 @@ describe('no control pairs a height with the radius that halves it (#395 review 
         `rounded-pill deliberately, step down a radius, or drop a stop.`,
     ).toEqual([]);
   });
+
+  /* ── Platform gray vs the admin-neutral tint (#537 D1, PR #538 review) ──
+     `.brand-platform` re-points --color-brand-* at gray for shared surfaces.
+     Its brand COLOURS are deliberately unlayered (they must outrank the
+     @theme ramp), but --shadow-card-tint has a competitor on the very same
+     element: decision 25's `.bg-ground-admin` override, which lives in
+     @layer base. ChooseAppPage and AccountLayout both carry
+     `brand-platform bg-ground-admin` on one div, and an unlayered rule beats
+     a layered one regardless of specificity — so declaring the tint beside
+     the colours silently defeats the admin-neutral guarantee this file
+     exists to protect.
+
+     The fix is ordering inside one layer, which is exactly the kind of
+     wiring that rots invisibly, so it is pinned structurally here (computed
+     cascade is not reachable in jsdom — same reason every other pin in this
+     file reads source). */
+  it('declares .brand-platform\'s shadow tint INSIDE @layer base, before .bg-ground-admin', () => {
+    const layerStart = baseCss.indexOf('@layer base {');
+    expect(layerStart).toBeGreaterThan(-1);
+
+    // The tint declaration must appear in the layered block, not only in the
+    // unlayered .brand-platform rule.
+    const layered = baseCss.slice(layerStart);
+    const platformTint = layered.search(/\.brand-platform\s*\{[^}]*--shadow-card-tint\s*:/);
+    const adminTint = layered.search(/\.bg-ground-admin\s*\{[^}]*--shadow-card-tint\s*:/);
+    expect(platformTint).toBeGreaterThan(-1);
+    expect(adminTint).toBeGreaterThan(-1);
+    // Same layer + same specificity => source order decides. Admin must win.
+    expect(platformTint).toBeLessThan(adminTint);
+  });
+
+  it('does NOT declare --shadow-card-tint in the unlayered .brand-platform rule', () => {
+    // The mutation this guards: moving the tint back beside the brand colours
+    // restores the silent override of decision 25.
+    // Slice from the END of the @layer base block, found by brace-matching —
+    // not from a landmark rule inside it, which would move if the block is
+    // reordered and make this pin fail for the wrong reason.
+    const start = baseCss.indexOf('@layer base {');
+    let depth = 0;
+    let i = baseCss.indexOf('{', start);
+    for (; i < baseCss.length; i++) {
+      if (baseCss[i] === '{') depth++;
+      else if (baseCss[i] === '}' && --depth === 0) break;
+    }
+    const unlayered = baseCss.slice(i);
+    const rule = unlayered.match(/\.brand-platform\s*\{[^}]*\}/);
+    expect(rule, 'unlayered .brand-platform rule not found').not.toBeNull();
+    expect(rule![0]).not.toMatch(/--shadow-card-tint/);
+    // ...while still carrying the brand ramp it exists for.
+    expect(rule![0]).toMatch(/--color-brand-600/);
+  });
 });

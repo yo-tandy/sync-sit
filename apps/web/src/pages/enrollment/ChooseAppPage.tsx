@@ -5,7 +5,6 @@ import { httpsCallable } from 'firebase/functions';
 import { CONSENT_VERSION, getEjemEmail } from '@ejm/shared-core';
 import { getSitRole } from '@ejm/sit-core';
 import {
-  APP_NAME,
   useDocumentGround,
   enrollmentErrorReason,
   ageGateErrorCode,
@@ -114,7 +113,7 @@ export function ChooseAppPage() {
   };
 
   return (
-    <div className="bg-ground-admin flex min-h-[100dvh] flex-col px-6 py-4">
+    <div className="brand-platform bg-ground-admin flex min-h-[100dvh] flex-col px-6 py-4">
       <div className="flex shrink-0 justify-end">
         <LanguageSelector />
       </div>
@@ -135,7 +134,7 @@ export function ChooseAppPage() {
         >
           <img src={sitMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
           <div className="flex-1">
-            <p className="text-base font-semibold text-gray-950">{APP_NAME.sit}</p>
+            <p className="text-base font-semibold text-gray-950">{t('unifiedEnrollment.chooseSitRole')}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{t('unifiedEnrollment.chooseSitDesc')}</p>
           </div>
           {switching === 'sit' && <Spinner className="h-5 w-5 shrink-0 text-brand-600" />}
@@ -149,7 +148,7 @@ export function ChooseAppPage() {
         >
           <img src={studyMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain" />
           <div className="flex-1">
-            <p className="text-base font-semibold text-gray-950">{APP_NAME.study}</p>
+            <p className="text-base font-semibold text-gray-950">{t('unifiedEnrollment.chooseStudyRole')}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-500">{t('unifiedEnrollment.chooseStudyDesc')}</p>
           </div>
           {switching === 'study' && <Spinner className="h-5 w-5 shrink-0 text-brand-600" />}
@@ -158,7 +157,7 @@ export function ChooseAppPage() {
         <div className="mb-4 flex items-center gap-4 rounded-xl border-[1.5px] border-gray-100 bg-gray-50 p-5 opacity-60">
           <img src={doMd} alt="" width={48} height={48} className="h-12 w-12 shrink-0 rounded-xl object-contain grayscale" />
           <div className="flex-1">
-            <p className="text-base font-semibold text-gray-500">{APP_NAME.do}</p>
+            <p className="text-base font-semibold text-gray-500">{t('unifiedEnrollment.chooseDoRole')}</p>
             <p className="mt-1 text-xs leading-relaxed text-gray-400">{t('unifiedEnrollment.chooseDoDesc')}</p>
           </div>
           <span className="rounded-pill bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-500">

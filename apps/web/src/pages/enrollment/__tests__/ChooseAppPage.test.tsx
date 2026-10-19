@@ -122,11 +122,14 @@ afterEach(() => {
 });
 
 describe('ChooseAppPage', () => {
-  it('renders sit and study as selectable, and do as disabled with a coming-soon badge', () => {
+  it('renders Babysitter and Tutor as selectable, and Doer as disabled with a coming-soon badge', () => {
+    // ROLE labels, not app names (issue #537 D6): the tile says what the
+    // user will DO; the brand mark beside it says which app that leads to.
     renderPage();
-    expect(screen.getByText('sync/sit')).toBeInTheDocument();
-    expect(screen.getByText('sync/study')).toBeInTheDocument();
-    expect(screen.getByText('sync/do')).toBeInTheDocument();
+    expect(screen.getByText('Babysitter')).toBeInTheDocument();
+    expect(screen.getByText('Tutor')).toBeInTheDocument();
+    expect(screen.getByText('Doer')).toBeInTheDocument();
+    expect(screen.queryByText('sync/sit')).not.toBeInTheDocument();
     expect(screen.getByText(i18n.t('unifiedEnrollment.comingSoon'))).toBeInTheDocument();
     // do's tile is not a clickable button — only sit/study are.
     const buttons = screen.getAllByRole('button');
@@ -149,9 +152,18 @@ describe('ChooseAppPage', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
+
+  it('renders inside the gray platform brand scope (issue #537 D1)', () => {
+    // The chooser is a PLATFORM surface: a .brand-platform ancestor re-points
+    // every brand-* utility below it at the gray ramp (base.css). Pinned on
+    // the class because that is the entire mechanism — no scope, sit red.
+    const { container } = renderPage();
+    expect(container.querySelector('.brand-platform')).not.toBeNull();
+  });
+
   it('choosing sit calls enrollBabysitter in crossApp mode and resumes at /enroll/babysitter', async () => {
     renderPage();
-    fireEvent.click(screen.getByText('sync/sit'));
+    fireEvent.click(screen.getByText('Babysitter'));
 
     await waitFor(() => {
       expect(h.navigate).toHaveBeenCalledWith('/enroll/babysitter');
@@ -163,7 +175,7 @@ describe('ChooseAppPage', () => {
 
   it('choosing study mints a handoff code and navigates to the study handoff URL', async () => {
     renderPage();
-    fireEvent.click(screen.getByText('sync/study'));
+    fireEvent.click(screen.getByText('Tutor'));
 
     await waitFor(() => {
       expect(h.assignedUrls).toHaveLength(1);
@@ -176,7 +188,7 @@ describe('ChooseAppPage', () => {
   it('surfaces a translated error on enrollBabysitter rejection without navigating', async () => {
     h.enrollBabysitterError = { code: 'functions/failed-precondition', details: { reason: 'role-exclusive' } };
     renderPage();
-    fireEvent.click(screen.getByText('sync/sit'));
+    fireEvent.click(screen.getByText('Babysitter'));
 
     const msg = i18n.t('signup.roleExclusiveBabysitter');
     expect(await screen.findByText(msg)).toBeInTheDocument();

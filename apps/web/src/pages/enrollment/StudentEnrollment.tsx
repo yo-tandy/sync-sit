@@ -158,11 +158,11 @@ export function StudentEnrollment() {
         dateOfBirth: basicInfo.dateOfBirth,
         classLevel: basicInfo.classLevel,
         gender: basicInfo.gender,
+        languages: basicInfo.languages,
         contactEmail: contactInfo.contactEmail,
         contactPhone: contactInfo.contactPhone,
         whatsapp: contactInfo.whatsapp,
         contactVisibilityConsent: contactInfo.contactVisibilityConsent,
-        bio: additional.bio,
         address: additional.address,
         language: i18n.language?.startsWith('fr') ? 'fr' : 'en',
       });
@@ -285,6 +285,9 @@ export function StudentEnrollment() {
   if (authLoading) return null;
 
   return (
+    // brand-platform (issue #537 D1): the unified student flow is a PLATFORM
+    // surface — it must render gray, not sit red, even though sit hosts it.
+    <div className="brand-platform">
     <AuthColumn>
       <TopNav
         title={t('unifiedEnrollment.studentTitle')}
@@ -294,5 +297,6 @@ export function StudentEnrollment() {
       <StepIndicator totalSteps={TOTAL_STEPS} currentStep={step} />
       {renderStep()}
     </AuthColumn>
+    </div>
   );
 }

@@ -55,6 +55,7 @@ function payload(email: string, overrides: Record<string, unknown> = {}) {
     dateOfBirth: dobWithAge(16),
     classLevel: 'Terminale',
     gender: 'female',
+    languages: ['French', 'English'],
     contactEmail: 'iris.contact@test.com',
     contactPhone: '+33600000010',
     whatsapp: null,
@@ -107,12 +108,31 @@ describe('enrollStudentIdentity', () => {
     expect(doc.whatsapp).toBeUndefined();
     expect(doc.address).toBeNull();
     expect(doc.bio).toBe('Hi there!');
+    // Languages are collected on the shared identity screen now (#537 D7),
+    // so they land on the ROOT doc rather than inside one app's profile —
+    // which is the point: sit and study read one answer, not two.
+    expect(doc.languages).toEqual(['French', 'English']);
     expect(doc.contactVisibilityConsent).toBe(true);
     expect(doc.consentVersion).toBe('1.0');
 
     // The verification code is consumed — cannot be replayed.
     const codeDoc = await getDb().collection('verificationCodes').doc(email.toLowerCase()).get();
     expect(codeDoc.exists).toBe(false);
+  });
+
+  it('omits languages entirely when the client sends none (root-presence convention)', async () => {
+    // Same rule the contact trio follows: an absent array must not be
+    // written as [], which would read as "the user cleared their languages"
+    // on a doc that never had the chance to hold any. Keeps an older client
+    // that predates #537 D7 from silently blanking the field.
+    const email = `iris.nolangs${GRAD_16}@ejm-test.org`;
+    await seedCode(email);
+    const { uid } = await callFunction<{ uid: string }>(
+      'enrollStudentIdentity',
+      payload(email, { languages: undefined }),
+    );
+    const doc = (await getDb().collection('users').doc(uid).get()).data()!;
+    expect(doc.languages).toBeUndefined();
   });
 
   it('records contactVisibilityConsent: false when the consent checkbox was left unchecked', async () => {

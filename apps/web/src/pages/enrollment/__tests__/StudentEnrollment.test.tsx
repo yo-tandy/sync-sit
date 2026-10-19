@@ -112,7 +112,14 @@ vi.mock('@ejm/shared-ui', async () => ({
   StepBasicInfo: ({ onNext }: { onNext: (d: unknown) => void }) => (
     <button
       onClick={() =>
-        onNext({ firstName: 'Iris', lastName: 'Martin', dateOfBirth: '2008-01-15', classLevel: 'Terminale', gender: 'female' })
+        onNext({
+          firstName: 'Iris',
+          lastName: 'Martin',
+          dateOfBirth: '2008-01-15',
+          classLevel: 'Terminale',
+          gender: 'female',
+          languages: ['French', 'English'],
+        })
       }
     >
       basic-info-next
@@ -130,7 +137,7 @@ vi.mock('@ejm/shared-ui', async () => ({
   StepAdditionalInfo: ({ onNext, serverError }: { onNext: (d: unknown) => void; serverError?: string | null }) => (
     <div>
       {serverError && <p>{serverError}</p>}
-      <button onClick={() => onNext({ bio: 'Hi!', photoFile: null, address: null })}>additional-info-next</button>
+      <button onClick={() => onNext({ photoFile: null, address: null })}>additional-info-next</button>
     </div>
   ),
 }));
@@ -253,9 +260,14 @@ describe('StudentEnrollment account creation', () => {
       gender: 'female',
       contactEmail: 'iris@example.com',
       contactVisibilityConsent: true,
-      bio: 'Hi!',
+      languages: ['French', 'English'],
       address: null,
     });
+    // #537 D7 + D4, the two halves of the same move: languages come IN to
+    // the shared identity payload (they describe the person, so every app
+    // reads one answer), and the bio goes OUT to the per-app experience
+    // stage. toMatchObject alone would not catch a lingering bio.
+    expect(enrollCalls[0].payload).not.toHaveProperty('bio');
   });
 
   it('surfaces a translated age-gate rejection without navigating away', async () => {
@@ -266,6 +278,13 @@ describe('StudentEnrollment account creation', () => {
     const msg = i18n.t('enrollment.age.under15');
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/enroll/choose-app');
+  });
+
+  it('renders inside the gray platform brand scope (issue #537 D1)', () => {
+    // Sit hosts the unified student flow, but it is a PLATFORM surface and
+    // must not wear sit red — the .brand-platform ancestor is the mechanism.
+    const { container } = renderFlow();
+    expect(container.querySelector('.brand-platform')).not.toBeNull();
   });
 });
 

@@ -258,6 +258,14 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     expect(header.className).not.toMatch(/\bhidden\b/);
   });
 
+  it('wraps the hub in the gray platform brand scope (issue #537 D1)', () => {
+    // /account is a PLATFORM surface — role-neutral, cross-app. The
+    // .brand-platform ancestor re-points brand-* at the gray ramp; without
+    // it the hub wears sit red purely because sit hosts it.
+    renderLayout(<AccountLayout />, 'account hub');
+    expect(document.querySelector('.brand-platform')).not.toBeNull();
+  });
+
   it('is sticky, not fixed -- this layout already sits outside PageContainer, so sticky is full-bleed here', () => {
     renderLayout(<AccountLayout />, 'account hub');
     const header = screen.getByText('Sync/Account').closest('header')!;
