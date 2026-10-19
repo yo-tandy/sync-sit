@@ -190,15 +190,60 @@ describe('tutor DashboardPage', () => {
     fireEvent.click(pill);
     expect(await screen.findByText(/activate your profile/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
+    // No contact-visibility consent on the doc: Activate stays disabled
+    // until the consent box is ticked, and the write records it on root.
+    const activate = screen.getByRole('button', { name: 'Activate' });
+    expect(activate).toBeDisabled();
+    fireEvent.click(activate);
+    expect(h.updateDoc).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /access to my contact information/i }));
+    fireEvent.click(activate);
 
     await waitFor(() =>
       expect(h.updateDoc).toHaveBeenCalledWith(
         expect.anything(),
-        expect.objectContaining({ 'profiles.tutor.searchable': true })
+        expect.objectContaining({ 'profiles.tutor.searchable': true, contactVisibilityConsent: true })
       )
     );
     await waitFor(() => expect(h.auth.refreshUserDoc).toHaveBeenCalled());
+  });
+
+  it('consent given at enrollment: no consent box, activation does not re-write it', async () => {
+    h.scheduleData = { weekly: { tue: [true] } };
+    h.auth.userDoc = {
+      ...tutor({ subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }], searchable: false }),
+      contactVisibilityConsent: true,
+    };
+    renderWithProviders(<DashboardPage />);
+    const pill = await screen.findByRole('button', { name: 'Inactive' });
+    await waitFor(() => expect(pill.className).not.toContain('opacity-50'));
+    fireEvent.click(pill);
+    expect(await screen.findByText(/activate your profile/i)).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }));
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const data = h.updateDoc.mock.calls[0][1];
+    expect(data['profiles.tutor.searchable']).toBe(true);
+    expect(data).not.toHaveProperty('contactVisibilityConsent');
+  });
+
+  it('consent box resets when the dialog is closed and reopened', async () => {
+    h.scheduleData = { weekly: { tue: [true] } };
+    h.auth.userDoc = tutor({
+      subjects: [{ subject: 'math', levels: ['6e'], rate: 20 }],
+      searchable: false,
+    });
+    renderWithProviders(<DashboardPage />);
+    const pill = await screen.findByRole('button', { name: 'Inactive' });
+    await waitFor(() => expect(pill.className).not.toContain('opacity-50'));
+    fireEvent.click(pill);
+    fireEvent.click(await screen.findByRole('checkbox', { name: /access to my contact information/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(pill);
+    expect(await screen.findByRole('checkbox', { name: /access to my contact information/i })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Activate' })).toBeDisabled();
   });
 
   it('no schedule slots: pill inert with the availability hint', async () => {
