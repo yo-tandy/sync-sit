@@ -6,6 +6,12 @@ permissions:
   pull-requests: write
   id-token: write
 
+# One run per PR at a time: overlapping runs (quick successive pushes) would
+# race to create the same pr-N channels and deploy over each other.
+concurrency:
+  group: preview-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   build_and_preview:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
@@ -42,11 +48,13 @@ jobs:
       # switchers) fall back to the PRODUCTION origins, which may not have the
       # routes this PR's code links to yet. Channel URLs carry a random
       # per-channel hash, so they can only be read once the channel exists.
+      # Only sit and study are resolved: no app links to sync-do yet (#304),
+      # and Deploy Preview creates the do channel itself.
       - name: Resolve preview channel URLs
         id: channels
         run: |
           CHANNEL="pr-${{ github.event.pull_request.number }}"
-          for pair in sit:sync-sit study:sync-study-app do:sync-do-app; do
+          for pair in sit:sync-sit study:sync-study-app; do
             key="${pair%%:*}"; site="${pair#*:}"
             find_url() {
               pnpm exec firebase hosting:channel:list --site "$site" --project sync-sit --json \
@@ -54,7 +62,8 @@ jobs:
             }
             url="$(find_url)"
             if [ -z "$url" ]; then
-              pnpm exec firebase hosting:channel:create "$CHANNEL" --site "$site" --project sync-sit --expires 7d --non-interactive >/dev/null
+              # Tolerate "already exists" from a race; the re-read below decides.
+              pnpm exec firebase hosting:channel:create "$CHANNEL" --site "$site" --project sync-sit --expires 7d --non-interactive >/dev/null || true
               url="$(find_url)"
             fi
             if [ -z "$url" ]; then
