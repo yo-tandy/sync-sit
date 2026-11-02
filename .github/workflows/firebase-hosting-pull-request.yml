@@ -26,6 +26,45 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # Authenticate via Workload Identity Federation
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: sync-sit
+          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
+          create_credentials_file: true
+          export_environment_variables: true
+
+      # Create this PR's preview channel on every site BEFORE building, so each
+      # app can be built pointing at its siblings' preview URLs. Without this
+      # the cross-app links (study's "Sign up" -> sit /enroll, the app
+      # switchers) fall back to the PRODUCTION origins, which may not have the
+      # routes this PR's code links to yet. Channel URLs carry a random
+      # per-channel hash, so they can only be read once the channel exists.
+      - name: Resolve preview channel URLs
+        id: channels
+        run: |
+          CHANNEL="pr-${{ github.event.pull_request.number }}"
+          for pair in sit:sync-sit study:sync-study-app do:sync-do-app; do
+            key="${pair%%:*}"; site="${pair#*:}"
+            find_url() {
+              pnpm exec firebase hosting:channel:list --site "$site" --project sync-sit --json \
+                | jq -r --arg c "$CHANNEL" '.result.channels[] | select(.name | endswith("/channels/" + $c)) | .url'
+            }
+            url="$(find_url)"
+            if [ -z "$url" ]; then
+              pnpm exec firebase hosting:channel:create "$CHANNEL" --site "$site" --project sync-sit --expires 7d --non-interactive >/dev/null
+              url="$(find_url)"
+            fi
+            if [ -z "$url" ]; then
+              echo "::error::could not resolve preview channel URL for $site/$CHANNEL"
+              exit 1
+            fi
+            echo "$key preview: $url"
+            echo "${key}_url=$url" >> "$GITHUB_OUTPUT"
+          done
+
       # Build shared package
       - run: pnpm --filter @ejm/sit-core build
 
@@ -40,19 +79,11 @@ jobs:
           VITE_FIREBASE_MESSAGING_SENDER_ID: '652129443234'
           VITE_FIREBASE_APP_ID: '1:652129443234:web:b1addb8ca9204154aba6fb'
           VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
-
-      # Authenticate via Workload Identity Federation
-      - id: auth
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: sync-sit
-          workload_identity_provider: projects/652129443234/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-          service_account: github-action-1196270164@sync-sit.iam.gserviceaccount.com
-          create_credentials_file: true
-          export_environment_variables: true
+          VITE_STUDY_APP_URL: ${{ steps.channels.outputs.study_url }}
 
       # Build study-web so the channel deploy can cover both hosting targets
-      # (see firebase.json: targets `web` and `study`).
+      # (see firebase.json: targets `web` and `study`). Cross-app URLs point
+      # at this PR's own channels (see "Resolve preview channel URLs").
       - name: Build study-web
         run: |
           pnpm --filter @ejm/shared-core build
@@ -68,6 +99,7 @@ jobs:
           # Same project-wide public VAPID key as the sit build step above —
           # study-web push (issue #168 Phase 1) needs it at build time.
           VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
+          VITE_SIT_APP_URL: ${{ steps.channels.outputs.sit_url }}
 
       # Build do-web (third hosting target: site sync-do-app, plan §3.1). Same
       # project-level Firebase config; reuses the sit web-app id like study-web
@@ -88,6 +120,8 @@ jobs:
           # above — do-web push (sync-do plan §13 PR9, fcmTokensDo) needs it
           # at build time.
           VITE_FIREBASE_VAPID_KEY: BHhR2VRnGyiMruB55skkISGURA5MqVat0lzGRtzfnfHJ6IlgOs8sZDKy25k0nitxIlmLToaUWr1YfX5KBuxg1yo
+          VITE_SIT_APP_URL: ${{ steps.channels.outputs.sit_url }}
+          VITE_STUDY_APP_URL: ${{ steps.channels.outputs.study_url }}
 
       # Deploy preview channel (all three hosting targets in firebase.json)
       - name: Deploy Preview
