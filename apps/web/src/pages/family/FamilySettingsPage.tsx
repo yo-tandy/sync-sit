@@ -21,6 +21,7 @@ import { XIcon, PlusIcon } from '@/components/ui/Icons';
 import type { FamilyDoc, KidDoc } from '@ejm/sit-core';
 import { getParentView } from '@ejm/sit-core';
 import { uploadErrorKey, MAX_FAMILY_PHOTO_BYTES } from '@ejm/shared-core';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 interface CreateFamilyPhotoUploadUrlRequest {
   familyId: string;
@@ -134,6 +135,7 @@ interface KidForm {
 }
 
 export function FamilySettingsPage() {
+  const hub = useHubPaths();
   const { t } = useTranslation();
   const { userDoc } = useAuthStore();
   const parent = getParentView(userDoc);
@@ -348,7 +350,7 @@ export function FamilySettingsPage() {
   if (loading) {
     return (
       <div>
-        <TopNav title={t('menu.myFamily')} backTo="/family" />
+        <TopNav title={t('menu.myFamily')} backTo={hub.back('/family')} />
         <div className="flex justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-brand-600" />
         </div>
@@ -358,7 +360,7 @@ export function FamilySettingsPage() {
 
   return (
     <div>
-      <TopNav title={t('menu.myFamily')} backTo="/family" />
+      <TopNav title={t('menu.myFamily')} backTo={hub.back('/family')} />
       <div className="px-6 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
 

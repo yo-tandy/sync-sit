@@ -69,8 +69,11 @@ export function useAppSwitchState({
   const [busyApp, setBusyApp] = useState<SyncApp | 'account' | null>(null);
   const [failed, setFailed] = useState(false);
 
+  // The hub AND its sub-pages (`/account/profile`, …): they are all the hub.
   const accountActive =
-    account !== undefined && account.handoffUrl === undefined && pathname === account.href;
+    account !== undefined &&
+    account.handoffUrl === undefined &&
+    (pathname === account.href || pathname.startsWith(`${account.href}/`));
 
   // The failure message belongs to ONE attempt, not to the session -- see
   // AppSwitchBar's docstring for why this runs during render rather than in

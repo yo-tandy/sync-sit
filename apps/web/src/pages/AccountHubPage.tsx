@@ -11,6 +11,7 @@ import { getSitRole } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+import { HUB_PATHS } from '@/lib/hubRoutes';
 
 // Imported directly, not through a shared-ui lookup (#422): this page's own
 // graph then holds only the two marks it actually shows (sync-do never
@@ -124,15 +125,15 @@ export function AccountHubPage() {
       rows: [
         {
           label: t('accountHub.myAccount'),
-          href: isParent ? '/family/account' : '/babysitter/account',
+          href: HUB_PATHS.profile,
         },
         // Family, supervised kids and verification are parent-side concepts
         // in sit: a student belongs to no family here and supervises no one.
         ...(isParent
           ? [
-              { label: t('accountHub.myFamily'), href: '/family/settings' },
-              { label: t('accountHub.supervisedKids'), href: '/family/governance' },
-              { label: t('accountHub.verification'), href: '/family/verification' },
+              { label: t('accountHub.myFamily'), href: HUB_PATHS.family },
+              { label: t('accountHub.supervisedKids'), href: HUB_PATHS.kids },
+              { label: t('accountHub.verification'), href: HUB_PATHS.verification },
             ]
           : []),
       ],

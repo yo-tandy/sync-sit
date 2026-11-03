@@ -10,6 +10,7 @@ import {
 } from '@ejm/shared-core';
 import { functions } from '@/config/firebase';
 import { Button, Card, Input, TopNav } from '@/components/ui';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 /** Machine-readable guardian error code from an HttpsError's details, if any. */
 function guardianErrorCode(err: unknown): string | null {
@@ -30,6 +31,7 @@ function guardianErrorCode(err: unknown): string | null {
  * Copy-adapted from sync-study's CreateKidInvitePage, pin test included.
  */
 export function CreateKidInvitePage() {
+  const hub = useHubPaths();
   const { t } = useTranslation();
 
   const [kidEmail, setKidEmail] = useState('');
@@ -115,13 +117,13 @@ export function CreateKidInvitePage() {
   if (sent) {
     return (
       <div>
-        <TopNav title={t('governance.invite.title')} backTo="/family/governance" />
+        <TopNav title={t('governance.invite.title')} backTo={hub.kidsBase} />
         <div className="px-5 pt-4 pb-8">
           <Card>
             <h2 className="mb-2 text-lg font-bold text-gray-900">{t('governance.inviteSent')}</h2>
             <p className="mb-2 text-sm text-gray-600">{t('governance.inviteSentDesc')}</p>
             <p className="mb-5 text-sm text-gray-500">{t('governance.inviteSentNeutral')}</p>
-            <Link to="/family/governance" className="block">
+            <Link to={hub.kidsBase} className="block">
               <Button className="w-full">{t('governance.inviteSentBack')}</Button>
             </Link>
           </Card>
@@ -132,7 +134,7 @@ export function CreateKidInvitePage() {
 
   return (
     <div>
-      <TopNav title={t('governance.invite.title')} backTo="/family/governance" />
+      <TopNav title={t('governance.invite.title')} backTo={hub.kidsBase} />
 
       <div className="px-5 pt-4 pb-8">
         <p className="mb-5 text-sm text-gray-500">{t('governance.invite.intro')}</p>

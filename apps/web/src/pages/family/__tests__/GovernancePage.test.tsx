@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Routes, Route } from 'react-router';
+import { HubRouteProvider } from '@/lib/hubRoutes';
 
 // Hoisted, test-controllable state. The governance dashboard loads everything
 // through the getGovernedChildren callable (no client Firestore reads).
@@ -165,5 +166,39 @@ describe('GovernancePage (sit)', () => {
     renderPage();
 
     expect(await screen.findByText(/couldn't load/i)).toBeInTheDocument();
+  });
+
+  describe('opened from the account hub (Settings)', () => {
+    function renderInHub() {
+      return render(
+        <MemoryRouter initialEntries={['/account/kids']}>
+          <HubRouteProvider>
+            <Routes>
+              <Route path="/account/kids" element={<GovernancePage />} />
+              <Route path="/account" element={<p>SETTINGS HUB</p>} />
+              <Route path="/family" element={<p>FAMILY PORTAL</p>} />
+            </Routes>
+          </HubRouteProvider>
+        </MemoryRouter>,
+      );
+    }
+
+    it('goes back to the hub, not to the family portal', async () => {
+      renderInHub();
+      await screen.findByText(/no supervised kids yet/i);
+      fireEvent.click(screen.getByRole('button', { name: /back/i }));
+      expect(await screen.findByText('SETTINGS HUB')).toBeInTheDocument();
+      expect(screen.queryByText('FAMILY PORTAL')).toBeNull();
+    });
+
+    it('keeps its kid links inside the hub', async () => {
+      h.children = [kid()];
+      renderInHub();
+      await screen.findByText(/Noa/);
+      const links = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+      expect(links).toContain('/account/kids/new');
+      expect(links).toContain('/account/kids/c1');
+      expect(links.some((l) => l?.startsWith('/family/'))).toBe(false);
+    });
   });
 });

@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/Checkbox';
 import { getParentProfile } from '@ejm/sit-core';
 import { uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
 import { putToSignedUrl, callableErrorCode, type SignedUploadResponse } from '@ejm/shared-ui';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 interface CreateVerificationDocumentUploadUrlRequest {
   familyId: string;
@@ -35,6 +36,7 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
 }
 
 export function VerificationPage() {
+  const hub = useHubPaths();
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId;
@@ -202,7 +204,7 @@ export function VerificationPage() {
 
   return (
     <div>
-      <TopNav title={t('verification.title')} backTo="/family" />
+      <TopNav title={t('verification.title')} backTo={hub.back('/family')} />
 
       <div className="px-5 pb-8">
         {loading ? (

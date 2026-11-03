@@ -222,6 +222,15 @@ describe('AppSwitchInline', () => {
     });
   });
 
+  it("keeps the account tab current on the hub's sub-pages, and only there", () => {
+    const { navigateTo } = renderInline();
+    navigateTo('/family/account/profile');
+    expect(screen.getByRole('button', { name: /my account/i })).toHaveAttribute('aria-current', 'page');
+    // A sibling path that merely shares the prefix is NOT the hub.
+    navigateTo('/family/accounts');
+    expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+  });
+
   describe('handoff-form account tab (one hub on sync-sit)', () => {
     const HUB = { href: '/account', handoffUrl: 'https://sync-sit.com' };
 

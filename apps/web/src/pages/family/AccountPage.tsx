@@ -19,6 +19,7 @@ import {
   notifPrefRowsForUser,
   resolveNotifPrefsFor,
 } from '@ejm/sit-core';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -99,6 +100,7 @@ function PushStatusCard({ uid }: { uid?: string }) {
 }
 
 export function AccountPage() {
+  const hub = useHubPaths();
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
   const parent = getParentView(userDoc);
@@ -353,7 +355,7 @@ export function AccountPage() {
 
   return (
     <div>
-      <TopNav title={t('menu.myAccount')} backTo="/family" />
+      <TopNav title={t('menu.myAccount')} backTo={hub.back('/family')} />
 
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}
