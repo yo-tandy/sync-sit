@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
@@ -78,7 +78,7 @@ interface UserProfiles {
   profiles?: { parent?: unknown; tutor?: unknown };
 }
 
-export function labelsFor(
+function labelsFor(
   scope: NotifScope,
   pageSide: Side,
   user: UserProfiles | null | undefined,
@@ -123,8 +123,14 @@ export function NotifPrefsSection({ side }: { side: Side }) {
     }
     return out;
   }, [rows, notifPrefs]);
+  // Reseed when the stored prefs change -- during render, not in an effect,
+  // so the stale toggles never paint (same pattern as appSwitchShared).
   const [prefs, setPrefs] = useState(stored);
-  useEffect(() => setPrefs(stored), [stored]);
+  const [seededFrom, setSeededFrom] = useState(stored);
+  if (seededFrom !== stored) {
+    setSeededFrom(stored);
+    setPrefs(stored);
+  }
 
   // Write ONLY the toggled category/channel via a dot-path: a whole-object
   // `notifPrefs` write would clobber blocks another app wrote after mount.
