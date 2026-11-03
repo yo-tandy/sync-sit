@@ -225,7 +225,7 @@ export const enrollTutor = onCall(
     }
 
     // 4. Validate enrollment payload (crossApp: the synthesized input — the
-    // subjects floor and every copied-field bound apply identically)
+    // subjects shape and every copied-field bound apply identically)
     const enrollmentResult = tutorEnrollmentSchema.safeParse(enrollmentInput);
     if (!enrollmentResult.success) {
       const firstIssue = enrollmentResult.error.issues[0];
@@ -365,7 +365,13 @@ export const enrollTutor = onCall(
       // the cross-origin handoff, which transfers a session, not a client
       // payload). Scoped to isCrossApp — the classic new-account path never
       // has a caller doc to read, so it stays false there exactly as before.
-      searchable: isCrossApp && (callerData as { contactVisibilityConsent?: boolean }).contactVisibilityConsent === true,
+      // Also gated on having subjects: the wizard's "Skip for now" sends
+      // subjects: [], and a subject-less tutor must never start searchable
+      // (the dashboard's activation gate expects to own that transition).
+      searchable:
+        isCrossApp &&
+        enrollment.subjects.length > 0 &&
+        (callerData as { contactVisibilityConsent?: boolean }).contactVisibilityConsent === true,
     };
 
     // 5a. Add-profile path — an authenticated existing user gains a tutor

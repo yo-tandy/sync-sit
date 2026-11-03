@@ -27,8 +27,13 @@ describe('tutorEnrollmentSchema', () => {
     expect(tutorEnrollmentSchema.safeParse(validEnrollment).success).toBe(true);
   });
 
-  it('rejects an empty subjects array — enrollment must produce a searchable tutor', () => {
-    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(false);
+  it('accepts an empty subjects array — the wizard lets tutors skip subjects and add them later', () => {
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(true);
+  });
+
+  it('still requires the subjects field itself', () => {
+    const { subjects: _s, ...rest } = validEnrollment;
+    expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(false);
   });
 
   it('rejects a zero rate (must be positive, matching the wizard gate)', () => {

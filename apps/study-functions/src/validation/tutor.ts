@@ -42,13 +42,14 @@ export const tutorImmutableProfileSchema = z.object({
 });
 
 /**
- * Subjects the tutor offers. At least one is REQUIRED at enrollment since
- * issue #143 made subjects the first collected step — a tutor with zero
- * subjects is invisible to search, and the floor belongs here, not only in
- * the wizard's client-side gate.
+ * Subjects the tutor offers. The array itself is required, but it MAY be
+ * empty: the signup wizard lets a tutor skip the subjects step and add them
+ * later at /tutor/subjects. A tutor with zero subjects stays out of search —
+ * the dashboard's activation gate refuses the searchable toggle until both
+ * subjects and availability exist.
  */
 export const tutorSubjectsSchema = z.object({
-  subjects: z.array(subjectOfferingSchema).min(1, 'At least one subject is required'),
+  subjects: z.array(subjectOfferingSchema),
 });
 
 /**

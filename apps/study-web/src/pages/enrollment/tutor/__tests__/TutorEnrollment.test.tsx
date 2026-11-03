@@ -178,6 +178,7 @@ vi.mock('../StepSubjects', () => ({
       <button onClick={() => onNext([{ subject: 'math', levels: ['Terminale'], rate: 25 }])}>
         subjects-next
       </button>
+      <button onClick={() => onNext([])}>subjects-skip</button>
     </div>
   ),
 }));
@@ -305,6 +306,25 @@ describe('TutorEnrollment orchestrator', () => {
     // New-account path signs the tutor in — the success CTA must land in
     // the portal, not bounce to login.
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'flow.tutor28@ejm.org', 'Pw123456!');
+  });
+
+  it('skipping subjects submits enrollTutor with an empty subjects array and lands in the portal', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+    fireEvent.click(await screen.findByText('profile-next'));
+    fireEvent.click(await screen.findByText('subjects-skip'));
+
+    const enroll = await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'enrollTutor');
+      expect(c).toBeTruthy();
+      return c!;
+    });
+    // Sent as an explicit [] (the JSON round-trip keeps empty arrays) — the
+    // server schema requires the field and accepts it empty.
+    expect((enroll.payload as { enrollment: Record<string, unknown> }).enrollment.subjects).toEqual([]);
+    await vi.waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/tutor'));
   });
 
   it('a sign-in failure after successful enrollment shows the account-ready login state, never a guarded bounce', async () => {
