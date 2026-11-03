@@ -42,6 +42,28 @@ describe('StepSubjects (tutor enrollment)', () => {
     expect(screen.getByRole('button', { name: /Complete sign-up/i })).toBeDisabled();
   });
 
+  it('skip completes signup with no subjects, discarding a half-filled draft', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} />);
+    fireEvent.change(within(row()).getByRole('combobox'), { target: { value: 'math' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(onNext).toHaveBeenCalledWith([]);
+  });
+
+  it('skip stays available after removing every row, and is disabled while submitting', () => {
+    const onNext = vi.fn();
+    const { unmount } = renderWithProviders(<StepSubjects onNext={onNext} />);
+    fireEvent.click(within(row()).getByRole('button', { name: /Remove/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+    expect(onNext).toHaveBeenCalledWith([]);
+    unmount();
+
+    renderWithProviders(<StepSubjects onNext={onNext} loading />);
+    expect(screen.getByRole('button', { name: /Skip for now/i })).toBeDisabled();
+  });
+
   it('submits the offerings payload when the row is valid', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);

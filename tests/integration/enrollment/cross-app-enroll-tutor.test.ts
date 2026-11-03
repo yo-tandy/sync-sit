@@ -573,12 +573,22 @@ describe('enrollTutor crossApp mode', () => {
     ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
   });
 
-  it('enforces the subjects floor (empty array rejected)', async () => {
+  it('accepts an empty subjects array (the wizard\'s "Skip for now"); the tutor starts unsearchable', async () => {
     const uid = 'crossapp-nosubjects';
     await seedSitter(uid, 'nosubjects@test.com');
     const token = await getIdToken(uid);
+    await callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: [] }, token);
+    const after = (await getDb().collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.tutor.subjects).toEqual([]);
+    expect(after.profiles.tutor.searchable).toBe(false);
+  });
+
+  it('still requires the subjects field itself', async () => {
+    const uid = 'crossapp-nosubjects-field';
+    await seedSitter(uid, 'nosubjectsfield@test.com');
+    const token = await getIdToken(uid);
     await expect(
-      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: [] }, token),
+      callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0' }, token),
     ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
   });
 

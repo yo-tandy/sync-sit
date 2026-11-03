@@ -221,7 +221,7 @@ export const enrollTutor = onCall(
     }
 
     // 4. Validate enrollment payload (crossApp: the synthesized input — the
-    // subjects floor and every copied-field bound apply identically)
+    // subjects shape and every copied-field bound apply identically)
     const enrollmentResult = tutorEnrollmentSchema.safeParse(enrollmentInput);
     if (!enrollmentResult.success) {
       const firstIssue = enrollmentResult.error.issues[0];
