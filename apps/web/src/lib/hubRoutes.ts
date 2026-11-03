@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext } from 'react';
 
 /**
  * The account hub's own copies of the account pages.
@@ -18,12 +18,9 @@ export const HUB_PATHS = {
   verification: '/account/verification',
 } as const;
 
-const InHubContext = createContext(false);
+/** True below the hub's outlet (`HubRouteProvider`). */
+export const InHubContext = createContext(false);
 
-/** Wraps the hub's outlet: every page below it resolves to hub paths. */
-export function HubRouteProvider({ children }: { children: ReactNode }) {
-  return <InHubContext.Provider value={true}>{children}</InHubContext.Provider>;
-}
 
 /**
  * Where an account page's links point, depending on which shell mounted it.

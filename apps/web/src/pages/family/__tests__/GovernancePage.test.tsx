@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router';
-import { HubRouteProvider } from '@/lib/hubRoutes';
+import { HubRouteProvider } from '@/components/HubRouteProvider';
 
 // Hoisted, test-controllable state. The governance dashboard loads everything
 // through the getGovernedChildren callable (no client Firestore reads).

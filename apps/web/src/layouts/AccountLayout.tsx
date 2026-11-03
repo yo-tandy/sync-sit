@@ -8,7 +8,7 @@ import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
 import { AppSwitchInlineHost } from '@/components/ui/AppSwitchInlineHost';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { useAuthStore } from '@/stores/authStore';
-import { HubRouteProvider } from '@/lib/hubRoutes';
+import { HubRouteProvider } from '@/components/HubRouteProvider';
 
 /**
  * Shell for the shared account hub (#367, decision 24).
