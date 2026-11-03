@@ -583,6 +583,27 @@ describe('enrollTutor crossApp mode', () => {
     expect(after.profiles.tutor.searchable).toBe(false);
   });
 
+  it('skipped subjects never start searchable, even with root contact-visibility consent', async () => {
+    // Consent alone seeds searchable: true on crossApp (issue #435); a
+    // subject-less tutor must still start out of search.
+    const uid = 'crossapp-skip-consented';
+    await seedSitter(uid, 'skipconsented@test.com', { contactVisibilityConsent: true });
+    const token = await getIdToken(uid);
+    await callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: [] }, token);
+    const after = (await getDb().collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.tutor.subjects).toEqual([]);
+    expect(after.profiles.tutor.searchable).toBe(false);
+  });
+
+  it('with subjects, root contact-visibility consent still seeds searchable (control for the pin above)', async () => {
+    const uid = 'crossapp-subjects-consented';
+    await seedSitter(uid, 'subjectsconsented@test.com', { contactVisibilityConsent: true });
+    const token = await getIdToken(uid);
+    await callFunction('enrollTutor', { crossApp: true, consentVersion: '1.0', subjects: SUBJECTS }, token);
+    const after = (await getDb().collection('users').doc(uid).get()).data()!;
+    expect(after.profiles.tutor.searchable).toBe(true);
+  });
+
   it('still requires the subjects field itself', async () => {
     const uid = 'crossapp-nosubjects-field';
     await seedSitter(uid, 'nosubjectsfield@test.com');

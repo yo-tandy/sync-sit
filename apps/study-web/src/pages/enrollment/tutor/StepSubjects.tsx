@@ -36,6 +36,9 @@ export function StepSubjects({ onNext, loading = false, error: submitError = nul
     initialRows && initialRows.length > 0 ? initialRows : [{ subject: '', levels: [], rate: '' }],
   );
   const [error, setError] = useState<string | null>(null);
+  // Skipping drops the draft rows; with anything entered, ask first.
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
+  const hasDraft = rows.some((r) => r.subject || r.levels.length > 0 || r.rate !== '');
 
   const addRow = () => {
     setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);
@@ -190,16 +193,39 @@ export function StepSubjects({ onNext, loading = false, error: submitError = nul
         {loading ? t('common.loading') : t('enrollment.completeSignup')}
       </Button>
 
-      {/* Skipping discards any half-filled draft rows: the tutor adds
-          subjects later from the portal. */}
-      <button
-        type="button"
-        onClick={() => onNext([])}
-        disabled={loading}
-        className="mt-3 block w-full text-center text-sm font-medium text-gray-500 hover:text-brand-600 disabled:opacity-50"
-      >
-        {t('enrollment.subjectsSkip')}
-      </button>
+      {/* Skipping discards the draft rows (the tutor adds subjects later
+          from the portal), so a draft with content gets an inline confirm. */}
+      {confirmingSkip ? (
+        <div className="mt-3 text-center">
+          <p className="mb-2 text-sm text-gray-700">{t('enrollment.subjectsSkipConfirm')}</p>
+          <div className="flex justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => onNext([])}
+              disabled={loading}
+              className="text-sm font-medium text-brand-600 disabled:opacity-50"
+            >
+              {t('enrollment.subjectsSkipConfirmYes')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingSkip(false)}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              {t('enrollment.subjectsSkipConfirmNo')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => (hasDraft ? setConfirmingSkip(true) : onNext([]))}
+          disabled={loading}
+          className="mt-3 block w-full text-center text-sm font-medium text-gray-500 hover:text-brand-600 disabled:opacity-50"
+        >
+          {t('enrollment.subjectsSkip')}
+        </button>
+      )}
       <p className="mt-1 text-center text-xs text-gray-400">{t('enrollment.subjectsSkipHint')}</p>
     </form>
   );
