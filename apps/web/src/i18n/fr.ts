@@ -381,7 +381,7 @@ export default {
   accountHub: {
     // Brand string (#445), not translated -- identical in every language,
     // same convention as "Sync/Sit" / "Sync/Study".
-    brandTitle: 'Sync/Account',
+    brandTitle: 'Sync/Paramètres',
     subtitle: 'Partagé entre sync/sit, sync/study et sync/do.',
     neutralSection: 'Compte',
     myAccount: 'Mon compte',
@@ -427,7 +427,7 @@ export default {
     backHome: "Retour à l'accueil",
   },
   appSwitch: {
-    account: 'Mon compte',
+    account: 'Paramètres',
     barLabel: "Changer d'application",
     toStudy: 'Ouvrir sync-study',
     error: "Impossible de changer d'application. Veuillez réessayer.",
