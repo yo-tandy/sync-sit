@@ -58,6 +58,7 @@ export function ExpandableBabysitterCard({
   onAccept,
   onDecline,
   existingReference,
+  defaultExpanded = false,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterSummary;
@@ -73,10 +74,18 @@ export function ExpandableBabysitterCard({
   onAccept?: () => void;
   onDecline?: () => void;
   existingReference?: ReferenceDoc;
+  /** Open on mount and scroll into view — the card a landing-page row was
+   * tapped for. */
+  defaultExpanded?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Mount-only: a later re-render must not yank the page back to this card.
+  useEffect(() => {
+    if (defaultExpanded) cardRef.current?.scrollIntoView?.({ block: 'start' });
+  }, []);
   const badgeLabels = useBadgeLabels();
   const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
@@ -227,6 +236,9 @@ export function ExpandableBabysitterCard({
 
   return (
     <Card borderColor={borderColors[variant]} className="mb-2">
+      {/* Scroll anchor; the margin clears the sticky app bar and
+          a pending group's date label. */}
+      <div ref={cardRef} className="scroll-mt-24" />
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}

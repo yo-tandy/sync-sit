@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -7,11 +7,11 @@ import { hasStarted, isLateCancellationClient, humanizeNoticeWindow } from '@/ut
 import { db, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
+import { useBabysitterSummaries } from '@/hooks/useBabysitterSummaries';
 import { Button, Badge, Card, SkeletonCard, Input, Dialog, Textarea, TopNav } from '@/components/ui';
 import { CalendarIcon, SearchIcon } from '@/components/ui/Icons';
-import type { AppointmentDoc, BabysitterSummary, RecurringSlot } from '@ejm/sit-core';
+import type { AppointmentDoc, RecurringSlot } from '@ejm/sit-core';
 import { getFamilyId } from '@ejm/shared-core';
-import { formatBabysitterName } from '@/lib/formatName';
 import { debouncedTogglePreferred } from '@/lib/debouncedPreferred';
 import { EndorsementDialog } from '@/components/endorsements/EndorsementDialog';
 import { ExpandableBabysitterCard } from '@/components/appointments/ExpandableBabysitterCard';
@@ -42,6 +42,11 @@ function groupByDateTime(
   return [...groups.entries()].map(([label, appointments]) => ({ label, appointments }));
 }
 
+/** Router state a link into this page may carry. */
+export interface FamilyAppointmentsNavState {
+  focusAppointmentId?: string;
+}
+
 /**
  * Dedicated family appointments page (issue #241, parity Q1 = b) — the sit
  * mirror of study's family SessionsPage (a first-class page the dashboard
@@ -68,6 +73,10 @@ export function FamilyAppointmentsPage() {
   const { userDoc } = useAuthStore();
   const navigate = useNavigate();
   const { pending, confirmed, pastRecent, rejectedRecent, loading: aptsLoading } = useFamilyAppointments();
+  // The appointment a landing-page row was tapped for: its card opens
+  // expanded and scrolls into view, so the tap lands on that appointment
+  // rather than on the whole list.
+  const focusId = (useLocation().state as FamilyAppointmentsNavState | null)?.focusAppointmentId ?? null;
 
   const [cancelTarget, setCancelTarget] = useState<string | null>(null);
   const [cancelReason, setCancelReason] = useState('');
@@ -188,7 +197,6 @@ export function FamilyAppointmentsPage() {
     }
   };
 
-  const [babysitters, setBabysitters] = useState<Record<string, BabysitterSummary>>({});
   const [preferredIds, setPreferredIds] = useState<Set<string>>(new Set());
 
   // References state
@@ -267,40 +275,11 @@ export function FamilyAppointmentsPage() {
     [...confirmed, ...pastRecent].map((a) => a.babysitterUserId).filter(Boolean)
   );
 
-  // Look up babysitter profiles for all appointments
-  useEffect(() => {
-    const allApts = [...pending, ...confirmed, ...pastRecent, ...rejectedRecent];
-    const uids = [...new Set(allApts.map((a) => a.babysitterUserId).filter(Boolean))];
-    const missing = uids.filter((uid) => !babysitters[uid]);
-    if (missing.length === 0) return;
-
-    // One callable for the batch (issue #529): the page no longer reads
-    // users/{uid} directly; `age` arrives computed (the date of birth
-    // stays on the server) and contact is present only when this family
-    // is approved or has a confirmed appointment with the babysitter.
-    const summarize = httpsCallable<{ uids: string[] }, { summaries: BabysitterSummary[] }>(
-      functions,
-      'getBabysitterSummaries',
-    );
-    summarize({ uids: missing })
-      .then((res) => res?.data?.summaries ?? [])
-      .catch(() => [] as BabysitterSummary[])
-      .then((summaries) => {
-        const byUid = new Map(summaries.map((s) => [s.uid, s]));
-        return missing.map((uid) => {
-          const s = byUid.get(uid);
-          if (s) {
-            const info: BabysitterSummary = { ...s, name: formatBabysitterName(s.firstName, s.lastName) };
-            return [uid, info] as [string, BabysitterSummary];
-          }
-          return [uid, { uid, firstName: '', lastName: '', name: t('familyDashboard.babysitterFallback') }] as [string, BabysitterSummary];
-        });
-      })
-      .then((entries) => {
-      const newData = Object.fromEntries(entries);
-      setBabysitters((prev) => ({ ...prev, ...newData }));
-    });
-  }, [pending, confirmed, pastRecent, rejectedRecent]);
+  // Babysitter summaries for every listed appointment — the same hook the
+  // landing page rows read, so both pages name the same babysitter.
+  const babysitters = useBabysitterSummaries(
+    [...pending, ...confirmed, ...pastRecent, ...rejectedRecent].map((a) => a.babysitterUserId),
+  );
 
   // Whether the cancel dialog targets a still-pending request (vs. a
   // confirmed appointment): single source for the dialog's accessible name
@@ -362,6 +341,7 @@ export function FamilyAppointmentsPage() {
                       <ExpandableBabysitterCard
                         key={apt.appointmentId}
                         appointment={apt}
+                        defaultExpanded={apt.appointmentId === focusId}
                         info={babysitters[apt.babysitterUserId]}
                         variant="pending"
                         isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
@@ -387,6 +367,7 @@ export function FamilyAppointmentsPage() {
                   <ExpandableBabysitterCard
                     key={apt.appointmentId}
                     appointment={apt}
+                    defaultExpanded={apt.appointmentId === focusId}
                     info={babysitters[apt.babysitterUserId]}
                     variant="confirmed"
                     isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
@@ -402,7 +383,7 @@ export function FamilyAppointmentsPage() {
               <div className="mb-5">
                 <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('babysitterDashboard.past')}</h3>
                 {pastRecent.map((apt) => (
-                  <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="past" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} existingReference={getRefForAppointment(apt.appointmentId)} onLeaveReference={() => setRefTarget({ apt, existing: getRefForAppointment(apt.appointmentId) })} />
+                  <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} defaultExpanded={apt.appointmentId === focusId} info={babysitters[apt.babysitterUserId]} variant="past" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} existingReference={getRefForAppointment(apt.appointmentId)} onLeaveReference={() => setRefTarget({ apt, existing: getRefForAppointment(apt.appointmentId) })} />
                 ))}
               </div>
             )}
@@ -410,7 +391,7 @@ export function FamilyAppointmentsPage() {
               <div className="mb-5">
                 <h3 className="mb-2 text-sm font-semibold text-gray-700">{t('familyDashboard.declined')}</h3>
                 {rejectedRecent.map((apt) => (
-                  <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} info={babysitters[apt.babysitterUserId]} variant="rejected" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} onResubmit={() => openResubmit(apt)} />
+                  <ExpandableBabysitterCard key={apt.appointmentId} appointment={apt} defaultExpanded={apt.appointmentId === focusId} info={babysitters[apt.babysitterUserId]} variant="rejected" isPreferred={preferredIds.has(apt.babysitterUserId)} onTogglePreferred={() => togglePreferred(apt.babysitterUserId)} onResubmit={() => openResubmit(apt)} />
                 ))}
               </div>
             )}
