@@ -21,10 +21,18 @@ const h = vi.hoisted(() => ({
     loading: false,
     loadError: false,
   },
+  // What getBabysitterSummaries answers with (the rows name the babysitter).
+  summaries: [] as { uid: string; firstName: string; lastName: string }[],
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) =>
+    name === 'getBabysitterSummaries'
+      ? () => Promise.resolve({ data: { summaries: h.summaries } })
+      : vi.fn(),
+}));
+vi.mock('@/hooks/useHolidays', () => ({ useHolidays: () => ({ periods: [] }) }));
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -48,7 +56,7 @@ vi.mock('@/hooks/useFamilyAppointments', () => ({
 
 import i18n from '@/i18n';
 import { render, cleanup, screen, waitFor, act, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router';
 import { FamilyDashboard } from '../DashboardPage';
 
 function renderPage() {
@@ -115,6 +123,7 @@ beforeEach(() => {
   h.getDoc.mockResolvedValue({ exists: () => false, data: () => ({}) });
   h.getDocs.mockReset();
   h.getDocs.mockResolvedValue({ docs: [] });
+  h.summaries = [];
   h.apts.pending = [];
   h.apts.confirmed = [];
   h.apts.pastRecent = [];
@@ -286,6 +295,39 @@ describe('family DashboardPage — requests & appointments sections (issue #338)
     h.apts.loading = true;
     renderPage();
     expect(screen.queryByText('No appointments yet')).toBeNull();
+  });
+
+  it('leads each row with the babysitter, like the card it opens', async () => {
+    // The row used to show only the date, while the /family/appointments card
+    // it opens leads with the babysitter's name — the two pages described the
+    // same appointment differently. Both now read getBabysitterSummaries.
+    h.summaries = [{ uid: 'bs-a2', firstName: 'Lea', lastName: 'Bernard' }];
+    h.apts.pending = [apt('a1', 'pending')];
+    h.apts.confirmed = [apt('a2', 'confirmed')];
+    renderPage();
+    const named = await screen.findByText('Lea BERNARD');
+    expect(named.closest('a')?.textContent).toMatch(/Tue.*1 Sep.*· 18:00–21:00/);
+    // A babysitter the callable does not answer for gets the generic label.
+    expect(screen.getByText('Babysitter').closest('a')?.textContent).toMatch(/Waiting for the babysitter/);
+  });
+
+  it('hands the tapped appointment to /family/appointments so its card opens expanded', () => {
+    h.apts.pending = [apt('a1', 'pending')];
+    h.apts.confirmed = [apt('a2', 'confirmed', { date: '2026-09-05' })];
+    function Probe() {
+      const state = useLocation().state as { focusAppointmentId?: string } | null;
+      return <p>focus:{state?.focusAppointmentId ?? 'none'}</p>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/family']}>
+        <Routes>
+          <Route path="/family" element={<FamilyDashboard />} />
+          <Route path="/family/appointments" element={<Probe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText(/Sat.*5 Sep/));
+    expect(screen.getByText('focus:a2')).toBeTruthy();
   });
 
   it('keeps past and declined history off the landing page', () => {

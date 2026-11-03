@@ -6,8 +6,12 @@ import { db } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { useFamilyAppointments } from '@/hooks/useFamilyAppointments';
-import { Button, Badge, Card, SkeletonCard, Input, InstallAppBanner } from '@/components/ui';
-import { CalendarIcon, ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
+import { useBabysitterSummaries } from '@/hooks/useBabysitterSummaries';
+import { useHolidays } from '@/hooks/useHolidays';
+import { Avatar, Button, Badge, Card, SkeletonCard, Input, InstallAppBanner } from '@/components/ui';
+import { DateTag } from '@/components/ui/DateTag';
+import { ChevronRightIcon, PlusIcon, SearchIcon } from '@/components/ui/Icons';
+import { getDateTag } from '@/lib/dateTag';
 import type { AppointmentDoc, RecurringSlot } from '@ejm/sit-core';
 import { getParentProfile } from '@ejm/sit-core';
 import { getFamilyId, hasFamilyMembership } from '@ejm/shared-core';
@@ -15,6 +19,7 @@ import { useRefetchOnFocus, DashboardGreeting, DashboardSection } from '@ejm/sha
 import { formatFamilyTitle } from '@/lib/formatName';
 import { parisNowStamp } from '@/lib/appointmentTime';
 import { CrossAppWelcomeCard } from '@/components/family/CrossAppWelcomeCard';
+import type { FamilyAppointmentsNavState } from './AppointmentsPage';
 
 /** Soonest-first ordering for a section's rows. A recurring appointment has no
  * single date (its occurrences are derived from `recurringSlots`), so it sorts
@@ -41,6 +46,10 @@ export function FamilyDashboard() {
   // asked for (issue #338) — the pending requests and the confirmed
   // appointments; past and declined history stays on /family/appointments.
   const { pending, confirmed, loading: aptsLoading, loadError: aptsError } = useFamilyAppointments();
+  // Names the babysitter on each row — the same source /family/appointments
+  // reads, so the row and the card it opens describe the appointment alike.
+  const babysitters = useBabysitterSummaries([...pending, ...confirmed].map((a) => a.babysitterUserId));
+  const { periods: holidayPeriods } = useHolidays();
 
   // Both membership shapes, via the shared resolver. Without the root field a
   // Plan C parent never loaded their kids either, so "Find a babysitter"
@@ -165,34 +174,46 @@ export function FamilyDashboard() {
 
   /** One section row. Navigates to /family/appointments, where the cancel /
    * edit / accept-decline actions live — the same rule both provider
-   * dashboards follow (a landing page fires no callable). */
-  const row = (apt: AppointmentDoc, variant: 'pending' | 'confirmed') => (
-    <Link key={apt.appointmentId} to="/family/appointments" className="block">
-      <Card interactive>
-        <div className="flex items-center gap-3">
-          <CalendarIcon className="h-5 w-5 shrink-0 text-brand-600" />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-semibold text-gray-900">{whenLine(apt)}</p>
-              <Badge variant={variant === 'pending' ? 'amber' : 'green'}>
-                {variant === 'pending'
-                  ? t('familyDashboard.badgePending')
-                  : t('familyDashboard.badgeConfirmed')}
-              </Badge>
+   * dashboards follow (a landing page fires no callable). The row carries the
+   * appointment id so that page opens this appointment's card expanded, and
+   * leads with the babysitter's name like the card it lands on. */
+  const row = (apt: AppointmentDoc, variant: 'pending' | 'confirmed') => {
+    const name = babysitters[apt.babysitterUserId]?.name || t('familyDashboard.babysitterFallback');
+    const navState: FamilyAppointmentsNavState = { focusAppointmentId: apt.appointmentId };
+    return (
+      <Link key={apt.appointmentId} to="/family/appointments" state={navState} className="block">
+        <Card interactive>
+          <div className="flex items-center gap-3">
+            <Avatar
+              initials={name.split(' ').map((w: string) => w[0] || '').join('').slice(0, 2)}
+              src={babysitters[apt.babysitterUserId]?.photoUrl || undefined}
+              size="sm"
+            />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-semibold text-gray-900">{name}</p>
+                <Badge variant={variant === 'pending' ? 'amber' : 'green'}>
+                  {variant === 'pending'
+                    ? t('familyDashboard.badgePending')
+                    : t('familyDashboard.badgeConfirmed')}
+                </Badge>
+              </div>
+              <p className="text-xs text-gray-500">{whenLine(apt)}</p>
+              <DateTag tag={getDateTag(apt.date || '', apt.startTime || '', holidayPeriods)} />
+              {variant === 'pending' && (
+                <p className="mt-1 text-xs text-amber-700">
+                  {apt.initiatedBy === 'babysitter'
+                    ? t('familyDashboard.answeredPublishedSearch')
+                    : t('familyDashboard.awaitingBabysitter')}
+                </p>
+              )}
             </div>
-            {variant === 'pending' && (
-              <p className="mt-1 text-xs text-amber-700">
-                {apt.initiatedBy === 'babysitter'
-                  ? t('familyDashboard.answeredPublishedSearch')
-                  : t('familyDashboard.awaitingBabysitter')}
-              </p>
-            )}
+            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
           </div>
-          <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-500" />
-        </div>
-      </Card>
-    </Link>
-  );
+        </Card>
+      </Link>
+    );
+  };
 
   return (
     <div className="px-5 pt-4 pb-8">

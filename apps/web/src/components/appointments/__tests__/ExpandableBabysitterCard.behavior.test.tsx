@@ -346,3 +346,29 @@ describe('rejected cards: who declined decides the affordance', () => {
     expect(screen.getByText('appointment.edit')).toBeInTheDocument();
   });
 });
+
+describe('opening on a tapped landing-page row', () => {
+  // jsdom has no layout, so scrollIntoView is absent: stub it to observe it.
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('starts expanded and scrolls itself into view with defaultExpanded', () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      <ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" defaultExpanded />,
+    );
+    // The class line lives only in the expanded view.
+    expect(screen.getByText(/familyDashboard\.classLabel/)).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays collapsed and leaves the scroll alone by default', () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" />);
+    expect(screen.queryByText(/familyDashboard\.classLabel/)).toBeNull();
+    expect(scroll).not.toHaveBeenCalled();
+  });
+});
