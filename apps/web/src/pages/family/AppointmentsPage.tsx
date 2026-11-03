@@ -341,7 +341,7 @@ export function FamilyAppointmentsPage() {
                       <ExpandableBabysitterCard
                         key={apt.appointmentId}
                         appointment={apt}
-                    defaultExpanded={apt.appointmentId === focusId}
+                        defaultExpanded={apt.appointmentId === focusId}
                         info={babysitters[apt.babysitterUserId]}
                         variant="pending"
                         isReturning={returningBabysitterIds.has(apt.babysitterUserId)}
