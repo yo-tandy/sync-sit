@@ -222,6 +222,37 @@ describe('AppSwitchInline', () => {
     });
   });
 
+  describe('on the account hub, no app is current', () => {
+    // The hub belongs to the whole suite, not to the app hosting it: while
+    // it is on screen "My account" is the ONLY current entry, and the host
+    // app's tab keeps working as its way home.
+    it('drops aria-current from the host app and gives it to My account', () => {
+      const { navigateTo } = renderInline();
+      navigateTo('/family/account');
+      expect(screen.getByRole('button', { name: /my account/i })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: /sync\/study/ })).not.toHaveAttribute('aria-current');
+    });
+
+    it('the host app tab still takes you home from the hub', () => {
+      const { navigateTo, onNavigateHome } = renderInline();
+      navigateTo('/family/account');
+      const own = screen.getByRole('button', { name: /sync\/sit/ });
+      expect(own).toBeEnabled();
+      fireEvent.click(own);
+      expect(onNavigateHome).toHaveBeenCalledWith('/family');
+      expect(h.assign).not.toHaveBeenCalled();
+    });
+
+    it('the host app is current again once you leave the hub', () => {
+      const { navigateTo } = renderInline();
+      navigateTo('/family/account');
+      navigateTo('/family');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+    });
+  });
+
   describe('handoff-form account tab (one hub on sync-sit)', () => {
     const HUB = { href: '/account', handoffUrl: 'https://sync-sit.com' };
 
