@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { SUPPORT_EMAIL } from '@/constants/brand';
+import { ACCOUNT_HUB_PATH } from '@ejm/shared-ui';
 import { Link } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
@@ -28,11 +29,11 @@ import { AppSwitchInlineHost } from './AppSwitchInlineHost';
 import type { UserRole } from '@ejm/sit-core';
 
 /**
- * The account hub is one route for every non-admin portal (#367) -- the
- * inline switcher's "My account" entry always resolves here, mirroring the
- * constant every `AppSwitchBarHost` call site in this app already passes.
+ * The suite's ONE account hub (#367) is this app's `/account` -- the inline
+ * switcher's "My account" entry resolves here in-app, while study and do hand
+ * off to it (`ACCOUNT_HUB_PATH` in shared-ui).
  */
-const ACCOUNT_HREF = '/account';
+const ACCOUNT_HREF = ACCOUNT_HUB_PATH;
 
 function MenuIcon({ className }: { className?: string }) {
   return (

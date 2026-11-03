@@ -30,7 +30,7 @@ export function TutorLayout() {
             <Outlet />
           </Suspense>
         </PageContainer>
-        <AppSwitchBarHost accountHref="/tutor/account" homeHref="/tutor" />
+        <AppSwitchBarHost homeHref="/tutor" />
       </div>
     </AuthGuard>
   );

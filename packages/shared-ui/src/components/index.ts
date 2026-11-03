@@ -27,6 +27,8 @@ export { AppSwitchBar } from './AppSwitchBar.js';
 export type { AppSwitchBarProps } from './AppSwitchBar.js';
 export { AppSwitchInline } from './AppSwitchInline.js';
 export type { AppSwitchInlineProps } from './AppSwitchInline.js';
+export { ACCOUNT_HUB_PATH } from './appSwitchShared.js';
+export type { AppSwitchAccount } from './appSwitchShared.js';
 export { SideNav } from './SideNav.js';
 export type { SideNavItem, SideNavSection } from './SideNav.js';
 export { Dialog } from './Dialog.js';

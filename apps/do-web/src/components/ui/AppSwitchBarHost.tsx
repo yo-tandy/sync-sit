@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router';
 import { httpsCallable } from 'firebase/functions';
-import { AppSwitchBar } from '@ejm/shared-ui';
+import { ACCOUNT_HUB_PATH, AppSwitchBar } from '@ejm/shared-ui';
 import doSm from '@ejm/shared-ui/brand-marks/sync-do-48.png';
 import doMd from '@ejm/shared-ui/brand-marks/sync-do-96.png';
 import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
@@ -24,17 +24,13 @@ const STUDY_MARK = { sm: studySm, md: studyMd };
  *
  * - It offers BOTH siblings. Decision 20 gates sit and study linking TO
  *   sync-do, not sync-do linking out, so this direction needs no approval.
- * - It renders NO account tab. do-web ships no account page by design
- *   (plan §18.3): the shared hub owns identity, contact, language,
- *   notifications and the rest, and do contributes only a doer-settings
- *   screen reached from a row in that hub. Until the hub exists (#367) there
- *   is no account route here to point at, and a tab leading nowhere is worse
- *   than an absent one. Passing accountHref is the whole change when #367
- *   lands.
+ * - Its account tab LEAVES the app. do-web ships no account page by design
+ *   (plan §18.3): the suite's one account hub lives on sync-sit, so the tab
+ *   hands off there (`next=/account`) like the sibling tabs do.
  *
- * Because there is no account tab, the current-app tab is do's ONLY in-app
- * control on the bar -- which is also the only way a failed-switch message
- * clears here without a route change or a retry.
+ * Every tab but the current-app one leaves the origin, so that tab is do's
+ * ONLY in-app control on the bar -- which is also the only way a
+ * failed-switch message clears here without a route change or a retry.
  */
 export function AppSwitchBarHost({
   /** This portal's dashboard route -- where the current-app tab goes. */
@@ -44,8 +40,8 @@ export function AppSwitchBarHost({
 }) {
   // The bar is persistent -- it lives in the layout, outside <Outlet /> -- so
   // it cannot see a route change on its own and needs the current path to
-  // retire a failed-switch message. do has no account tab to mark active, but
-  // the message lifetime applies here exactly as it does in sit and study.
+  // retire a failed-switch message. do's account tab is a handoff, never
+  // active, but the message lifetime applies here exactly as in sit and study.
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
@@ -67,6 +63,9 @@ export function AppSwitchBarHost({
         { app: 'study', url: STUDY_APP_URL, mark: STUDY_MARK },
       ]}
       mintHandoffCode={mintHandoffCode}
+      // do ships no account page: the tab hands off to the suite's one
+      // account hub on sync-sit.
+      account={{ href: ACCOUNT_HUB_PATH, handoffUrl: SIT_APP_URL }}
       pathname={pathname}
       home={{ href: homeHref, onNavigate: (href) => void navigate(href) }}
     />

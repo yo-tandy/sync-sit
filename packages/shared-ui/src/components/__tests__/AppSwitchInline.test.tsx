@@ -221,4 +221,57 @@ describe('AppSwitchInline', () => {
       expect(nav.className).not.toMatch(/\bmd:hidden\b/);
     });
   });
+
+  describe('handoff-form account tab (one hub on sync-sit)', () => {
+    const HUB = { href: '/account', handoffUrl: 'https://sync-sit.com' };
+
+    it('mints a code and leaves for the hub with next=/account in the FRAGMENT', async () => {
+      const { mint } = renderInline({ current: 'study', account: HUB });
+      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(mint).toHaveBeenCalledTimes(1);
+      expect(h.assign).toHaveBeenCalledWith(
+        'https://sync-sit.com/handoff#code=code123&lang=en&next=%2Faccount',
+      );
+    });
+
+    it('is never aria-current, even on a same-named route in this app', () => {
+      const { navigateTo } = renderInline({ current: 'study', account: HUB });
+      navigateTo('/account');
+      expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+    });
+
+    it('surfaces a failed mint without navigating, and re-enables', async () => {
+      renderInline({
+        current: 'study',
+        account: HUB,
+        mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')),
+      });
+      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(h.assign).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /my account/i })).not.toBeDisabled();
+    });
+
+    it('ignores a second tap while the first handoff is in flight', async () => {
+      let resolve!: (code: string) => void;
+      const mint = vi.fn(() => new Promise<string>((r) => (resolve = r)));
+      renderInline({ current: 'study', account: HUB, mintHandoffCode: mint, siblings: [{ app: 'sit', url: 'https://sync-sit.com', mark: fakeMark('sit') }] });
+      const tab = screen.getByRole('button', { name: /my account/i });
+      fireEvent.click(tab);
+      fireEvent.click(tab);
+      fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
+      expect(mint).toHaveBeenCalledTimes(1);
+      await act(async () => resolve('code123'));
+      expect(h.assign).toHaveBeenCalledTimes(1);
+      expect(h.assign.mock.calls[0][0]).toContain('next=%2Faccount');
+    });
+
+    it('app tabs still carry NO next -- only the account tab deep-links', async () => {
+      renderInline({ current: 'study', account: HUB, siblings: [{ app: 'sit', url: 'https://sync-sit.com', mark: fakeMark('sit') }] });
+      fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(h.assign.mock.calls[0][0]).not.toContain('next=');
+    });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen, cleanup, within, fireEvent } from '@testing-library/react';
+import { screen, cleanup, within, fireEvent, waitFor } from '@testing-library/react';
 import { Route, Routes } from 'react-router';
 
 vi.mock('../AuthGuard', () => ({
@@ -10,23 +10,55 @@ vi.mock('@/components/ui/FamilyAppBar', () => ({
   FamilyAppBar: () => <div data-testid="appbar" />,
 }));
 vi.mock('@/config/firebase', () => ({ functions: {} }));
+// Pending forever unless a test resolves it -- no handoff completes by accident.
+const h = vi.hoisted(() => ({ mint: vi.fn(() => new Promise(() => {})) }));
 vi.mock('firebase/functions', () => ({
-  httpsCallable: () => () => new Promise(() => {}),
+  httpsCallable: () => () => h.mint(),
 }));
 
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { DoerLayout } from '../DoerLayout';
 import { FamilyLayout } from '../FamilyLayout';
+import { SIT_APP_URL } from '@/utils/appSwitch';
 
 /**
  * "Shipped in all six shells" (#365) is a claim about the LAYOUTS, and until
  * this file existed deleting <AppSwitchBarHost /> from either do-web shell
  * left the whole suite green — the host test renders it in isolation.
  *
- * do-web's bar carries NO account tab (plan §18.3: do ships no account page;
- * the shared hub owns identity, #367), so the mount assertion is the nav
- * landmark itself rather than an account path.
+ * do ships no account page (plan §18.3), so its account tab hands off to the
+ * suite's one hub on sync-sit; the mount assertion is the nav landmark.
  */
+
+/**
+ * The suite has ONE account hub, on sync-sit. A shell's account tab must
+ * HAND OFF there (`next=/account`), never route to this app's own profile
+ * page -- the inconsistency this pin exists for: sit's tab opened the hub
+ * while study's opened `/tutor/account` or `/family/account`.
+ */
+async function accountTabHandsOffToHub(bar: HTMLElement) {
+  const assign = vi.fn();
+  const original = window.location;
+  Object.defineProperty(window, 'location', {
+    value: { ...original, assign, hash: '' },
+    writable: true,
+    configurable: true,
+  });
+  try {
+    h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
+    const tab = within(bar).getByRole('button', { name: /my account/i });
+    // Never the active tab: the hub is never on screen in this app.
+    expect(tab).not.toHaveAttribute('aria-current');
+    fireEvent.click(tab);
+    await waitFor(() => expect(assign).toHaveBeenCalledTimes(1));
+    expect(assign.mock.calls[0][0]).toBe(
+      `${SIT_APP_URL}/handoff#code=c1&lang=en&next=%2Faccount`,
+    );
+  } finally {
+    Object.defineProperty(window, 'location', { value: original, writable: true, configurable: true });
+  }
+}
+
 
 /**
  * The fixed bar and each shell's bottom padding are a MATCHED PAIR, and only
@@ -53,7 +85,7 @@ function shellReservesBarHeight(bar: HTMLElement) {
  * The current-app tab is `disabled` unless the shell supplies `home`, and for
  * a while no shell did — the component honoured the prop, its own tests passed
  * it, and every shipped bar had a permanently dead tab (PR #385 round 4). It
- * matters twice over here: with no account tab (§3), this is do's ONLY in-app
+ * matters twice over here: every other tab leaves the origin, so this is do's ONLY in-app
  * control on the bar, and the only thing that clears a failed-switch message
  * without a route change or a retry.
  *
@@ -100,9 +132,15 @@ describe('the app-switch bar is mounted in do-web’s shells (#365)', () => {
     currentAppTabNavigatesHome(bar, '/family home');
   });
 
-  it('neither bar offers an account tab — do ships no account page (§3)', async () => {
+  it('DoerLayout\'s account tab hands off to the one hub on sync-sit', async () => {
     renderShell(<DoerLayout />, '/doer', '/doer/board');
-    await screen.findByRole('navigation', { name: /switch app/i });
-    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+    const bar = await screen.findByRole('navigation', { name: /switch app/i });
+    await accountTabHandsOffToHub(bar);
+  });
+
+  it('FamilyLayout\'s account tab hands off to the one hub on sync-sit', async () => {
+    renderShell(<FamilyLayout />, '/family', '/family/tasks');
+    const bar = await screen.findByRole('navigation', { name: /switch app/i });
+    await accountTabHandsOffToHub(bar);
   });
 });
