@@ -222,6 +222,15 @@ describe('AppSwitchInline', () => {
     });
   });
 
+  it("keeps the account tab current on the hub's sub-pages, and only there", () => {
+    const { navigateTo } = renderInline();
+    navigateTo('/family/account/profile');
+    expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
+    // A sibling path that merely shares the prefix is NOT the hub.
+    navigateTo('/family/accounts');
+    expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+  });
+
   describe('on the account hub, no app is current', () => {
     // The hub belongs to the whole suite, not to the app hosting it: while
     // it is on screen "My account" is the ONLY current entry, and the host

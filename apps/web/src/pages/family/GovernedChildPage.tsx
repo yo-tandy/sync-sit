@@ -11,6 +11,7 @@ import type {
   GovernedStudySession,
   GovernedSessionInstance,
 } from '@/types/guardian';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 /** Machine-readable guardian error code from an HttpsError's details, if any. */
 function guardianErrorCode(err: unknown): string | null {
@@ -77,6 +78,7 @@ type SearchableTarget = { app: 'study' | 'sit'; searchable: boolean };
  * refetched. Copy-adapted from sync-study's GovernedChildPage.
  */
 export function GovernedChildPage() {
+  const hub = useHubPaths();
   const { t, i18n } = useTranslation();
   const { childUid } = useParams<{ childUid: string }>();
 
@@ -251,14 +253,14 @@ export function GovernedChildPage() {
   if (denied) {
     return (
       <div>
-        <TopNav title={t('governance.title')} backTo="/family/governance" />
+        <TopNav title={t('governance.title')} backTo={hub.kidsBase} />
         <div className="px-5 pt-4 pb-8">
           <Card>
             <h2 className="mb-2 text-lg font-bold text-gray-900">
               {t('governance.child.deniedTitle')}
             </h2>
             <p className="mb-5 text-sm text-gray-600">{t('governance.child.deniedDesc')}</p>
-            <Link to="/family/governance" className="block">
+            <Link to={hub.kidsBase} className="block">
               <Button className="w-full">{t('governance.child.deniedBack')}</Button>
             </Link>
           </Card>
@@ -270,7 +272,7 @@ export function GovernedChildPage() {
   if (detail === null) {
     return (
       <div>
-        <TopNav title={t('governance.title')} backTo="/family/governance" />
+        <TopNav title={t('governance.title')} backTo={hub.kidsBase} />
         <div className="px-5 pt-4 pb-8">
           {loadError ? (
             <p className="py-10 text-center text-sm text-brand-600">
@@ -482,7 +484,7 @@ export function GovernedChildPage() {
 
   return (
     <div>
-      <TopNav title={t('governance.title')} backTo="/family/governance" />
+      <TopNav title={t('governance.title')} backTo={hub.kidsBase} />
 
       <div className="px-5 pt-4 pb-8">
         {actionError && <p className="mb-4 text-sm text-brand-600">{actionError}</p>}

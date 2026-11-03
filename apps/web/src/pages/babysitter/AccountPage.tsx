@@ -18,6 +18,7 @@ import {
   getEjemEmail,
   getContact,
 } from '@ejm/sit-core';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -81,6 +82,7 @@ function PushStatusCard({ uid }: { uid?: string }) {
 }
 
 export function BabysitterAccountPage() {
+  const hub = useHubPaths();
   const { t } = useTranslation();
   const { userDoc, firebaseUser, refreshUserDoc, resetPassword } = useAuthStore();
   const babysitter = getBabysitterView(userDoc);
@@ -347,7 +349,7 @@ export function BabysitterAccountPage() {
 
   return (
     <div>
-      <TopNav title={t('menu.myAccount')} backTo="/babysitter" />
+      <TopNav title={t('menu.myAccount')} backTo={hub.back('/babysitter')} />
 
       <div className="px-5 pt-4 pb-8">
         {error && <p className="mb-4 text-sm text-brand-600">{error}</p>}

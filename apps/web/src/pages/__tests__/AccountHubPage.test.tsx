@@ -110,6 +110,28 @@ describe('AccountHubPage (sit)', () => {
    * location.assign instead of the session handoff. So each one now CLICKS a
    * row and asserts which mechanism fired -- and that the other did not.
    */
+  it('opens the Account rows INSIDE the hub, not in the family portal', () => {
+    renderHub(PARENT);
+    const account = screen.getByText('Account').closest('section')!;
+    const expected: Array<[string, string]> = [
+      ['My account', '/account/profile'],
+      ['My family', '/account/family'],
+      ['Supervised kids', '/account/kids'],
+      ['Verification', '/account/verification'],
+    ];
+    for (const [label, href] of expected) {
+      fireEvent.click(within(account).getByText(label));
+      expect(h.navigate).toHaveBeenLastCalledWith(href);
+    }
+  });
+
+  it("opens a student's My account inside the hub too", () => {
+    renderHub(STUDENT);
+    const account = screen.getByText('Account').closest('section')!;
+    fireEvent.click(within(account).getByText('My account'));
+    expect(h.navigate).toHaveBeenLastCalledWith('/account/profile');
+  });
+
   it('a sit row navigates in-app and never leaves the origin', async () => {
     renderHub(PARENT);
     const sit = screen.getByText('sync/sit').closest('section')!;

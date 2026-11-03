@@ -8,6 +8,7 @@ import { AppSwitchBarHost } from '@/components/ui/AppSwitchBarHost';
 import { AppSwitchInlineHost } from '@/components/ui/AppSwitchInlineHost';
 import { ScrollToTop } from '@/components/ScrollToTop';
 import { useAuthStore } from '@/stores/authStore';
+import { HubRouteProvider } from '@/components/HubRouteProvider';
 
 /**
  * Shell for the shared account hub (#367, decision 24).
@@ -142,7 +143,11 @@ export function AccountLayout() {
           </div>
         </header>
         <PageContainer>
-          <Outlet />
+          {/* The hub's sub-pages (lib/hubRoutes) go back to the hub, not to
+              the portal they also live in. */}
+          <HubRouteProvider>
+            <Outlet />
+          </HubRouteProvider>
         </PageContainer>
         {/* homeHref is the member's OWN portal, not '/': #385 requires the
             current-app tab to actually navigate, and the hub belongs to no

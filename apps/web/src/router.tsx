@@ -62,6 +62,9 @@ import { AdminDashboard } from '@/pages/admin/DashboardPage';
 import { AdminUsersPage } from '@/pages/admin/UsersPage';
 import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
 import { AccountHubPage } from '@/pages/AccountHubPage';
+import { HubProfilePage } from '@/pages/HubProfilePage';
+import { HUB_PATHS } from '@/lib/hubRoutes';
+import { AuthGuard } from '@/layouts/AuthGuard';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminDoTasksPage } from '@/pages/admin/DoTasksPage';
@@ -164,7 +167,18 @@ export const router = createBrowserRouter([
   // AppBar, no back button — it is not a subsection of either portal.
   {
     element: <AccountLayout />,
-    children: [{ path: '/account', element: <AccountHubPage /> }],
+    children: [
+      { path: '/account', element: <AccountHubPage /> },
+      // The hub's own copies of the account pages (lib/hubRoutes): the same
+      // components the portals mount, kept in the hub's neutral chrome and
+      // going back to the hub. Family-side pages keep the portal's role gate.
+      { path: HUB_PATHS.profile, element: <HubProfilePage /> },
+      { path: HUB_PATHS.family, element: <AuthGuard role="parent"><FamilySettingsPage /></AuthGuard> },
+      { path: HUB_PATHS.kids, element: <AuthGuard role="parent"><GovernancePage /></AuthGuard> },
+      { path: `${HUB_PATHS.kids}/new`, element: <AuthGuard role="parent"><CreateKidInvitePage /></AuthGuard> },
+      { path: `${HUB_PATHS.kids}/:childUid`, element: <AuthGuard role="parent"><GovernedChildPage /></AuthGuard> },
+      { path: HUB_PATHS.verification, element: <AuthGuard role="parent"><VerificationPage /></AuthGuard> },
+    ],
   },
   {
     element: <AdminLayout />,
