@@ -84,6 +84,15 @@ what makes cross-app switching point at your own dev servers rather than at
 production. What is *not* exercised is setting them **in a deployed build**:
 production has never needed to, because its fallbacks are its own hosts.
 
+**PR preview channels are the one deployed exception.** Production sit and
+study may not have the routes a PR links to yet (e.g. study's "Sign up" →
+sit `/enroll`), so `firebase-hosting-pull-request.yml` sets both variables per
+PR: its "Resolve preview channel URLs" step creates (or reuses) the `pr-N`
+channel on `sync-sit` and `sync-study-app`, reads each channel's URL (it has a
+random hash, so it can't be predicted), and passes them to the web, study-web
+and do-web builds. Cross-app links on a preview therefore stay inside that
+PR's own preview.
+
 **A new environment must add both to its workflow's `env:` blocks.** This is
 the client-side face of the same trap: leave them unset and staging's app
 switcher sends people to production. The dev files do not help — a deployed
