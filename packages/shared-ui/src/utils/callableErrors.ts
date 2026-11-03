@@ -113,3 +113,34 @@ export function callableErrorCode(err: unknown): string | null {
   if (typeof code !== 'string') return null;
   return code.startsWith('functions/') ? code.slice('functions/'.length) : code;
 }
+
+/**
+ * The deliberate verification-code failures `verifyCode` and every enroll*
+ * callable that re-checks the code (`enrollStudentIdentity`, `enrollFamily`,
+ * `enrollBabysitter`, `enrollTutor`, `enrollDoer`) throw, as a code the
+ * caller maps to translated copy instead of the English server text.
+ * NOT `joinFamily`: its `not-found` also means 'Family not found'.
+ *   - `not-found` ('No verification code found') and `deadline-exceeded`
+ *     ('Verification code has expired') → 'expired': both are fixed by
+ *     requesting a new code. (The client SDK also reports its own call
+ *     timeout as `deadline-exceeded`; "request a new code" is still a
+ *     harmless next step there.)
+ *   - `resource-exhausted` ('Too many failed attempts') → 'too-many-attempts'.
+ *   - `details.reason: 'code_identity_class'` (`assertCodeIdentityClass`: a
+ *     code minted by another signup flow, issue #322) → 'wrong-class'.
+ * `invalid-argument` is NOT mapped here: on the enroll* callables it also
+ * carries every schema-validation failure, so only the caller knows whether
+ * it means a wrong code (verifyCode) or bad form data (the submit step).
+ * Callers check `enrollmentErrorReason` first: the send-code callables throw
+ * `resource-exhausted` for the send cap with `details.reason: 'send-cap'`.
+ */
+export type VerificationCodeError = 'expired' | 'too-many-attempts' | 'wrong-class';
+
+export function verificationCodeError(err: unknown): VerificationCodeError | null {
+  const details = (err as { details?: { reason?: unknown } } | null)?.details;
+  if (details?.reason === 'code_identity_class') return 'wrong-class';
+  const code = callableErrorCode(err);
+  if (code === 'not-found' || code === 'deadline-exceeded') return 'expired';
+  if (code === 'resource-exhausted') return 'too-many-attempts';
+  return null;
+}

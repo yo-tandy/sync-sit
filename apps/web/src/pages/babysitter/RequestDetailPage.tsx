@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { callableErrorCode } from '@ejm/shared-ui';
 import { doc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/config/firebase';
@@ -132,8 +133,10 @@ export function RequestDetailPage() {
       const fn = httpsCallable(functions, 'acknowledgeModification');
       await fn({ appointmentId });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed';
-      alert(message);
+      // Only generic failures are possible for the user here (not-found,
+      // permission-denied, ...): show translated copy, never the server text.
+      console.error('[request] acknowledge modification failed', err);
+      alert(t('common.error'));
     } finally {
       setAcknowledging(false);
     }
@@ -148,7 +151,12 @@ export function RequestDetailPage() {
       setWithdrawDialog(false);
       navigate('/babysitter/published-searches');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      console.error('[request] withdraw failed', err);
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('request.cancelUnavailable')
+          : t('common.error'),
+      );
     } finally {
       setWithdrawing(false);
     }
@@ -226,8 +234,13 @@ export function RequestDetailPage() {
       setAcceptDialog(false);
       setDeclineDialog(false);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
-      alert(message);
+      console.error('[request] respond failed', err);
+      // failed-precondition = "This appointment is no longer pending".
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('request.noLongerPending')
+          : t('common.error'),
+      );
     } finally {
       setResponding(false);
     }

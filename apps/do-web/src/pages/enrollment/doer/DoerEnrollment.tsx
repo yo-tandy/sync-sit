@@ -12,6 +12,7 @@ import {
   enrollmentErrorReason,
   ageGateErrorCode,
   AuthColumn,
+  enrollmentSubmitErrorKey,
 } from '@ejm/shared-ui';
 import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasAnyContact, type User } from '@ejm/shared-core';
 import { getDoerProfile, type TaskCategory } from '@ejm/do-core';
@@ -314,8 +315,10 @@ export function DoerEnrollment() {
         setSignedOutSuccess(settled.firebaseUser ? 'profileLoad' : 'login');
       }
     } catch (err: unknown) {
+      console.error('[enrollment] doer enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

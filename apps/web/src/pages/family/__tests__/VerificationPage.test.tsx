@@ -144,19 +144,41 @@ describe('family VerificationPage — stale community requests (#218)', () => {
     expect(screen.queryByText(/raw server text/)).not.toBeInTheDocument();
   });
 
-  it('still surfaces the server message for failures with no reason', async () => {
+  const lookupWith = async (err: Error) => {
     h.callable.mockImplementation((name: string, payload?: unknown) => {
-      if (name === 'lookupCommunityCode') return Promise.reject(new Error('This code has expired'));
+      if (name === 'lookupCommunityCode') return Promise.reject(err);
       return defaultCallable(name, payload);
     });
-
     renderPage();
     expect(await screen.findByText('Approve a friend')).toBeInTheDocument();
-
     fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'zz99xx' } });
     fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+  };
+  const fnError = (code: string, message: string) =>
+    Object.assign(new Error(message), { code: `functions/${code}` });
 
-    expect(await screen.findByText('This code has expired')).toBeInTheDocument();
+  it('an unexpected server fault shows translated generic copy, never the bare "internal"', async () => {
+    await lookupWith(fnError('internal', 'internal'));
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).not.toBeInTheDocument();
+  });
+
+  it('maps not-found to the invalid-code copy rather than the English server text', async () => {
+    await lookupWith(fnError('not-found', 'Invalid code'));
+    expect(await screen.findByText(i18n.t('verification.communityCodeInvalid'))).toBeInTheDocument();
+    expect(screen.queryByText('Invalid code')).not.toBeInTheDocument();
+  });
+
+  it('maps deadline-exceeded to the expired-code copy rather than the English server text', async () => {
+    await lookupWith(fnError('deadline-exceeded', 'This code has expired'));
+    expect(await screen.findByText(i18n.t('verification.communityCodeExpired'))).toBeInTheDocument();
+    expect(screen.queryByText('This code has expired')).not.toBeInTheDocument();
+  });
+
+  it('a failed-precondition with no reason (several meanings) stays generic, not the server text', async () => {
+    await lookupWith(fnError('failed-precondition', 'You cannot approve your own family'));
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/own family/)).not.toBeInTheDocument();
   });
 });
 

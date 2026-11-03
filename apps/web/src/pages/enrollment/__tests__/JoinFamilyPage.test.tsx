@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   navigate: () => {},
   // Controllable auth for the orphan-parent pins (issue #279).
   auth: { firebaseUser: null as unknown, userDoc: null as Record<string, unknown> | null },
+  joinError: null as unknown,
 }));
 
 vi.mock('@/config/firebase', () => ({ auth: {}, functions: {}, db: {} }));
@@ -19,6 +20,9 @@ vi.mock('firebase/functions', () => ({
     h.calls.push({ name, payload });
     if (name === 'validateInviteLink') {
       return Promise.resolve({ data: { familyName: 'Testers' } });
+    }
+    if (name === 'joinFamily' && h.joinError) {
+      return Promise.reject(h.joinError);
     }
     return Promise.resolve({ data: { success: true } });
   },
@@ -50,7 +54,11 @@ vi.mock('@ejm/sit-core', () => ({
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
     userDoc?.profiles?.parent ?? null,
 }));
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real code readers: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../packages/shared-ui/src/utils/callableErrors')>(
+    '../../../../../../packages/shared-ui/src/utils/callableErrors',
+  )),
   // Layout-only column (issue #528): pass children through.
   AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
@@ -78,7 +86,9 @@ vi.mock('@/components/ui/Icons', () => ({
   MailIcon: () => <span>mail-icon</span>,
 }));
 vi.mock('@/components/forms/CodeInput', () => ({
-  CodeInput: () => <div>code-input</div>,
+  CodeInput: ({ onComplete }: { onComplete: (code: string) => void }) => (
+    <button type="button" onClick={() => onComplete('123456')}>code-input</button>
+  ),
 }));
 
 import { I18nextProvider } from 'react-i18next';
@@ -91,6 +101,7 @@ beforeEach(() => {
   h.calls.length = 0;
   h.navigate = vi.fn();
   h.auth = { firebaseUser: null, userDoc: null };
+  h.joinError = null;
 });
 
 afterEach(() => {
@@ -189,5 +200,95 @@ describe('JoinFamilyPage orphan-parent re-attach (issue #279)', () => {
     renderAuthed();
     expect(await screen.findByText(i18n.t('enrollment.alreadyInFamily'))).toBeTruthy();
     expect(screen.queryAllByText(/Join the Testers family/)).toHaveLength(0);
+  });
+});
+
+// joinFamily failures used to render err.message: an unexpected fault showed
+// the bare token 'internal', and the deliberate messages were English-only.
+describe('JoinFamilyPage join error copy', () => {
+  const fnErr = (code: string, message: string, details?: Record<string, unknown>) =>
+    Object.assign(new Error(message), { code: `functions/${code}`, details });
+
+  function renderPage() {
+    return render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <JoinFamilyPage />
+        </MemoryRouter>
+      </I18nextProvider>,
+    );
+  }
+
+  async function completeWizard() {
+    renderPage();
+    await act(async () => {});
+    fireEvent.change(screen.getByLabelText('Email address *'), { target: { value: 'invitee@test.com' } });
+    fireEvent.click(screen.getByText('Send verification code'));
+    await act(async () => {});
+    fireEvent.click(screen.getByText('code-input'));
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'longenough1' } });
+    fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'longenough1' } });
+    fireEvent.click(screen.getByText('Continue'));
+    fireEvent.change(screen.getByLabelText('First name *'), { target: { value: 'Ada' } });
+    fireEvent.change(screen.getByLabelText('Last name *'), { target: { value: 'Lovelace' } });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Join the Testers family'));
+    });
+    expect(h.calls.some((c) => c.name === 'joinFamily')).toBe(true);
+  }
+
+  it("an 'internal' rejection on the credentialed join shows the translated server error", async () => {
+    h.joinError = fnErr('internal', 'internal');
+    await completeWizard();
+    expect(screen.getByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+  });
+
+  it.each([
+    ['deadline-exceeded', 'Verification code expired', undefined, 'enrollment.joinExpired'],
+    ['not-found', 'Invalid invite link', undefined, 'enrollment.joinExpired'],
+    ['invalid-argument', 'Invalid verification code', undefined, 'enrollment.joinInvalid'],
+    ['resource-exhausted', 'Too many failed attempts. Request a new code.', undefined, 'auth.tooManyAttempts'],
+    ['failed-precondition', 'This invite link has already been used', undefined, 'invite.invalidLinkDesc'],
+    [
+      'failed-precondition',
+      'This verification code cannot be used for this enrollment. Please request a new one.',
+      { reason: 'code_identity_class' },
+      'auth.codeWrongClass',
+    ],
+  ])('maps %s (%s) to its translated copy', async (code, message, details, key) => {
+    h.joinError = fnErr(code, message, details);
+    await completeWizard();
+    expect(screen.getByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+  });
+
+  it("an 'internal' rejection on the signed-in confirm-join shows the translated server error", async () => {
+    h.auth = {
+      firebaseUser: { uid: 'orphan-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true } } },
+    };
+    h.joinError = fnErr('internal', 'internal');
+    renderPage();
+    await screen.findAllByText(/Join the Testers family/);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('enrollment.joinFamilyConfirm', { familyName: 'Testers' }) }));
+    });
+    expect(screen.getByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+  });
+
+  it('a used invite on the signed-in confirm-join shows the invalid-link copy', async () => {
+    h.auth = {
+      firebaseUser: { uid: 'orphan-1' },
+      userDoc: { profiles: { parent: { enrollmentComplete: true } } },
+    };
+    h.joinError = fnErr('failed-precondition', 'This invite link has already been used');
+    renderPage();
+    await screen.findAllByText(/Join the Testers family/);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: i18n.t('enrollment.joinFamilyConfirm', { familyName: 'Testers' }) }));
+    });
+    expect(screen.getByText(i18n.t('invite.invalidLinkDesc'))).toBeInTheDocument();
   });
 });

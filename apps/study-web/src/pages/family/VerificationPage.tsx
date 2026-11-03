@@ -4,7 +4,7 @@ import { httpsCallable } from 'firebase/functions';
 import { storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
-import { Badge, Button, Card, Checkbox, Input, Spinner, TopNav, putToSignedUrl, type SignedUploadResponse } from '@ejm/shared-ui';
+import { Badge, Button, Card, Checkbox, Input, Spinner, TopNav, callableErrorCode, putToSignedUrl, type SignedUploadResponse } from '@ejm/shared-ui';
 import { getParentProfile, uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
 
 /**
@@ -150,10 +150,21 @@ export function VerificationPage() {
 
   // The server discriminates actionable failures with details.reason; a stale
   // request gets its own copy rather than the raw server message (#218).
-  const approveErrorMessage = (err: unknown, fallback: string) => {
+  // Everything else maps by callable CODE to our own copy, never err.message
+  // (English-only server text / bare `internal`). failed-precondition and
+  // permission-denied are reused by the server for several distinct causes
+  // (used code vs own family vs no family), so they get the generic copy.
+  const approveErrorMessage = (err: unknown) => {
     const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
     if (reason === 'already_verified') return t('family.verification.communityAlreadyVerified');
-    return err instanceof Error ? err.message : fallback;
+    switch (callableErrorCode(err)) {
+      case 'not-found':
+        return t('family.verification.communityCodeInvalid');
+      case 'deadline-exceeded':
+        return t('family.verification.communityCodeExpired');
+      default:
+        return t('family.verification.communityApproveFailed');
+    }
   };
 
   const handleLookup = async () => {
@@ -161,7 +172,8 @@ export function VerificationPage() {
     try {
       await lookupCommunityCode(approveCode.trim());
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Invalid code'));
+      console.error('[verification] community code lookup failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 
@@ -174,7 +186,8 @@ export function VerificationPage() {
       setKnowPerson(false);
       setConfirmEjm(false);
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Approval failed'));
+      console.error('[verification] community code approval failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 

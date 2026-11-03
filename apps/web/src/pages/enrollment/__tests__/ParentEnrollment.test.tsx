@@ -36,7 +36,7 @@ const h = vi.hoisted(() => ({
   subscribers: [] as Array<(s: unknown) => void>,
   // One-shot enrollFamily rejection: set to drive a GENUINE enrollment
   // failure (as opposed to the post-enrollment session failures above).
-  enrollError: null as Error | null,
+  enrollError: null as unknown,
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -112,7 +112,9 @@ vi.mock('@ejm/sit-core', () => ({
   getSitRole: (userDoc: { profiles?: { babysitter?: unknown; parent?: unknown } } | null) =>
     userDoc?.profiles?.babysitter ? 'babysitter' : userDoc?.profiles?.parent ? 'parent' : undefined,
 }));
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
   // Layout-only column (issue #528): pass children through.
   AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // Mirrors the real helper: read details.reason off the rejected value.
@@ -451,13 +453,13 @@ describe('ParentEnrollment post-enrollment session gate (issue #262)', () => {
     // The other direction of the separation this fix makes: a real
     // enrollment rejection must keep reading as one — a future refactor
     // that widens the inner try would silently reclassify it.
-    h.enrollError = new Error('Failed to create account');
+    h.enrollError = Object.assign(new Error('Failed to create account'), { code: 'functions/internal' });
     renderFlow();
     await reachFamilyStep();
     fireEvent.click(screen.getByText('family-fill'));
     fireEvent.click(screen.getByText('family-submit'));
 
-    expect(await screen.findByText(/Failed to create account/)).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
     expect(screen.queryByText('Your family account is ready')).toBeNull();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
     // The sign-in never ran: enrollment failed before it.
@@ -633,5 +635,27 @@ describe('ParentEnrollment shared wizard (issue #440)', () => {
     fireEvent.click(screen.getByText('top-back'));
     expect(await screen.findByText('parent-verify-step')).toBeInTheDocument();
     expect(screen.queryByText(/verify-error:/)).toBeNull();
+  });
+});
+
+// The final-step catch used to render err.message: an unexpected fault showed
+// the bare token 'internal', and deliberate server messages were English-only.
+describe('ParentEnrollment account-creation error copy', () => {
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.enrollError = Object.assign(new Error(message), { code: `functions/${code}` });
+    renderFlow();
+    await reachFamilyStep();
+    fireEvent.click(screen.getByText('family-fill'));
+    fireEvent.click(screen.getByText('family-submit'));
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });
 });

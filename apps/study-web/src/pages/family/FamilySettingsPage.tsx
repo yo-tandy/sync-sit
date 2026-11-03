@@ -114,7 +114,9 @@ export function FamilySettingsPage() {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : t('family.settings.saveFailed'));
+          // Never err.message: Firestore SDK text is English-only.
+          console.error('[family-settings] load failed', err);
+          setError(t('family.settings.loadFailed'));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -190,8 +192,9 @@ export function FamilySettingsPage() {
 
       toast(t('family.settings.saved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('family.settings.saveFailed');
-      if (isMountedRef.current) setError(message);
+      // Never err.message: Firestore SDK text is English-only.
+      console.error('[family-settings] save failed', err);
+      if (isMountedRef.current) setError(t('family.settings.saveFailed'));
     } finally {
       if (isMountedRef.current) setSaving(false);
     }

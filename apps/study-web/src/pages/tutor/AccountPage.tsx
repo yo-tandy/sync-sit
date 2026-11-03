@@ -381,8 +381,9 @@ export function AccountPage() {
       await refreshUserDoc();
       toast(t('account.contactSaved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
-      setError(message);
+      // Never err.message: Firestore SDK text is English-only (and an Error always wins an instanceof check).
+      console.error('[account] contact save failed', err);
+      setError(t('account.contactSaveFailed'));
     } finally {
       setContactSaving(false);
     }

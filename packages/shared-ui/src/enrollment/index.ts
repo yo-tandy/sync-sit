@@ -6,3 +6,4 @@ export { StepContactInfo, type ContactInfoData } from './StepContactInfo.js';
 export { StepAdditionalInfo, type AdditionalInfoData } from './StepAdditionalInfo.js';
 export { StepParentEmail } from './StepParentEmail.js';
 export { StepFamilyInfo, type FamilyFormData } from './StepFamilyInfo.js';
+export { verifyCodeErrorKey, enrollmentSubmitErrorKey } from './errorKeys.js';

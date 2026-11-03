@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 
 // The page drives the SHARED verification callables through the real
 // verificationStore (getVerificationStatus / submitVerification /
@@ -420,5 +420,60 @@ describe('family VerificationPage', () => {
       await screen.findByText('This request is no longer valid — this family has already been verified.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/raw server text/)).not.toBeInTheDocument();
+  });
+
+  describe('community approve/lookup error copy (never the raw callable message)', () => {
+    async function lookupWith(err: unknown) {
+      statusResponse = {
+        verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+        documents: [],
+      };
+      h.callable.mockImplementation((name: string, payload: unknown) =>
+        name === 'lookupCommunityCode' ? Promise.reject(err) : defaultCallable(name, payload),
+      );
+      renderWithProviders(<VerificationPage />);
+      await screen.findByText('Approve a friend');
+      fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'zz99xx' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+    }
+
+    it('unexpected fault (functions/internal) shows the generic translated copy, not the bare token', async () => {
+      await lookupWith(Object.assign(new Error('internal'), { code: 'functions/internal' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityApproveFailed'))).toBeInTheDocument();
+      expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    });
+
+    it('not-found maps to the invalid-code copy', async () => {
+      await lookupWith(Object.assign(new Error('Invalid code'), { code: 'functions/not-found' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityCodeInvalid'))).toBeInTheDocument();
+      expect(screen.queryByText('Invalid code')).not.toBeInTheDocument();
+    });
+
+    it('deadline-exceeded maps to the expired-code copy', async () => {
+      await lookupWith(Object.assign(new Error('This code has expired'), { code: 'functions/deadline-exceeded' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityCodeExpired'))).toBeInTheDocument();
+      expect(screen.queryByText('This code has expired')).not.toBeInTheDocument();
+    });
+
+    it('an approve rejection (functions/internal) also shows the generic copy', async () => {
+      statusResponse = {
+        verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+        documents: [],
+      };
+      h.callable.mockImplementation((name: string, payload: unknown) =>
+        name === 'approveCommunityCode'
+          ? Promise.reject(Object.assign(new Error('internal'), { code: 'functions/internal' }))
+          : defaultCallable(name, payload),
+      );
+      renderWithProviders(<VerificationPage />);
+      await screen.findByText('Approve a friend');
+      fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'ZZ99XX' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+      fireEvent.click(await screen.findByLabelText(i18n.t('family.verification.checkboxKnowPerson')));
+      fireEvent.click(screen.getByLabelText(i18n.t('family.verification.checkboxConfirmEjm')));
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityApproveFailed'))).toBeInTheDocument();
+      expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    });
   });
 });

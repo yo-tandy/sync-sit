@@ -13,6 +13,7 @@ import {
   StepFamilyInfo,
   enrollmentErrorReason,
   AuthColumn,
+  enrollmentSubmitErrorKey,
 } from '@ejm/shared-ui';
 import type { FamilyFormData } from '@ejm/shared-ui';
 import { getStudyRole } from '@ejm/study-core';
@@ -336,8 +337,10 @@ export function ParentEnrollment() {
         setSignedOutSuccess(true);
       }
     } catch (err: unknown) {
+      console.error('[enrollment] family enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to create account');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

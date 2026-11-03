@@ -31,7 +31,7 @@ vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => h.auth,
 }));
 
-import '@/i18n';
+import i18n from '@/i18n';
 import { StepPreferences } from '../StepPreferences';
 
 function renderStep() {
@@ -210,5 +210,33 @@ describe('StepPreferences skip (#537 D8)', () => {
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
     const payload = h.updateDoc.mock.calls[0][1];
     expect(payload['profiles.babysitter.enrollmentComplete']).toBe(true);
+  });
+});
+
+// #544: a rejected SAVE shows translated copy, never the SDK's English text.
+// (The skip no longer writes anything — #537 D8 above — so it has no failure
+// path to pin.)
+describe('StepPreferences save failure copy', () => {
+  beforeEach(() => {
+    h.auth.userDoc = {
+      uid: 'bs1',
+      firstName: 'Lea',
+      lastName: 'Bernard',
+      profiles: { babysitter: { ejemEmail: 'lea@ejm.org' } },
+    };
+    h.updateDoc.mockClear();
+  });
+  afterEach(() => cleanup());
+
+  const rejection = () =>
+    Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' });
+
+  it('a rejected save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(rejection());
+    renderStep();
+    fireEvent.click(screen.getByRole('button', { name: /^save/i }));
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
   });
 });

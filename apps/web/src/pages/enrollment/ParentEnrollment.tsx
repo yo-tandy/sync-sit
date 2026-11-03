@@ -14,6 +14,7 @@ import {
   enrollmentErrorReason,
   type FamilyFormData,
   AuthColumn,
+  enrollmentSubmitErrorKey,
 } from '@ejm/shared-ui';
 import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasFamilyMembership } from '@ejm/shared-core';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
@@ -299,8 +300,10 @@ export function ParentEnrollment() {
         setSignedOutSuccess(true);
       }
     } catch (err: unknown) {
+      console.error('[enrollment] family enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to create account');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

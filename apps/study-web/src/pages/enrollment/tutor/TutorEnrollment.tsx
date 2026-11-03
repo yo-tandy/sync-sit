@@ -4,7 +4,7 @@ import { ADMIN_CONFIG_DEFS, CONSENT_VERSION } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { AuthColumn, TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode, enrollmentSubmitErrorKey } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
 import type { StudyUser, SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -301,8 +301,10 @@ export function TutorEnrollment() {
       }
 
     } catch (err: unknown) {
+      console.error('[enrollment] tutor enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);

@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
   users: [] as Record<string, unknown>[],
   // Issue #421: the next call to this NAMED callable rejects with this
   // shape, mirroring the real HttpsError envelope (`.details.code`).
-  rejectNext: null as null | { name: string; code: string; details?: unknown },
+  rejectNext: null as null | { name: string; code: string; details?: unknown; message?: string },
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -17,9 +17,9 @@ vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
     if (h.rejectNext && h.rejectNext.name === name) {
-      const { code, details } = h.rejectNext;
+      const { code, details, message } = h.rejectNext;
       h.rejectNext = null;
-      return Promise.reject(Object.assign(new Error('rejected'), { code, details }));
+      return Promise.reject(Object.assign(new Error(message ?? 'rejected'), { code, details }));
     }
     if (name === 'listUsers') {
       return Promise.resolve({ data: { users: [...h.users] } });
@@ -219,5 +219,54 @@ describe('AdminUsersPage — identity-correction dialog (issue #158)', () => {
       expect(screen.queryByLabelText(i18n.t('admin.identityFirstName'))).toBeNull();
       expect(h.calls.filter((c) => c.name === 'listUsers').length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe('AdminUsersPage — callable failure copy', () => {
+  async function openIdentityDialogWithChange() {
+    h.users = [user({ uid: 'u-i', firstName: 'Typoed', lastName: 'Name' })];
+    renderPage();
+    await screen.findByText('Typoed Name');
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.correctIdentity') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('admin.identityFirstName')), {
+      target: { value: 'Fixed' },
+    });
+  }
+
+  it('identity correction: an unexpected fault shows the generic localized copy only', async () => {
+    h.rejectNext = { name: 'correctUserIdentity', code: 'functions/internal', message: 'internal' };
+    await openIdentityDialogWithChange();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+    const err = await screen.findByText(i18n.t('admin.identityCorrectionFailed'));
+    // Exact text: no ": internal" detail suffix.
+    expect(err.textContent).toBe(i18n.t('admin.identityCorrectionFailed'));
+  });
+
+  it('identity correction: invalid-argument maps to the check-name-and-DOB copy', async () => {
+    h.rejectNext = {
+      name: 'correctUserIdentity',
+      code: 'functions/invalid-argument',
+      message: 'dateOfBirth must be a valid date',
+    };
+    await openIdentityDialogWithChange();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+    expect(await screen.findByText(i18n.t('admin.identityCorrectionInvalid'))).toBeInTheDocument();
+    expect(screen.queryByText(/must be a valid date/i)).toBeNull();
+  });
+
+  it('export: a failure alerts translated copy, never the raw token', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    h.rejectNext = { name: 'exportUserData', code: 'functions/internal', message: 'internal' };
+    h.users = [user({ uid: 'u-e' })];
+    renderPage();
+    await screen.findByText('Anna Albert');
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.exportData') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('admin.exportFailed'));
+    expect(alertSpy).not.toHaveBeenCalledWith('internal');
+    alertSpy.mockRestore();
   });
 });

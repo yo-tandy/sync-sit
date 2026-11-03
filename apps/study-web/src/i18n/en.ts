@@ -233,6 +233,8 @@ export default {
     resendCode: 'Resend code',
     verifying: 'Verifying...',
     invalidCode: 'Invalid verification code',
+    codeExpired: 'This verification code has expired. Please request a new one.',
+    codeWrongClass: "This code can't be used for this sign-up. Please request a new one.",
     createPassword: 'Create your password',
     confirmPassword: 'Confirm password',
     passwordMismatch: "Passwords don't match",
@@ -753,6 +755,7 @@ export default {
     settings: {
       saved: 'Family details saved!',
       saveFailed: 'Failed to save family details',
+      loadFailed: 'Could not load your family details. Please try again.',
       sharedHint:
         'Your family details and children are shared with the Sync/Sit babysitting app — changes here update both.',
       familyName: 'Family name',
@@ -1024,6 +1027,9 @@ export default {
       approve: 'Approve',
       approveSuccess: 'Account approved successfully!',
       communityAlreadyVerified: 'This request is no longer valid — this family has already been verified.',
+      communityCodeInvalid: 'That code was not found. Check it and try again.',
+      communityCodeExpired: 'This code has expired. Ask the person to request a new one.',
+      communityApproveFailed: 'Something went wrong. Please try again.',
     },
     sessions: {
       title: 'Your sessions',
@@ -1350,6 +1356,7 @@ export default {
     emailLabel: 'Email address',
     ejemEmailHint: 'Use your official EJM email. The last 2 digits must be your graduation year.',
     serverError: 'Server error. Please try again.',
+    submitInvalid: 'Some of your details could not be accepted. Please check them and try again.',
     firstName: 'First name *',
     lastName: 'Last name *',
     dateOfBirth: 'Date of birth *',

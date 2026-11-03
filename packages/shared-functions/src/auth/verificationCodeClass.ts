@@ -122,9 +122,9 @@ export function assertCodeIdentityClass(
   if (SATISFYING_CLASSES[required].includes(codeIdentityClass(codeData))) {
     return;
   }
-  // details.reason is the machine-readable marker clients may map to
-  // translated copy; unmapped reasons surface the message as-is
-  // (enrollmentErrorReason returns null), which this message is written for.
+  // details.reason is the machine-readable marker the clients map to
+  // translated copy (shared-ui `verificationCodeError` → 'wrong-class'); the
+  // English message is for logs and any caller that does not map it.
   throw new HttpsError(
     'failed-precondition',
     'This verification code cannot be used for this enrollment. Please request a new one.',
