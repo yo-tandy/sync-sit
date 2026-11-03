@@ -249,6 +249,21 @@ describe('CrossAppWelcomePage (study)', () => {
     expect(screen.getByText(i18n.t('enrollment.contactEmailInvalid'))).toBeInTheDocument();
   });
 
+  it('a malformed contact phone blocks the details continue even with an email present', () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterNoContactDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactEmail')), {
+      target: { value: 'sacha@contact.com' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactPhone')), {
+      target: { value: 'not a phone' },
+    });
+    expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeDisabled();
+    expect(screen.getByText(i18n.t('enrollment.contactPhoneInvalid'))).toBeInTheDocument();
+  });
+
   it('a degenerate doc (identity gaps too) renders name, DOB, class, gender AND contact inputs', () => {
     h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterBareDoc, loading: false };
     renderPage();

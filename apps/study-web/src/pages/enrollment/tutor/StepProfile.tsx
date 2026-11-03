@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isPlausiblePhone } from '@ejm/shared-core';
 import { Button, Input, Select } from '@ejm/shared-ui';
 import { CLASS_LEVELS_TUTOR, GENDER_OPTIONS, getAge } from './profileFields';
 
@@ -83,14 +84,15 @@ export function StepProfile({ onNext, initial = null, serverError = null, identi
   // here so the rejection can't strand the user on the subjects step.
   const emailFormatOk =
     !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
+  const phoneFormatOk = !contactPhone.trim() || isPlausiblePhone(contactPhone);
   const hasContact = contactEmail.trim() || contactPhone.trim();
   const identityValid = (hasFirstName || firstName)
     && (hasLastName || lastName)
     && (hasDateOfBirth || (dateOfBirth && ageValid));
-  // emailFormatOk gates UNCONDITIONALLY (true when the email is empty): with
-  // a phone also present, a malformed email must still block — otherwise it
+  // emailFormatOk/phoneFormatOk gate UNCONDITIONALLY (true when empty): with
+  // the other channel present, a malformed one must still block — otherwise it
   // rides into the payload and the server rejects on the subjects step.
-  const isValid = identityValid && classLevel && hasContact && emailFormatOk;
+  const isValid = identityValid && classLevel && hasContact && emailFormatOk && phoneFormatOk;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,6 +219,7 @@ export function StepProfile({ onNext, initial = null, serverError = null, identi
         type="tel"
         value={contactPhone}
         onChange={(e) => setContactPhone(e.target.value)}
+        error={contactPhone.trim() && !phoneFormatOk ? t('enrollment.contactPhoneInvalid') : undefined}
       />
 
       {serverError && <p className="mb-4 text-sm text-brand-600">{serverError}</p>}

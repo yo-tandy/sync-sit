@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { isPlausiblePhone } from '@ejm/shared-core';
 import { Button, Input } from '@ejm/shared-ui';
 
 export interface ProfileData {
@@ -111,11 +112,12 @@ export function StepProfile({
   // dot-less 'x@y' the native email input would let through.
   const emailFormatOk =
     !contactEmail.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(contactEmail.trim());
+  const phoneFormatOk = !contactPhone.trim() || isPlausiblePhone(contactPhone);
   const hasContact = !collectContact || contactEmail.trim() || contactPhone.trim();
   const identityValid = (hasFirstName || firstName)
     && (hasLastName || lastName)
     && (hasDateOfBirth || (dateOfBirth && ageValid));
-  const isValid = identityValid && hasContact && emailFormatOk;
+  const isValid = identityValid && hasContact && emailFormatOk && phoneFormatOk;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -213,6 +215,7 @@ export function StepProfile({
             type="tel"
             value={contactPhone}
             onChange={(e) => setContactPhone(e.target.value)}
+            error={contactPhone.trim() && !phoneFormatOk ? t('enrollment.contactPhoneInvalid') : undefined}
           />
         </>
       )}

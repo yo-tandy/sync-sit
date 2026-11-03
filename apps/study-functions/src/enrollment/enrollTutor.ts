@@ -12,7 +12,7 @@ import {
   ensureScheduleDoc,
 } from '@ejm/shared-functions/enrollment/addProfileToUser.js';
 import { toDobDate } from './dob.js';
-import { tutorEnrollmentSchema, withPrefDefaults } from '../validation/tutor.js';
+import { suppliedPhoneError, tutorEnrollmentSchema, withPrefDefaults } from '../validation/tutor.js';
 import type { TutorEnrollmentInput } from '../validation/tutor.js';
 
 interface EnrollTutorData {
@@ -143,6 +143,8 @@ export const enrollTutor = onCall(
       // stored-wins rule was written when nested was canonical, and re-typing
       // a contact right after clearing it must not resurrect the old value.
       const supplement = pickCrossAppSupplement(data.enrollment);
+      const supplementPhoneError = suppliedPhoneError(supplement);
+      if (supplementPhoneError) throw new HttpsError('invalid-argument', supplementPhoneError);
       const suppliedContact = Object.fromEntries(
         (['contactEmail', 'contactPhone', 'whatsapp'] as const)
           .filter((k) => supplement[k] !== undefined)
@@ -179,6 +181,8 @@ export const enrollTutor = onCall(
       }
       ejemEmailLower = data.ejemEmail.toLowerCase();
       enrollmentInput = data.enrollment;
+      const enrollmentPhoneError = suppliedPhoneError(data.enrollment);
+      if (enrollmentPhoneError) throw new HttpsError('invalid-argument', enrollmentPhoneError);
       codeDoc = await db.collection('verificationCodes').doc(ejemEmailLower).get();
 
       if (!codeDoc.exists) {
