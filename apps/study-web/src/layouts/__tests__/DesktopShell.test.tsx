@@ -37,7 +37,7 @@ async function accountTabHandsOffToHub(bar: HTMLElement) {
   });
   try {
     h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
-    const tab = within(bar).getByRole('button', { name: /my account/i });
+    const tab = within(bar).getByRole('button', { name: /^settings$/i });
     // Never the active tab: the hub is never on screen in this app.
     expect(tab).not.toHaveAttribute('aria-current');
     fireEvent.click(tab);
@@ -126,7 +126,7 @@ function currentAppTabNavigatesHome(bar: HTMLElement, app: RegExp, homeText: str
  * this block existed deleting <AppSwitchBarHost /> from either shell left the
  * whole suite green — every other bar test renders a host in isolation.
  *
- * Both shells are exercised, and both must send "My account" to the ONE hub
+ * Both shells are exercised, and both must send "Settings" to the ONE hub
  * on sync-sit -- they used to pass two different study profile paths.
  */
 describe('the app-switch bar is mounted in study’s shells (#365)', () => {
@@ -137,7 +137,7 @@ describe('the app-switch bar is mounted in study’s shells (#365)', () => {
     shellReservesBarHeight(bar);
     // Rendered ON the study profile page: a host still pointing the account
     // tab there would mark it aria-current.
-    expect(within(bar).getByRole('button', { name: /my account/i })).not.toHaveAttribute(
+    expect(within(bar).getByRole('button', { name: /^settings$/i })).not.toHaveAttribute(
       'aria-current',
     );
     currentAppTabNavigatesHome(bar, /sync\/study/, homeText);

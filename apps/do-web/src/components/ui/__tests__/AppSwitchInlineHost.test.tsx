@@ -35,7 +35,7 @@ describe('AppSwitchInlineHost (do)', () => {
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeInTheDocument();
   });
 
-  it('"My account" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
+  it('"Settings" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
     h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
     h.assign.mockReset();
     const original = window.location;
@@ -46,7 +46,7 @@ describe('AppSwitchInlineHost (do)', () => {
     });
     try {
       renderHost();
-      const tab = screen.getByRole('button', { name: /my account/i });
+      const tab = screen.getByRole('button', { name: /^settings$/i });
       expect(tab).not.toHaveAttribute('aria-current');
       fireEvent.click(tab);
       await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));

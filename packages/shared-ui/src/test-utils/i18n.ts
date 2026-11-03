@@ -45,7 +45,7 @@ export function createTestI18n(): i18n {
           // (#417) both read only these three keys, never the per-app
           // `toSit`/`toStudy` ones AppSwitchMenuItem uses.
           appSwitch: {
-            account: 'My account',
+            account: 'Settings',
             barLabel: 'Switch app',
             error: 'Could not switch apps. Please try again.',
           },
