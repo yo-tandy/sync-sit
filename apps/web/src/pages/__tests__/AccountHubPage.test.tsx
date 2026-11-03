@@ -149,12 +149,15 @@ describe('AccountHubPage (sit)', () => {
     expect(h.assign).not.toHaveBeenCalled();
   });
 
-  it('gives a PARENT the family-shaped study deep rows — My account, Sessions, Search', () => {
+  it('gives a PARENT the family-shaped study deep rows — Sessions, Search, and NO study "My account"', () => {
+    // The hub's own My account holds the account and every app's
+    // notification settings; a study copy would be a stale second one.
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    for (const present of ['My account', 'Sessions', 'Search']) {
+    for (const present of ['Sessions', 'Search']) {
       expect(within(study).getByText(present)).toBeInTheDocument();
     }
+    expect(within(study).queryByText('My account')).toBeNull();
     // The old single generic row is gone once a shaped row set is offered.
     expect(within(study).queryByText('Open sync-study')).toBeNull();
   });
@@ -164,9 +167,10 @@ describe('AccountHubPage (sit)', () => {
     // must get study's tutor-shaped equivalents, not the parent rows.
     renderHub(STUDENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    for (const present of ['My account', 'Sessions', 'Search']) {
+    for (const present of ['Sessions', 'Search']) {
       expect(within(study).getByText(present)).toBeInTheDocument();
     }
+    expect(within(study).queryByText('My account')).toBeNull();
     expect(within(study).queryByText('Open sync-study')).toBeNull();
 
     fireEvent.click(within(study).getByText('Sessions'));
@@ -174,14 +178,6 @@ describe('AccountHubPage (sit)', () => {
     expect(h.assign).toHaveBeenCalledWith(
       'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en&next=%2Ftutor%2Fsessions',
     );
-  });
-
-  it('a STUDENT study "My account" row points at the tutor account path', async () => {
-    renderHub(STUDENT);
-    const study = screen.getByText('sync/study').closest('section')!;
-    fireEvent.click(within(study).getByText('My account'));
-    await waitFor(() => expect(h.assign).toHaveBeenCalled());
-    expect(h.assign).toHaveBeenCalledWith(expect.stringContaining('next=%2Ftutor%2Faccount'));
   });
 
   it('a STUDENT study "Search" row points at the tutor published-searches path', async () => {
