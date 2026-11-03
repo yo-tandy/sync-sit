@@ -159,21 +159,21 @@ export function AccountHubPage() {
 
   /*
    * Role-shaped deep rows (issue #426): study's own routes, mirrored 1:1 --
-   * both `FamilyLayout` and `TutorLayout` in study serve an account, a
-   * sessions and a search-equivalent page under the SAME three names. `next`
+   * minus study's "My account": the account and every app's notification
+   * settings live on THIS hub's My account now, so a second one in study
+   * would be a stale copy. Both `FamilyLayout` and `TutorLayout` in study
+   * serve a sessions and a search-equivalent page under the same names. `next`
    * is re-validated on arrival regardless (study's `HandoffPage`), so this
    * table only needs to point at real study routes, not defend against
    * tampering itself.
    */
   const studyDeepRows = isParent
     ? [
-        { label: t('accountHub.myAccount'), href: '/family/account' },
         { label: t('accountHub.sessions'), href: '/family/sessions' },
         { label: t('accountHub.search'), href: '/family/search' },
       ]
     : sitRole === 'babysitter'
       ? [
-          { label: t('accountHub.myAccount'), href: '/tutor/account' },
           { label: t('accountHub.sessions'), href: '/tutor/sessions' },
           { label: t('accountHub.search'), href: '/tutor/published-searches' },
         ]

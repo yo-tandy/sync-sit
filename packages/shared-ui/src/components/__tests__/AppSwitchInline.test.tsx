@@ -229,7 +229,7 @@ describe('AppSwitchInline', () => {
     it('drops aria-current from the host app and gives it to My account', () => {
       const { navigateTo } = renderInline();
       navigateTo('/family/account');
-      expect(screen.getByRole('button', { name: /my account/i })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
       expect(screen.getByRole('button', { name: /sync\/sit/ })).not.toHaveAttribute('aria-current');
       expect(screen.getByRole('button', { name: /sync\/study/ })).not.toHaveAttribute('aria-current');
     });
@@ -249,7 +249,7 @@ describe('AppSwitchInline', () => {
       navigateTo('/family/account');
       navigateTo('/family');
       expect(screen.getByRole('button', { name: /sync\/sit/ })).toHaveAttribute('aria-current', 'page');
-      expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
     });
   });
 
