@@ -313,7 +313,7 @@ export default {
     // language, same convention as "Sync/Sit" / "Sync/Study" (see
     // `APP_NAME` in shared-ui's brandMarks). Titles AccountLayout's sticky
     // header, the hub's ONE header at every breakpoint (#445 review).
-    brandTitle: 'Sync/Account',
+    brandTitle: 'Sync/Settings',
     subtitle: 'Shared across sync/sit, sync/study and sync/do.',
     // The neutral section's OWN heading (#445): "Account", distinct from
     // `myAccount` ("My account"), which is that section's first ROW.
@@ -330,7 +330,7 @@ export default {
     favorites: 'Favorites',
   },
   appSwitch: {
-    account: 'My account',
+    account: 'Settings',
     barLabel: 'Switch app',
     toSit: 'Open sync-sit',
     error: 'Could not switch apps. Please try again.',

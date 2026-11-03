@@ -177,7 +177,7 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
     shellReservesBarHeight(bar);
-    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+    expect(within(bar).getByRole('button', { name: /^settings$/i })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -195,7 +195,7 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
     shellReservesBarHeight(bar);
-    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+    expect(within(bar).getByRole('button', { name: /^settings$/i })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -250,9 +250,9 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
 describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 review)', () => {
   afterEach(cleanup);
 
-  it('titles the header "Sync/Account" regardless of viewport (jsdom has no breakpoints — this proves it is not hidden)', () => {
+  it('titles the header "Sync/Settings" regardless of viewport (jsdom has no breakpoints — this proves it is not hidden)', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     expect(header).toBeInTheDocument();
     // Not inside a `hidden` wrapper -- unlike the old md-only exit row.
     expect(header.className).not.toMatch(/\bhidden\b/);
@@ -268,7 +268,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
 
   it('is sticky, not fixed -- this layout already sits outside PageContainer, so sticky is full-bleed here', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     expect(header.className).toMatch(/\bsticky\b/);
     expect(header.className).not.toMatch(/\bfixed\b/);
     expect(header.className).toMatch(/\btop-0\b/);
@@ -276,7 +276,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
 
   it('is neutral -- bg-ground-admin, never a brand colour', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     expect(header.className).toMatch(/\bbg-ground-admin\b/);
     expect(header.className).not.toMatch(/bg-brand/);
   });
@@ -286,7 +286,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     // does not render here (no sit role -> no portalHref) -- that slot's
     // OWN visibility class is still assertable regardless of its contents.
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     const slots = header.querySelectorAll(':scope > nav, :scope > div');
     expect(slots).toHaveLength(2);
     for (const slot of Array.from(slots)) {
@@ -304,7 +304,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
 
   it('flanks the title with equal flex-1/basis-0 slots, not a fixed width -- a fixed w-24 clipped "Open sync-study" onto three wrapped lines (screenshot review of #484)', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     const slots = header.querySelectorAll(':scope > nav, :scope > div');
     expect(slots).toHaveLength(2);
     for (const slot of Array.from(slots)) {
@@ -314,7 +314,7 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     }
     // The title itself must NOT grow -- it has to stay sized to its own
     // content so the two equal flex-1 slots do the centring.
-    const title = screen.getByText('Sync/Account');
+    const title = screen.getByText('Sync/Settings');
     expect(title.className).toMatch(/\bshrink-0\b/);
   });
 
@@ -325,13 +325,13 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     // justify-center inert there -- it is what centres the lone title once
     // both flanks vanish below md.
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     expect(header.className).toMatch(/\bjustify-center\b/);
   });
 
   it('keeps the desktop exits as <nav> landmarks with DISTINCT names -- "Home" for the home link, the switch label only on the switcher, and never nested', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     // Exactly one landmark per name inside the header: two simultaneously
     // visible navs sharing "Switch app" would be indistinguishable to a
     // screen-reader user navigating by landmark (review on #484). Since
@@ -351,14 +351,14 @@ describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 r
     // to the pill labels without touching AppSwitchInline's own markup,
     // which is also embedded in every portal's AppBar.
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     const slot = within(header).getByRole('navigation', SWITCH_BAR).parentElement!;
     expect(slot.className).toMatch(/\bwhitespace-nowrap\b/);
   });
 
   it('has no back button and no bell -- title and (at md+) the exit controls only', () => {
     renderLayout(<AccountLayout />, 'account hub');
-    const header = screen.getByText('Sync/Account').closest('header')!;
+    const header = screen.getByText('Sync/Settings').closest('header')!;
     expect(within(header).queryByRole('button', { name: /back|retour/i })).toBeNull();
     expect(within(header).queryAllByRole('img')).toHaveLength(0);
   });
