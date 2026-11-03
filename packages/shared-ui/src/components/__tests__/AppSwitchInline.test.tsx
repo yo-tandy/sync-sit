@@ -60,11 +60,11 @@ describe('AppSwitchInline', () => {
 
   afterEach(cleanup);
 
-  it('renders the same entry set as the bar: current app, its siblings, and My account', () => {
+  it('renders the same entry set as the bar: current app, its siblings, and Settings', () => {
     renderInline();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeInTheDocument();
   });
 
   it('marks the current app as the active entry', () => {
@@ -126,7 +126,7 @@ describe('AppSwitchInline', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /sync\/study/ })).toBeDisabled());
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeDisabled();
   });
 
   it('surfaces a failure without navigating, and re-enables', async () => {
@@ -151,17 +151,17 @@ describe('AppSwitchInline', () => {
     renderInline({ mintHandoffCode: vi.fn().mockResolvedValue('code123') });
     fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
     await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: /my account/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeDisabled();
 
     await act(async () => {
       window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
     });
-    expect(screen.getByRole('button', { name: /my account/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeEnabled();
   });
 
   it('navigates in-app for the account entry -- no handoff, it is same-origin', () => {
     const { mint, onNavigateAccount } = renderInline();
-    fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
 
     expect(onNavigateAccount).toHaveBeenCalledWith('/family/account');
     expect(mint).not.toHaveBeenCalled();
@@ -179,7 +179,7 @@ describe('AppSwitchInline', () => {
         home={{ href: '/doer', onNavigate: vi.fn() }}
       />,
     );
-    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^settings$/i })).toBeNull();
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
   });
 
@@ -225,10 +225,41 @@ describe('AppSwitchInline', () => {
   it("keeps the account tab current on the hub's sub-pages, and only there", () => {
     const { navigateTo } = renderInline();
     navigateTo('/family/account/profile');
-    expect(screen.getByRole('button', { name: /my account/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
     // A sibling path that merely shares the prefix is NOT the hub.
     navigateTo('/family/accounts');
-    expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+  });
+
+  describe('on the account hub, no app is current', () => {
+    // The hub belongs to the whole suite, not to the app hosting it: while
+    // it is on screen "My account" is the ONLY current entry, and the host
+    // app's tab keeps working as its way home.
+    it('drops aria-current from the host app and gives it to My account', () => {
+      const { navigateTo } = renderInline();
+      navigateTo('/family/account');
+      expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: /sync\/study/ })).not.toHaveAttribute('aria-current');
+    });
+
+    it('the host app tab still takes you home from the hub', () => {
+      const { navigateTo, onNavigateHome } = renderInline();
+      navigateTo('/family/account');
+      const own = screen.getByRole('button', { name: /sync\/sit/ });
+      expect(own).toBeEnabled();
+      fireEvent.click(own);
+      expect(onNavigateHome).toHaveBeenCalledWith('/family');
+      expect(h.assign).not.toHaveBeenCalled();
+    });
+
+    it('the host app is current again once you leave the hub', () => {
+      const { navigateTo } = renderInline();
+      navigateTo('/family/account');
+      navigateTo('/family');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+    });
   });
 
   describe('handoff-form account tab (one hub on sync-sit)', () => {
@@ -236,7 +267,7 @@ describe('AppSwitchInline', () => {
 
     it('mints a code and leaves for the hub with next=/account in the FRAGMENT', async () => {
       const { mint } = renderInline({ current: 'study', account: HUB });
-      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
       await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
       expect(mint).toHaveBeenCalledTimes(1);
       expect(h.assign).toHaveBeenCalledWith(
@@ -247,7 +278,7 @@ describe('AppSwitchInline', () => {
     it('is never aria-current, even on a same-named route in this app', () => {
       const { navigateTo } = renderInline({ current: 'study', account: HUB });
       navigateTo('/account');
-      expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
     });
 
     it('surfaces a failed mint without navigating, and re-enables', async () => {
@@ -256,17 +287,17 @@ describe('AppSwitchInline', () => {
         account: HUB,
         mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')),
       });
-      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
       expect(await screen.findByRole('alert')).toBeInTheDocument();
       expect(h.assign).not.toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: /my account/i })).not.toBeDisabled();
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toBeDisabled();
     });
 
     it('ignores a second tap while the first handoff is in flight', async () => {
       let resolve!: (code: string) => void;
       const mint = vi.fn(() => new Promise<string>((r) => (resolve = r)));
       renderInline({ current: 'study', account: HUB, mintHandoffCode: mint, siblings: [{ app: 'sit', url: 'https://sync-sit.com', mark: fakeMark('sit') }] });
-      const tab = screen.getByRole('button', { name: /my account/i });
+      const tab = screen.getByRole('button', { name: /^settings$/i });
       fireEvent.click(tab);
       fireEvent.click(tab);
       fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));

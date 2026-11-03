@@ -46,7 +46,7 @@ async function accountTabHandsOffToHub(bar: HTMLElement) {
   });
   try {
     h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
-    const tab = within(bar).getByRole('button', { name: /my account/i });
+    const tab = within(bar).getByRole('button', { name: /^settings$/i });
     // Never the active tab: the hub is never on screen in this app.
     expect(tab).not.toHaveAttribute('aria-current');
     fireEvent.click(tab);

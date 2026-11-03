@@ -118,7 +118,7 @@ export function AccountHubPage() {
       // "Account" (#445) -- distinct from `accountHub.myAccount` ("My
       // account"), which is this section's OWN first row. The section title
       // used to reuse that same string as the page-level heading; now the
-      // page-level heading is the sticky "Sync/Account" banner (AccountHome)
+      // page-level heading is the sticky "Sync/Settings" banner (AccountLayout)
       // and this is purely the first of the three section titles the owner
       // named: Account, Sync/Sit, Sync/Study.
       title: t('accountHub.neutralSection'),

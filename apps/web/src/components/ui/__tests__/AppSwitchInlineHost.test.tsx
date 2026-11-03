@@ -30,7 +30,7 @@ describe('AppSwitchInlineHost (sit)', () => {
   it('offers sync/study and the account entry', () => {
     renderHost();
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeInTheDocument();
   });
 
   it('does NOT offer sync/do — decision 20, flipped by #304', () => {
@@ -40,15 +40,15 @@ describe('AppSwitchInlineHost (sit)', () => {
 
   it('marks the account entry active only on the account route', () => {
     renderHost('/family/account');
-    expect(screen.getByRole('button', { name: /my account/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
     cleanup();
     renderHost('/family');
-    expect(screen.getByRole('button', { name: /my account/i })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
   });
 
   it('omits the account entry when accountHref is not supplied — admin’s sidebar-head shape', () => {
     renderHost('/admin', { accountHref: undefined, homeHref: '/admin' });
-    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^settings$/i })).toBeNull();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
   });
 

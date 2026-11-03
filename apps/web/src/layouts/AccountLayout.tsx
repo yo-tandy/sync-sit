@@ -39,7 +39,7 @@ import { HubRouteProvider } from '@/components/HubRouteProvider';
  * full-bleed and stacked at the same position. There can only be one header,
  * so this is now it, at every breakpoint: `sticky top-0 z-40 h-12`,
  * full-bleed because this layout sits OUTSIDE `PageContainer` (the width cap
- * only wraps `<Outlet />`, below), titled "Sync/Account" -- centred via TWO
+ * only wraps `<Outlet />`, below), titled "Sync/Settings" -- centred via TWO
  * mechanisms, not one: at `md+` the two flanking slots are equal
  * `flex-1 basis-0` (not a fixed width: a `w-24` box clipped
  * `AppSwitchMenuItem`'s label onto three wrapped lines, caught on a

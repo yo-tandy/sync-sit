@@ -30,7 +30,7 @@ describe('AppSwitchBarHost (study)', () => {
   it('offers sync/sit and the account tab', () => {
     renderHost();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeInTheDocument();
   });
 
   it('does NOT offer sync/do — decision 20, flipped by #304', () => {
@@ -38,7 +38,7 @@ describe('AppSwitchBarHost (study)', () => {
     expect(screen.queryByRole('button', { name: /sync\/do/ })).toBeNull();
   });
 
-  it('"My account" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
+  it('"Settings" hands off to the ONE account hub on sync-sit (next=/account)', async () => {
     h.mint.mockResolvedValueOnce({ data: { code: 'c1' } });
     h.assign.mockReset();
     const original = window.location;
@@ -49,7 +49,7 @@ describe('AppSwitchBarHost (study)', () => {
     });
     try {
       renderHost();
-      const tab = screen.getByRole('button', { name: /my account/i });
+      const tab = screen.getByRole('button', { name: /^settings$/i });
       expect(tab).not.toHaveAttribute('aria-current');
       fireEvent.click(tab);
       await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));

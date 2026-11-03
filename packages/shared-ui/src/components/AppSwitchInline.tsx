@@ -88,16 +88,19 @@ export function AppSwitchInline({
         </p>
       )}
       {appTabs.map(({ app, url, mark }) => {
-        const isCurrent = app === current;
+        const isOwn = app === current;
+        // On the account hub no APP is current: the hub belongs to the whole
+        // suite, so the host app's tab yields the highlight to "My account".
+        const isCurrent = isOwn && !accountActive;
         const busy = busyApp === app;
         return (
           <button
             key={app}
             type="button"
             aria-current={isCurrent ? 'page' : undefined}
-            disabled={busyApp !== null || (isCurrent && !home)}
+            disabled={busyApp !== null || (isOwn && !home)}
             onClick={() => {
-              if (isCurrent) {
+              if (isOwn) {
                 goHome();
                 return;
               }
