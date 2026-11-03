@@ -245,14 +245,24 @@ describe('AccountHubPage (sit)', () => {
   ])('offers %s no sit rows rather than rows that bounce', (_who, doc) => {
     renderHub(doc);
     expect(screen.queryByText('sync/sit')).toBeNull();
-    // The neutral block goes too: its only row is the same per-role account
-    // page, and its section heading ('Account') never renders without a sit
-    // role.
-    expect(screen.queryByText('Account')).toBeNull();
-    expect(screen.queryByText('My account')).toBeNull();
-    for (const bounces of ['Endorsements', 'Favorites', 'Search']) {
+    for (const bounces of ['Endorsements', 'Favorites', 'Search', 'My family']) {
       expect(screen.queryByText(bounces)).toBeNull();
     }
+  });
+
+  it('gives an admin no Account section -- there is no account page for them to reach', () => {
+    renderHub(ADMIN);
+    expect(screen.queryByText('Account')).toBeNull();
+    expect(screen.queryByText('My account')).toBeNull();
+  });
+
+  it("gives a study-only tutor My account, handing off to study's tutor profile page", async () => {
+    renderHub(NO_SIT_ROLE);
+    const account = screen.getByText('Account').closest('section')!;
+    fireEvent.click(within(account).getByText('My account'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(expect.stringContaining('next=%2Ftutor%2Faccount'));
+    expect(h.navigate).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -266,110 +276,46 @@ describe('AccountHubPage (sit)', () => {
 });
 
 /**
- * The footer slot (#491): `AccountHome`'s docstring reserves it for "sign
- * out, delete account", and this is the first thing to fill it. The dialog
- * gate, the error mapping and the sign-out-then-navigate ordering are all
- * `DeleteAccountSection`'s own behaviour (unit-tested in
- * `packages/shared-ui/src/pages/__tests__/DeleteAccountSection.test.tsx`) --
- * these tests are about the WIRING: the real callable name, the confirmation
- * payload, and that this app's `logout`/`navigate` are the ones actually
- * passed through.
+ * The footer: Sign out, Help, Share -- in that order, plain rows. Account
+ * deletion moved to the Help page (HelpPage.test.tsx covers its wiring).
  */
-describe('AccountHubPage — delete account footer (#491)', () => {
+describe('AccountHubPage — footer', () => {
   beforeEach(() => {
     h.userDoc = PARENT;
     h.navigate.mockReset();
-    h.assign.mockReset();
     h.callable.mockReset();
-    h.mint.mockReset();
     h.logout.mockReset().mockResolvedValue(undefined);
-    vi.stubGlobal('location', { assign: h.assign });
   });
-  afterEach(() => {
-    cleanup();
-    vi.unstubAllGlobals();
-  });
+  afterEach(cleanup);
 
-  function openDeleteDialog() {
-    renderHub(PARENT);
-    fireEvent.click(screen.getByText('Delete my account'));
-    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
-      target: { value: 'DELETE' },
-    });
+  function footer() {
+    return screen.getByText('Sign out').closest('ul')!;
   }
 
-  it('renders sign out and delete rows in the footer', () => {
+  it('lists Sign out, Help and Share, in that order, with no icons', () => {
     renderHub(PARENT);
-    expect(screen.getByText('Sign out')).toBeInTheDocument();
-    expect(screen.getByText('Delete my account')).toBeInTheDocument();
+    const rows = within(footer()).getAllByRole('button').map((b) => b.textContent);
+    expect(rows).toEqual(['Sign out', 'Help', 'Share']);
+    expect(footer().querySelector('svg')).toBeNull();
+  });
+
+  it('no longer carries Delete my account -- that is on the Help page', () => {
+    renderHub(PARENT);
+    expect(screen.queryByText('Delete my account')).toBeNull();
   });
 
   it('sign out calls the auth store directly, with no confirmation and no callable', () => {
     renderHub(PARENT);
     fireEvent.click(screen.getByText('Sign out'));
     expect(h.logout).toHaveBeenCalledTimes(1);
-    expect(h.callable).not.toHaveBeenCalledWith('deleteMyAccount');
+    expect(h.callable).not.toHaveBeenCalled();
   });
 
-  it('the delete confirm button stays disabled until the typed word matches', () => {
+  it('Help and Share open inside the hub', () => {
     renderHub(PARENT);
-    fireEvent.click(screen.getByText('Delete my account'));
-    const confirmButton = screen.getByRole('button', { name: 'Yes, delete my account' });
-    expect(confirmButton).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
-      target: { value: 'delete' },
-    });
-    expect(confirmButton).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
-      target: { value: 'DELETE' },
-    });
-    expect(confirmButton).not.toBeDisabled();
-  });
-
-  it('calls deleteMyAccount with the fixed confirmation token, then signs out, then lands on /account-deleted', async () => {
-    h.mint.mockResolvedValue(undefined);
-    openDeleteDialog();
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
-
-    await waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/account-deleted'));
-    expect(h.callable).toHaveBeenCalledWith('deleteMyAccount');
-    expect(h.callable).toHaveBeenCalledTimes(1);
-    expect(h.mint).toHaveBeenCalledWith({ confirm: 'DELETE' });
-    expect(h.mint).toHaveBeenCalledTimes(1);
-    expect(h.logout).toHaveBeenCalledTimes(1);
-  });
-
-  it('maps admin/last-admin to its own copy, keeps the dialog open and never signs out or navigates', async () => {
-    h.mint.mockRejectedValue(
-      Object.assign(new Error('last admin'), {
-        code: 'functions/failed-precondition',
-        details: { code: 'admin/last-admin' },
-      }),
-    );
-    openDeleteDialog();
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
-
-    expect(
-      await screen.findByText(
-        "You're the last admin. Appoint another admin before deleting your account.",
-      ),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
-    expect(h.logout).not.toHaveBeenCalled();
-    expect(h.navigate).not.toHaveBeenCalledWith('/account-deleted');
-  });
-
-  it('falls back to the generic failure copy for an unmapped rejection, and keeps the dialog open', async () => {
-    h.mint.mockRejectedValue(
-      Object.assign(new Error('boom'), { code: 'functions/internal' }),
-    );
-    openDeleteDialog();
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
-
-    expect(
-      await screen.findByText('Something went wrong. Please try again.'),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
-    expect(h.logout).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Help'));
+    expect(h.navigate).toHaveBeenLastCalledWith('/account/help');
+    fireEvent.click(screen.getByText('Share'));
+    expect(h.navigate).toHaveBeenLastCalledWith('/account/share');
   });
 });

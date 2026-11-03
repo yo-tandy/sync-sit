@@ -5,7 +5,7 @@ import { CheckIcon } from '../components/Icons.js';
 /**
  * Landing point after `deleteMyAccount` succeeds (#491).
  *
- * PUBLIC by construction: the member is signed out (by `DeleteAccountSection`)
+ * PUBLIC by construction: the member is signed out (by `DeleteAccountRow`)
  * before they ever arrive here, so this must render with no auth guard in
  * any host router — it sits in the same public group as `WelcomePage` /
  * `LoginPage`, never inside `AccountLayout` (whose `AuthGuard` would just

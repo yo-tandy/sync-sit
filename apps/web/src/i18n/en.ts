@@ -403,7 +403,10 @@ export default {
     search: 'Search',
     endorsements: 'Endorsements',
     favorites: 'Favorites',
-    // #491 -- the account hub footer (DeleteAccountSection, @ejm/shared-ui).
+    // The hub footer's Help row and the Help page's title.
+    help: 'Help',
+    share: 'Share',
+    // #491 -- the Help page's delete row (DeleteAccountRow, @ejm/shared-ui).
     deleteMyAccount: 'Delete my account',
     deleteDialogTitle: 'Delete my account?',
     deleteDialogBody:

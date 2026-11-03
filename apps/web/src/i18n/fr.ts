@@ -394,7 +394,10 @@ export default {
     search: 'Recherche',
     endorsements: 'Recommandations',
     favorites: 'Favoris',
-    // #491 -- le pied de page du compte partagé (DeleteAccountSection,
+    // La ligne Aide du pied de page et le titre de la page Aide.
+    help: 'Aide',
+    share: 'Partager',
+    // #491 -- la ligne de suppression de la page Aide (DeleteAccountRow,
     // @ejm/shared-ui). Le mot « DELETE » reste en anglais, à dessein : le
     // callable `deleteMyAccount` compare un jeton fixe, non localisé, pour
     // ne pas avoir à connaître la langue de l'appelant.

@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { AccountHome, DeleteAccountSection, type AccountSection } from '@ejm/shared-ui';
+import { AccountHome, type AccountSection } from '@ejm/shared-ui';
 import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
 import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
 import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { getSitRole } from '@ejm/sit-core';
+import { isTutor } from '@ejm/shared-core';
 import { useAuthStore } from '@/stores/authStore';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
@@ -184,8 +185,24 @@ export function AccountHubPage() {
   // `sitSections` already holds [neutral, sit] in that order (this app's
   // owner named it "Account" then "Sync/Sit"); the study block is always
   // appended last, whether or not `sitSections` is present.
+  /*
+   * A member with no sit role still has an account. A study-only tutor's
+   * profile page lives in study, so their "My account" hands off there --
+   * the one place it exists -- rather than the hub showing them no Account
+   * section at all.
+   */
+  const studyOnlyAccount: AccountSection[] =
+    !sitRole && userDoc && isTutor(userDoc)
+      ? [
+          {
+            title: t('accountHub.neutralSection'),
+            rows: [{ label: t('accountHub.myAccount'), href: '/tutor/account', external: true, ...errorHint }],
+          },
+        ]
+      : [];
+
   const sections: AccountSection[] = [
-    ...(sitRole ? sitSections : []),
+    ...(sitRole ? sitSections : studyOnlyAccount),
     {
       app: 'study' as const,
       mark: STUDY_MARK,
@@ -203,15 +220,11 @@ export function AccountHubPage() {
     },
   ];
 
-  // Fixed, matching `deleteMyAccount`'s own non-localised confirmation token
-  // (`packages/shared-functions/src/account/deleteMyAccount.ts`). This is
-  // only ever sent by `DeleteAccountSection` once its own gate has already
-  // matched the member's typed input against the identical literal, so
-  // there is nothing to derive here.
-  const deleteMyAccount = () =>
-    httpsCallable<{ confirm: string }, void>(functions, 'deleteMyAccount')({
-      confirm: 'DELETE',
-    }).then(() => undefined);
+  const footerRows = [
+    { label: t('common.signOut'), onClick: () => void logout() },
+    { label: t('accountHub.help'), onClick: () => void navigate(HUB_PATHS.help) },
+    { label: t('accountHub.share'), onClick: () => void navigate(HUB_PATHS.share) },
+  ];
 
   return (
     <AccountHome
@@ -219,11 +232,22 @@ export function AccountHubPage() {
       onNavigate={(href) => void navigate(href)}
       onNavigateExternal={(href) => void openStudy(href)}
       footer={
-        <DeleteAccountSection
-          onSignOut={logout}
-          onDeleteAccount={deleteMyAccount}
-          onDeleted={() => navigate('/account-deleted')}
-        />
+        // Sign out, then Help (support, legal, account deletion), then Share
+        // -- the rows every app's burger menu used to end with. Plain rows,
+        // no icons, matching the lists above.
+        <ul className="focus-ring-inset overflow-hidden rounded-lg border border-gray-200 bg-white">
+          {footerRows.map((row, i) => (
+            <li key={row.label} className={i > 0 ? 'border-t border-gray-100' : ''}>
+              <button
+                type="button"
+                onClick={row.onClick}
+                className="flex w-full items-center px-4 py-3 text-left active:bg-gray-50"
+              >
+                <span className="text-sm font-semibold text-gray-900">{row.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       }
     />
   );
