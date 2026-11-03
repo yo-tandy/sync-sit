@@ -1183,7 +1183,7 @@ export default {
         'For your child\'s privacy, we don\'t reveal whether an account already exists.',
       inviteSentBack: 'Back to supervised kids',
       invite: {
-        title: 'Add a child',
+        title: 'Add a supervised child account',
         intro:
           'Enter your child\'s details as they appear at school. They will confirm on their side before supervision starts.',
         emailLabel: 'Kid\'s EJM email',
@@ -1195,7 +1195,6 @@ export default {
         dateOfBirth: 'Date of birth',
         consentTitle: 'On behalf of your child, you accept:',
         consentAgree: 'I accept the',
-        consentVersion: '(version {{version}})',
         tos: 'Terms of Service',
         privacy: 'Privacy Policy',
         supervision: 'Supervision Agreement',

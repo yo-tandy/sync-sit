@@ -94,7 +94,6 @@ export function CreateKidInvitePage() {
     onChange: (checked: boolean) => void,
     docLabel: string,
     docTo: string,
-    version: string,
   ) => (
     <label className="flex items-start gap-2 text-sm text-gray-700">
       <input
@@ -107,8 +106,7 @@ export function CreateKidInvitePage() {
         {t('governance.invite.consentAgree')}{' '}
         <Link to={docTo} target="_blank" className="text-brand-600 hover:underline">
           {docLabel}
-        </Link>{' '}
-        {t('governance.invite.consentVersion', { version })}
+        </Link>
       </span>
     </label>
   );
@@ -175,25 +173,27 @@ export function CreateKidInvitePage() {
             onChange={(e) => setDateOfBirth(e.target.value)}
           />
 
-          {/* ── The consent trio — all three are required. ── */}
-          <p className="mb-2 text-sm font-semibold text-gray-700">
-            {t('governance.invite.consentTitle')}
-          </p>
-          <div className="mb-6 space-y-3">
-            {consentRow(tosChecked, setTosChecked, t('governance.invite.tos'), '/terms', TOS_VERSION)}
-            {consentRow(
-              privacyChecked,
-              setPrivacyChecked,
-              t('governance.invite.privacy'),
-              '/privacy',
-              PRIVACY_POLICY_VERSION,
-            )}
+          {/* ── The consent trio — all three are required. The Supervision
+              Agreement is the parent's own commitment, so it sits above the
+              two documents accepted on the child's behalf. ── */}
+          <div className="mb-4">
             {consentRow(
               supervisionChecked,
               setSupervisionChecked,
               t('governance.invite.supervision'),
               '/supervision-agreement',
-              SUPERVISION_AGREEMENT_VERSION,
+            )}
+          </div>
+          <p className="mb-2 text-sm font-semibold text-gray-700">
+            {t('governance.invite.consentTitle')}
+          </p>
+          <div className="mb-6 space-y-3">
+            {consentRow(tosChecked, setTosChecked, t('governance.invite.tos'), '/terms')}
+            {consentRow(
+              privacyChecked,
+              setPrivacyChecked,
+              t('governance.invite.privacy'),
+              '/privacy',
             )}
           </div>
 
