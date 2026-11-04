@@ -3,11 +3,12 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 
 /**
- * Direct tutor lookup by personal code (issue #235, parity A2): the entry
- * point on the family SearchPage and the TutorLookup flow — code → lookupTutor
- * callable → offering pickers → the shared TutorCard. The search flow itself
- * stays pinned in SearchPage.test.tsx; the card's CTA behavior in its own
- * component and integration coverage.
+ * Direct tutor lookup by name/email/phone (issue #437), replacing the
+ * personal-code flow (issue #235): the entry point on the family SearchPage
+ * and the TutorLookup flow — debounced query → lookupTutor callable → a
+ * list of results, each with its own offering pickers → the shared
+ * TutorCard. The search flow itself stays pinned in SearchPage.test.tsx;
+ * the card's CTA behavior in its own component and integration coverage.
  */
 
 const h = vi.hoisted(() => ({
@@ -67,10 +68,13 @@ function lookupResult(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function lookup(code = '4F7A2C9B') {
-  fireEvent.change(screen.getByLabelText('Tutor code'), { target: { value: code } });
-  fireEvent.click(screen.getByRole('button', { name: 'Find tutor' }));
-  await waitFor(() => expect(h.callable).toHaveBeenCalledWith('lookupTutor', { code }));
+async function search(query = 'Yael') {
+  fireEvent.change(screen.getByLabelText('Search by name, email or phone...'), {
+    target: { value: query },
+  });
+  await waitFor(() => expect(h.callable).toHaveBeenCalledWith('lookupTutor', { query }), {
+    timeout: 2000,
+  });
 }
 
 beforeEach(() => {
@@ -82,22 +86,22 @@ beforeEach(() => {
   };
   h.getDoc.mockResolvedValue({ exists: () => false, data: () => undefined });
   h.getDocs.mockResolvedValue({ docs: [] });
-  h.callable.mockResolvedValue({ data: { result: lookupResult() } });
+  h.callable.mockResolvedValue({ data: { results: [lookupResult()] } });
 });
 
-describe('SearchPage lookup entry point (issue #235)', () => {
-  it('renders the code-lookup card on the search page', async () => {
+describe('SearchPage lookup entry point (issue #437)', () => {
+  it('renders the identity-lookup card on the search page', async () => {
     renderWithProviders(<SearchPage />);
     await waitFor(() => expect(h.getDoc).toHaveBeenCalled());
     expect(screen.getByText('Already know a tutor?')).toBeTruthy();
-    expect(screen.getByLabelText('Tutor code')).toBeTruthy();
+    expect(screen.getByLabelText('Search by name, email or phone...')).toBeTruthy();
   });
 });
 
-describe('TutorLookup flow (issue #235)', () => {
-  it('resolves a code and renders the card with the first offering preselected', async () => {
+describe('TutorLookup flow (issue #437)', () => {
+  it('finds a tutor and renders the card with the first offering preselected', async () => {
     renderWithProviders(<TutorLookup />);
-    await lookup();
+    await search();
 
     // Card identity + the default (first) offering's subject/level/rate.
     await waitFor(() => expect(screen.getByText(/Yael/)).toBeTruthy());
@@ -108,9 +112,35 @@ describe('TutorLookup flow (issue #235)', () => {
     expect(screen.getByRole('button', { name: 'Request contact' })).toBeTruthy();
   });
 
+  it('renders one card per match, each with independent subject/level state', async () => {
+    h.callable.mockResolvedValue({
+      data: {
+        results: [
+          lookupResult({ uid: 'tut1', firstName: 'Yael' }),
+          lookupResult({
+            uid: 'tut2',
+            firstName: 'Noa',
+            subjects: [{ subject: 'physics', levels: ['4e'], rate: 30 }],
+          }),
+        ],
+      },
+    });
+    renderWithProviders(<TutorLookup />);
+    await search();
+
+    await waitFor(() => expect(screen.getByText(/Yael/)).toBeTruthy());
+    expect(screen.getByText(/Noa/)).toBeTruthy();
+    const subjectSelects = screen.getAllByLabelText('Subject') as HTMLSelectElement[];
+    expect(subjectSelects.map((s) => s.value)).toEqual(['math', 'physics']);
+
+    // Switching the FIRST result's subject must not disturb the second's.
+    fireEvent.change(subjectSelects[0], { target: { value: 'english' } });
+    expect((screen.getAllByLabelText('Subject')[1] as HTMLSelectElement).value).toBe('physics');
+  });
+
   it('switching subject resets the level to the new offering\'s first and re-rates', async () => {
     renderWithProviders(<TutorLookup />);
-    await lookup();
+    await search();
     await waitFor(() => expect(screen.getByLabelText('Subject')).toBeTruthy());
 
     fireEvent.change(screen.getByLabelText('Subject'), { target: { value: 'english' } });
@@ -118,30 +148,20 @@ describe('TutorLookup flow (issue #235)', () => {
     await waitFor(() => expect(screen.getByText('22 €/h')).toBeTruthy());
   });
 
-  it('sends the code as typed — the server owns normalization', async () => {
+  it('does not search until the query reaches 2 characters', async () => {
     renderWithProviders(<TutorLookup />);
-    await lookup('4f7a-2c9b');
-    await waitFor(() => expect(screen.getByText(/Yael/)).toBeTruthy());
+    fireEvent.change(screen.getByLabelText('Search by name, email or phone...'), {
+      target: { value: 'Y' },
+    });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(h.callable).not.toHaveBeenCalled();
   });
 
-  it('shows the uniform not-found copy (unknown code OR hidden tutor)', async () => {
-    h.callable.mockRejectedValue(
-      Object.assign(new Error('nf'), { code: 'functions/not-found' }),
-    );
+  it('shows the no-results copy for a well-formed query with no matches', async () => {
+    h.callable.mockResolvedValue({ data: { results: [] } });
     renderWithProviders(<TutorLookup />);
-    await lookup();
-    await waitFor(() => expect(screen.getByText(/No tutor found for this code/)).toBeTruthy());
-  });
-
-  it('shows the format copy on invalid-argument', async () => {
-    h.callable.mockRejectedValue(
-      Object.assign(new Error('bad'), { code: 'functions/invalid-argument' }),
-    );
-    renderWithProviders(<TutorLookup />);
-    await lookup('AAAABBBB');
-    await waitFor(() =>
-      expect(screen.getByText(/doesn't look like a tutor code/)).toBeTruthy(),
-    );
+    await search('nonexistentperson');
+    await waitFor(() => expect(screen.getByText('No tutors found')).toBeTruthy());
   });
 
   it('shows the verification recovery banner on permission-denied', async () => {
@@ -149,20 +169,20 @@ describe('TutorLookup flow (issue #235)', () => {
       Object.assign(new Error('denied'), { code: 'functions/permission-denied' }),
     );
     renderWithProviders(<TutorLookup />);
-    await lookup();
+    await search();
     await waitFor(() => expect(screen.getByText('Complete verification')).toBeTruthy());
   });
 
-  it('clears a previous result and error when a new lookup runs', async () => {
+  it('clears a previous result set when a new search runs', async () => {
     renderWithProviders(<TutorLookup />);
-    await lookup();
+    await search();
     await waitFor(() => expect(screen.getByText(/Yael/)).toBeTruthy());
 
-    h.callable.mockRejectedValue(
-      Object.assign(new Error('nf'), { code: 'functions/not-found' }),
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Find tutor' }));
-    await waitFor(() => expect(screen.getByText(/No tutor found for this code/)).toBeTruthy());
+    h.callable.mockResolvedValue({ data: { results: [] } });
+    fireEvent.change(screen.getByLabelText('Search by name, email or phone...'), {
+      target: { value: 'nonexistentperson' },
+    });
+    await waitFor(() => expect(screen.getByText('No tutors found')).toBeTruthy());
     expect(screen.queryByText(/Yael/)).toBeNull();
   });
 });
