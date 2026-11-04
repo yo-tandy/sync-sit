@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '../components/Button.js';
 import { Dialog } from '../components/Dialog.js';
 import { Input } from '../components/Input.js';
-import { LogOutIcon, TrashIcon } from '../components/Icons.js';
 import { accountDeleteErrorCode, callableErrorCode } from '../utils/callableErrors.js';
 
 /**
@@ -37,8 +36,8 @@ function deleteErrorKey(err: unknown): string {
   return 'common.error';
 }
 
-export interface DeleteAccountSectionProps {
-  /** Sign out — no confirmation, mirrors the app bar's own row. */
+export interface DeleteAccountRowProps {
+  /** Signs the member out once the erasure has gone through. */
   onSignOut: () => void | Promise<void>;
   /**
    * Calls the `deleteMyAccount` callable (`{ confirm: 'DELETE' }`). Its
@@ -54,20 +53,19 @@ export interface DeleteAccountSectionProps {
 }
 
 /**
- * The account hub footer (#491, `AccountHome`'s `footer` slot — its
- * docstring has reserved this for "sign out, delete account" since #367).
+ * The "Delete account" row and its confirmation dialog (#491), the last row
+ * of the account hub's Help page. Renders a full-bleed row button for the
+ * host to place inside its own list item, plus the dialog.
  *
  * Presentational plus the destructive dialog, no firebase dependency
- * (mirrors `CoParentSettings`): each host app supplies the three actions and
- * this owns the confirmation gate, the error mapping, and the styling — so
- * the destructive affordance cannot drift between sit, study and do as each
- * one wires `AccountHome` in turn.
+ * (mirrors `CoParentSettings`): the host supplies the three actions and
+ * this owns the confirmation gate, the error mapping, and the styling.
  */
-export function DeleteAccountSection({
+export function DeleteAccountRow({
   onSignOut,
   onDeleteAccount,
   onDeleted,
-}: DeleteAccountSectionProps) {
+}: DeleteAccountRowProps) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -115,35 +113,13 @@ export function DeleteAccountSection({
 
   return (
     <>
-      {/* focus-ring-inset (issue #325's opt-in), mirroring AccountHome's own
-          row list: overflow-hidden clips the rounded corners, the rows are
-          full-bleed (px-4 py-3, no gap from the <ul>), so a focused row's
-          ring at the default 2px offset is cut off on every edge. The
-          opt-in draws it inside the row instead. */}
-      <ul className="focus-ring-inset overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <li>
-          <button
-            type="button"
-            onClick={() => void onSignOut()}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-gray-50"
-          >
-            <LogOutIcon className="h-4 w-4 shrink-0 text-gray-500" />
-            <span className="text-sm font-semibold text-gray-900">{t('common.signOut')}</span>
-          </button>
-        </li>
-        <li className="border-t border-gray-100">
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-error-50"
-          >
-            <TrashIcon className="h-4 w-4 shrink-0 text-error-600" />
-            <span className="text-sm font-semibold text-error-600">
-              {t('accountHub.deleteMyAccount')}
-            </span>
-          </button>
-        </li>
-      </ul>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center px-4 py-3 text-left active:bg-error-50"
+      >
+        <span className="text-sm font-semibold text-error-600">{t('accountHub.deleteMyAccount')}</span>
+      </button>
 
       <Dialog open={open} onClose={close} ariaLabel={t('accountHub.deleteDialogTitle')}>
         <h3 className="mb-2 text-lg font-semibold text-gray-900">

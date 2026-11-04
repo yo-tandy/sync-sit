@@ -63,6 +63,7 @@ import { AdminUsersPage } from '@/pages/admin/UsersPage';
 import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
 import { AccountHubPage } from '@/pages/AccountHubPage';
 import { HubProfilePage } from '@/pages/HubProfilePage';
+import { HelpPage } from '@/pages/HelpPage';
 import { HUB_PATHS } from '@/lib/hubRoutes';
 import { AuthGuard } from '@/layouts/AuthGuard';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
@@ -111,7 +112,7 @@ export const router = createBrowserRouter([
       { path: '/welcome-sit', element: <CrossAppWelcomePage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
-      // PUBLIC by design (#491): `DeleteAccountSection` signs the member out
+      // PUBLIC by design (#491): `DeleteAccountRow` signs the member out
       // before it ever navigates here, so this must never sit behind
       // `AccountLayout`'s `AuthGuard` -- a signed-out visitor would just be
       // bounced straight back off it.
@@ -178,6 +179,14 @@ export const router = createBrowserRouter([
       { path: `${HUB_PATHS.kids}/new`, element: <AuthGuard role="parent"><CreateKidInvitePage /></AuthGuard> },
       { path: `${HUB_PATHS.kids}/:childUid`, element: <AuthGuard role="parent"><GovernedChildPage /></AuthGuard> },
       { path: HUB_PATHS.verification, element: <AuthGuard role="parent"><VerificationPage /></AuthGuard> },
+      // The footer's Help and Share, and Help's own pages: the same public
+      // pages, kept in the hub's chrome. They go back in history -- to Help.
+      { path: HUB_PATHS.help, element: <HelpPage /> },
+      { path: HUB_PATHS.about, element: <AboutPage /> },
+      { path: HUB_PATHS.privacy, element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
+      { path: HUB_PATHS.terms, element: <TermsPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
+      { path: HUB_PATHS.report, element: <SyncSitReportProblemPage /> },
+      { path: HUB_PATHS.share, element: <SharePage /> },
     ],
   },
   {

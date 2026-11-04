@@ -10,12 +10,22 @@ import { createContext, useContext } from 'react';
  * neutral chrome and go back to the hub -- so the hub mounts the same page
  * components on its own routes, and the pages ask this module where "back"
  * and "the kids list" are rather than hard-coding the portal paths.
+ *
+ * The footer's Help (and its About / Privacy / Terms / Report pages) and
+ * Share are mounted the same way; those pages go "back" in history, which
+ * from the hub is the hub's own Help page.
  */
 export const HUB_PATHS = {
   profile: '/account/profile',
   family: '/account/family',
   kids: '/account/kids',
   verification: '/account/verification',
+  help: '/account/help',
+  about: '/account/help/about',
+  privacy: '/account/help/privacy',
+  terms: '/account/help/terms',
+  report: '/account/help/report',
+  share: '/account/share',
 } as const;
 
 /** True below the hub's outlet (`HubRouteProvider`). */

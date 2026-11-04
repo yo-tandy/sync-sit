@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../../test-utils/render.js';
-import { DeleteAccountSection } from '../DeleteAccountSection.js';
+import { DeleteAccountRow } from '../DeleteAccountRow.js';
 
 afterEach(cleanup);
 
@@ -19,7 +19,7 @@ function setup(overrides?: {
   const onDeleteAccount = overrides?.onDeleteAccount ?? vi.fn().mockResolvedValue(undefined);
   const onDeleted = overrides?.onDeleted ?? vi.fn();
   renderWithProviders(
-    <DeleteAccountSection
+    <DeleteAccountRow
       onSignOut={onSignOut}
       onDeleteAccount={onDeleteAccount}
       onDeleted={onDeleted}
@@ -28,20 +28,11 @@ function setup(overrides?: {
   return { onSignOut, onDeleteAccount, onDeleted };
 }
 
-describe('DeleteAccountSection', () => {
-  it('renders sign out and delete my account rows', () => {
+describe('DeleteAccountRow', () => {
+  it('renders only the delete row -- sign out lives in the hub footer, not here', () => {
     setup();
-    expect(screen.getByText('Sign out')).toBeInTheDocument();
     expect(screen.getByText('Delete my account')).toBeInTheDocument();
-  });
-
-  it('sign out needs no confirmation — it calls onSignOut directly', () => {
-    const { onSignOut, onDeleteAccount } = setup();
-    fireEvent.click(screen.getByText('Sign out'));
-    expect(onSignOut).toHaveBeenCalledTimes(1);
-    expect(onDeleteAccount).not.toHaveBeenCalled();
-    // No dialog opened for sign-out.
-    expect(screen.queryByText('Delete my account?')).toBeNull();
+    expect(screen.queryByText('Sign out')).toBeNull();
   });
 
   it('opens a dialog explaining the erasure, with the delete button disabled until the word matches', () => {
