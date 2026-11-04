@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { matchesProviderIdentity, normalizePhoneForMatch } from '../providerLookup.js';
+import { matchesProviderIdentity, normalizePhoneForMatch, soundex, matchesName } from '../providerLookup.js';
 
 describe('normalizePhoneForMatch', () => {
   it('collapses a leading-0 French number and a +33 number to the same key', () => {
@@ -65,5 +65,75 @@ describe('matchesProviderIdentity', () => {
         ejemEmail: 'jean@ejm.internal',
       }),
     ).toBe(false);
+  });
+});
+
+// Issue #558: the owner's acceptance list for "John Doe <jdoe28@ejm.org>
+// 0523423210" — every one of these queries must find him.
+describe('matchesProviderIdentity — smart name matching (#558)', () => {
+  const john = {
+    fullName: 'John Doe',
+    email: 'jdoe28@ejm.org',
+    ejemEmail: 'jdoe28@ejm.org',
+    contactPhone: '0523423210',
+  };
+
+  it.each([
+    ['John', 'first name'],
+    ['Doe', 'last name'],
+    ['Jon', 'soundex: Jon ≈ John'],
+    ['John Doe', 'full name'],
+    ['Doe John', 'reversed order'],
+    ['Jon Do', 'fuzzy first + prefix last'],
+    ['jdoe28@ejm.org', 'exact email'],
+    ['05 23 42 32 10', 'phone with spaces'],
+    ['0523423210', 'phone bare'],
+    ['+33 5 23 42 32 10', 'phone with country code'],
+  ])('finds him with %s (%s)', (query) => {
+    expect(matchesProviderIdentity(query, john)).toBe(true);
+  });
+
+  it('does not find him with a different surname, a partial email, or a two-letter phonetic', () => {
+    expect(matchesProviderIdentity('John Durand', john)).toBe(false);
+    expect(matchesProviderIdentity('jdoe28@ejm', john)).toBe(false);
+    // No '@' → treated as a name: no name token starts with "jdoe".
+    expect(matchesProviderIdentity('jdoe', john)).toBe(false);
+    // Two letters: prefix only, never soundex.
+    expect(matchesProviderIdentity('Jn', john)).toBe(false);
+  });
+
+  it('is accent-insensitive on names', () => {
+    const elodie = { fullName: 'Élodie Lefèvre', email: 'e@x.org', ejemEmail: 'e@ejm.org' };
+    expect(matchesProviderIdentity('elodie lefevre', elodie)).toBe(true);
+    expect(matchesProviderIdentity('Lefèvre', elodie)).toBe(true);
+  });
+
+  it('a phone-shaped query is only ever phone-matched', () => {
+    // 8+ digits never falls through to the name path.
+    expect(matchesProviderIdentity('12345678', { fullName: '12345678 Smith', email: 'a@b.c', ejemEmail: 'a@ejm.c' })).toBe(false);
+  });
+});
+
+describe('soundex', () => {
+  it('codes the classic examples', () => {
+    expect(soundex('Robert')).toBe('R163');
+    expect(soundex('Rupert')).toBe('R163');
+    expect(soundex('Tymczak')).toBe('T522');
+    expect(soundex('Pfister')).toBe('P236');
+    expect(soundex('john')).toBe(soundex('jon'));
+  });
+  it('returns an empty code for a token with no letters', () => {
+    expect(soundex('123')).toBe('');
+  });
+});
+
+describe('matchesName', () => {
+  it('requires EVERY query token to land on some name token', () => {
+    expect(matchesName('John Smith', 'John Doe')).toBe(false);
+    expect(matchesName('Doe', 'John Doe')).toBe(true);
+  });
+  it('splits hyphenated and apostrophe names into tokens', () => {
+    expect(matchesName('Pierre', 'Jean-Pierre Dupont')).toBe(true);
+    expect(matchesName("Hara", "Scarlett O'Hara")).toBe(true);
   });
 });

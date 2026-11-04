@@ -35,6 +35,22 @@ describe('lookupBabysitter', () => {
     expect(lea!.firstName).toBe('Lea');
   });
 
+  // Issue #558: the owner's acceptance list, through the callable.
+  it.each([
+    ['Bernard Lea', 'reversed order'],
+    ['Lee', 'soundex: Lee ≈ Lea'],
+    ['Le Bern', 'prefix tokens'],
+    ['06 11 22 33 44', 'phone with spaces, no country code'],
+  ])('finds Lea Bernard with %s (%s)', async (query) => {
+    const { results } = await callFunction<{ results: LookupResult[] }>('lookupBabysitter', { query }, parent1Token);
+    expect(results.map((r) => r.uid)).toContain(seed.babysitter1.uid);
+  });
+
+  it('a different surname in the query excludes her even when the first name matches', async () => {
+    const { results } = await callFunction<{ results: LookupResult[] }>('lookupBabysitter', { query: 'Lea Durand' }, parent1Token);
+    expect(results.map((r) => r.uid)).not.toContain(seed.babysitter1.uid);
+  });
+
   it('matches by exact email', async () => {
     const { results } = await callFunction<{ results: LookupResult[] }>('lookupBabysitter', { query: 'camille.moreau@ejm.org' }, parent1Token);
     expect(results.find((r) => r.uid === seed.babysitter3.uid)).toBeDefined();
