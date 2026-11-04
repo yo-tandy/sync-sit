@@ -92,6 +92,7 @@ export function TutorLookup() {
       {searching && (
         <div className="mt-3 flex justify-center">
           <Spinner className="h-6 w-6 text-brand-600" />
+          <span className="sr-only">{t('family.search.lookup.searching')}</span>
         </div>
       )}
 

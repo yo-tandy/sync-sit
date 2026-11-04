@@ -9,6 +9,7 @@ import {
   resolveAreaLabel,
   getContact,
   matchesProviderIdentity,
+  getEjemEmail,
 } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser, TutorProfile, TutorLookupResult } from '@ejm/study-core';
@@ -111,7 +112,9 @@ export const lookupTutor = onCall(
       if (!matchesProviderIdentity(query, {
         fullName: `${tutorUser.firstName || ''} ${tutorUser.lastName || ''}`,
         email: tutorUser.email || '',
-        ejemEmail: tutorUser.ejemEmail || '',
+        // Canonical root ?? nested resolution (issue #203) — the same helper
+        // lookupBabysitter uses; a legacy doc with only the nested copy still matches.
+        ejemEmail: getEjemEmail(tutorUser as unknown as User) || '',
         contactPhone: contact.contactPhone,
         whatsapp: contact.whatsapp,
       })) continue;

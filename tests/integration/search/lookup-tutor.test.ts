@@ -203,8 +203,11 @@ describe('lookupTutor — identity search (issue #437)', () => {
       .where('adminUserId', '==', seed.parent1.uid)
       .where('action', '==', 'tutor_identity_lookup')
       .get();
-    const hit = logs.docs.find((d) => d.data().details.query === 'Yael');
-    expect(hit).toBeTruthy();
-    expect(hit!.data().details.matchCount).toBeGreaterThanOrEqual(1);
+    // Earlier cases in this file also look up 'Yael' (some while she is
+    // hidden, auditing matchCount 0), so pin that THIS call's audit exists:
+    // at least one 'Yael' entry with a positive match count.
+    const hits = logs.docs.filter((d) => d.data().details.query === 'Yael');
+    expect(hits.length).toBeGreaterThanOrEqual(1);
+    expect(hits.some((d) => d.data().details.matchCount >= 1)).toBe(true);
   });
 });
