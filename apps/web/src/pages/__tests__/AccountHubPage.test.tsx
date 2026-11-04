@@ -68,7 +68,7 @@ describe('AccountHubPage (sit)', () => {
 
   it('offers the four shared entries to a parent', () => {
     renderHub(PARENT);
-    for (const label of ['My account', 'My family', 'Supervised kids', 'Verification']) {
+    for (const label of ['My account', 'My family', 'Supervised children accounts', 'Verification']) {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0);
     }
   });
@@ -116,7 +116,7 @@ describe('AccountHubPage (sit)', () => {
     const expected: Array<[string, string]> = [
       ['My account', '/account/profile'],
       ['My family', '/account/family'],
-      ['Supervised kids', '/account/kids'],
+      ['Supervised children accounts', '/account/kids'],
       ['Verification', '/account/verification'],
     ];
     for (const [label, href] of expected) {
@@ -218,7 +218,7 @@ describe('AccountHubPage (sit)', () => {
     renderHub(STUDENT);
     expect(screen.getAllByText('My account').length).toBeGreaterThan(0);
     expect(screen.queryByText('My family')).toBeNull();
-    expect(screen.queryByText('Supervised kids')).toBeNull();
+    expect(screen.queryByText('Supervised children accounts')).toBeNull();
   });
 
   it('gives a student the student-side sit destinations', () => {

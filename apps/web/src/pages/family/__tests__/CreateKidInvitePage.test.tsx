@@ -77,6 +77,17 @@ describe('CreateKidInvitePage (sit)', () => {
     );
   });
 
+  it('puts the parent\'s own Supervision Agreement above the on-behalf consents, unversioned', () => {
+    renderPage();
+    const supervision = screen.getByRole('checkbox', { name: /supervision agreement/i });
+    const onBehalf = screen.getByText(/on behalf of your child/i);
+    const tos = screen.getByRole('checkbox', { name: /terms of service/i });
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(supervision.compareDocumentPosition(onBehalf) & FOLLOWING).toBeTruthy();
+    expect(onBehalf.compareDocumentPosition(tos) & FOLLOWING).toBeTruthy();
+    expect(screen.queryByText(/version/i)).toBeNull();
+  });
+
   it('keeps submit disabled until all three consents are checked', () => {
     renderPage();
     fillIdentity();

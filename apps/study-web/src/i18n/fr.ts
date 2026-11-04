@@ -1177,7 +1177,7 @@ export default {
         'Pour la confidentialité de votre enfant, nous ne révélons pas si un compte existe déjà.',
       inviteSentBack: 'Retour aux comptes supervisés',
       invite: {
-        title: 'Ajouter un enfant',
+        title: 'Ajouter un compte enfant supervisé',
         intro:
           'Saisissez les informations de votre enfant telles qu\'elles figurent à l\'école. Il devra confirmer de son côté avant que la supervision ne commence.',
         emailLabel: 'Email EJM de l\'enfant',
@@ -1189,7 +1189,6 @@ export default {
         dateOfBirth: 'Date de naissance',
         consentTitle: 'Au nom de votre enfant, vous acceptez :',
         consentAgree: 'J\'accepte',
-        consentVersion: '(version {{version}})',
         tos: 'les Conditions générales',
         privacy: 'la Politique de confidentialité',
         supervision: 'l\'Accord de supervision',
