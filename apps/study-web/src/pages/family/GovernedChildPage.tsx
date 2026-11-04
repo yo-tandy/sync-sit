@@ -157,7 +157,8 @@ export function GovernedChildPage() {
       await fn(payload);
       await load();
       return true;
-    } catch {
+    } catch (err) {
+      console.error('[governance] run control failed', err);
       if (mountedRef.current) setActionError(t('family.governance.actionError'));
       return false;
     } finally {
@@ -183,7 +184,8 @@ export function GovernedChildPage() {
       }
       setCancelTarget(null);
       await load();
-    } catch {
+    } catch (err) {
+      console.error('[governance] cancel session failed', err);
       if (mountedRef.current) setCancelError(t('family.governance.actionError'));
     } finally {
       if (mountedRef.current) setActing(false);

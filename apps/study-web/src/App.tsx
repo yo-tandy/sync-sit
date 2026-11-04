@@ -3,6 +3,7 @@ import { RouterProvider } from 'react-router';
 import { ToastProvider, useFlashTimer } from '@ejm/shared-ui';
 import { router } from './router';
 import { ForcedSignOutWatcher } from '@/components/ui/ForcedSignOutWatcher';
+import { UserLanguageSync } from '@/components/ui/UserLanguageSync';
 import { PushPrompt } from '@/components/ui/PushPrompt';
 import { setupForegroundMessages } from '@/lib/pushNotifications';
 
@@ -36,6 +37,7 @@ export default function App() {
     <ToastProvider>
       <RouterProvider router={router} />
       <ForcedSignOutWatcher />
+      <UserLanguageSync />
       <PushPrompt />
       {toast && (
         <div className="fixed top-4 left-4 right-4 z-50 mx-auto max-w-sm">

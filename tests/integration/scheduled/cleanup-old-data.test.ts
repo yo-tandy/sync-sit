@@ -37,7 +37,7 @@ describe('runCleanupOldData', () => {
     const collections = [
       'notifications', 'auditLogs', 'inviteLinks', 'verificationCodes',
       'accountExistsNotices', 'verificationSendCounters', 'appointments',
-      'publishedSearches', 'cronState',
+      'publishedSearches', 'cronState', 'searches',
     ];
     await Promise.all(
       collections.map(async (col) => {
@@ -208,6 +208,77 @@ describe('runCleanupOldData', () => {
     const remaining = await db.collection('appointments').get();
     expect(remaining.size).toBe(1);
     expect(remaining.docs[0].id).toBe(recentRef.id);
+  });
+
+  it('deletes the searches/{searchId} doc linked to an expired cancelled/rejected appointment, and leaves a fresh one alone (issue #408 item 2)', async () => {
+    const db = getDb();
+    const now = new Date();
+
+    // Expired: same shape sendContactRequest.ts writes, 1:1 with the
+    // appointment that links to it via `searchId`.
+    const expiredSearchRef = await db.collection('searches').add({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      type: 'one_time',
+      status: 'active',
+      date: daysAgo(8).toISOString().split('T')[0],
+      startTime: '18:00',
+      endTime: '22:00',
+      recurringSlots: null,
+      schoolWeeksOnly: false,
+      kidIds: ['kid1'],
+      address: '15 Rue de Passy, 75016 Paris',
+      latLng: { lat: 48.8566, lng: 2.2769 },
+      offeredRate: null,
+      additionalInfo: null,
+      filters: {},
+      createdAt: daysAgo(31),
+    });
+    await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      searchId: expiredSearchRef.id,
+      status: 'cancelled',
+      date: daysAgo(8).toISOString().split('T')[0],
+      createdAt: daysAgo(31),
+    });
+
+    // Fresh: linked to the RECENT appointment above (still within the 7-day
+    // grace) — must be left alone.
+    const freshSearchRef = await db.collection('searches').add({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      type: 'one_time',
+      status: 'active',
+      date: daysAgo(6).toISOString().split('T')[0],
+      startTime: '18:00',
+      endTime: '22:00',
+      recurringSlots: null,
+      schoolWeeksOnly: false,
+      kidIds: ['kid1'],
+      address: '15 Rue de Passy, 75016 Paris',
+      latLng: { lat: 48.8566, lng: 2.2769 },
+      offeredRate: null,
+      additionalInfo: null,
+      filters: {},
+      createdAt: daysAgo(31),
+    });
+    await db.collection('appointments').add({
+      familyId: seed.family1Id,
+      babysitterUserId: seed.babysitter1.uid,
+      searchId: freshSearchRef.id,
+      status: 'cancelled',
+      date: daysAgo(6).toISOString().split('T')[0],
+      createdAt: daysAgo(31),
+    });
+
+    const stats = await runCleanupOldData(db, now);
+
+    expect(stats.appointmentsDeleted).toBe(1);
+    expect(stats.searchesDeleted).toBe(1);
+
+    expect((await expiredSearchRef.get()).exists).toBe(false);
+    expect((await freshSearchRef.get()).exists).toBe(true);
   });
 
   it('a raised pastVisibilityDays DEFERS redaction (issue #250 invariant: notes outlive their visible card, never the reverse)', async () => {

@@ -1,5 +1,8 @@
 export default {
   common: {
+    // Shared AddressAutocomplete (issue #524): the two strings it used to hardcode.
+    addressPlaceholder: 'Start typing an address...',
+    addressPoweredBy: 'Powered by adresse.data.gouv.fr',
     back: 'Back',
     continue: 'Continue',
     done: 'Done',
@@ -17,6 +20,19 @@ export default {
     helloNoName: 'Hello',
   },
 
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: "We've updated our terms",
+    body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+    agreePrefix: 'I have read and accept the',
+    terms: 'Terms of Service',
+    and: 'and the',
+    privacy: 'Privacy Policy',
+    accept: 'Accept and continue',
+    staleClient: 'This app is out of date. Reload the page and try again.',
+    signOut: 'Sign out instead',
+  },
   auth: {
     login: 'Log in',
     loginTitle: 'Welcome back',
@@ -41,6 +57,9 @@ export default {
     resendCode: 'Resend code',
     verifying: 'Verifying...',
     invalidCode: 'Invalid verification code',
+    codeExpired: 'This verification code has expired. Please request a new one.',
+    codeWrongClass: "This code can't be used for this sign-up. Please request a new one.",
+    tooManyAttempts: 'Too many failed attempts. Please request a new code.',
     createPassword: 'Create your password',
     confirmPassword: 'Confirm password',
     passwordMismatch: "Passwords don't match",
@@ -423,6 +442,7 @@ export default {
       errorTooShort: 'Please write at least {{min}} characters.',
       errorNameRequired: 'Please enter the name families should see.',
       errorAlreadyExists: 'Your family has already endorsed this student.',
+      errorCooldown: 'This student declined your last request. You can ask again on {{date}}.',
       errorNoCompletedTask: 'You can endorse a student once a task you assigned them is completed.',
       errorPermission: 'You are not able to endorse this student.',
       errorInvalid: 'Please check what you wrote and try again.',
@@ -671,6 +691,7 @@ export default {
     emailLabel: 'Email address',
     ejemEmailHint: 'Use your official EJM email. The last 2 digits must be your graduation year.',
     serverError: 'Server error. Please try again.',
+    submitInvalid: 'Some of your details could not be accepted. Please check them and try again.',
     confirmConsentTitle: 'Almost there',
     identityOnFile: 'Enrolling as {{name}} — your identity is already on file from your other Sync profile.',
     alreadyEnrolled: 'This account already has this role.',
@@ -702,6 +723,7 @@ export default {
     contactSection: 'Contact details',
     contactHint: 'Provide at least one way for families to reach you. You can change these later.',
     contactEmailInvalid: 'Enter a full email address (e.g. name@example.com).',
+    contactPhoneInvalid: 'Enter a valid phone number (digits, optionally starting with +).',
     contactEmail: 'Contact email',
     contactPhone: 'Contact phone',
     completeSignup: 'Complete sign-up',
@@ -756,6 +778,8 @@ export default {
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender *',
+    languages: 'Languages spoken *',
+    languagesHint: 'Mark every language you can speak with families.',
     contactInfoTitle: 'How can families reach you?',
     contactInfoSubtitle: 'Provide at least one contact method — email or phone.',
     contactEmail: 'Contact email',
@@ -779,6 +803,16 @@ export default {
     photoSizeError: 'Photo must be smaller than 5 MB.',
     addressLabel: 'Address (optional)',
     addressHint: 'This helps optimize your search results — families see how far away you are.',
+    roleStudent: "I'm a student",
+    roleStudentDesc: 'Babysit, tutor, or both — one account across the whole EJM community.',
+    roleParent: "I'm a parent",
+    roleParentDesc: 'Find a babysitter, book a tutor, and manage your family.',
+    studentTitle: 'Create your account',
+    chooseAppTitle: "You're all set — what next?",
+    chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    chooseSitDesc: 'Offer babysitting to EJM families.',
+    chooseStudyDesc: 'Offer tutoring to EJM families.',
+    chooseDoDesc: 'Odd jobs and errands for EJM families.',
   },
 
   validation: {
@@ -786,8 +820,15 @@ export default {
   },
 
   accountHub: {
-    title: 'My account',
+    // Brand string (#445), not a translated label -- identical in every
+    // language, same convention as "Sync/Sit" / "Sync/Study" (see
+    // `APP_NAME` in shared-ui's brandMarks). Titles AccountLayout's sticky
+    // header, the hub's ONE header at every breakpoint (#445 review).
+    brandTitle: 'Sync/Settings',
     subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+    // The neutral section's OWN heading (#445): "Account", distinct from
+    // `myAccount` ("My account"), which is that section's first ROW.
+    neutralSection: 'Account',
     myAccount: 'My account',
     myFamily: 'My family',
     supervisedKids: 'Supervised kids',
@@ -800,10 +841,8 @@ export default {
     favorites: 'Favorites',
   },
   appSwitch: {
-    account: 'My account',
+    account: 'Settings',
     barLabel: 'Switch app',
-    toSit: 'Open sync-sit',
-    toStudy: 'Open sync-study',
     error: 'Could not switch apps. Please try again.',
   },
 

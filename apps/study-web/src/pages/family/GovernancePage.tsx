@@ -67,7 +67,8 @@ export function GovernancePage() {
       if (!mountedRef.current) return;
       setData(res.data);
       setLoadError(false);
-    } catch {
+    } catch (err) {
+      console.error('[governance] load governed children failed', err);
       // Last-known-good: a focus-refetch blip must not stamp an error banner
       // over data that is still rendered (mirrors the sit twin).
       if (mountedRef.current) setLoadError((prev) => prev || dataRef.current === null);
@@ -100,7 +101,8 @@ export function GovernancePage() {
       const fn = httpsCallable<{ inviteId: string }, { success: boolean }>(functions, name);
       await fn({ inviteId });
       await load();
-    } catch {
+    } catch (err) {
+      console.error('[governance] invite action failed', err);
       if (mountedRef.current) setActionError(t('family.governance.actionError'));
     } finally {
       if (mountedRef.current) setActingId(null);

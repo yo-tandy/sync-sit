@@ -137,6 +137,15 @@ describe('CrossAppWelcomePage (study)', () => {
     expect(screen.queryByText('subjects-next')).toBeNull();
   });
 
+  // PublicLayout has no header — the page brings the enrollment app bar
+  // itself, on both the welcome card and the subjects step.
+  it('renders the enrollment app bar on the welcome card and the subjects step', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: i18n.t('menu.openMenu') })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+    expect(screen.getByRole('button', { name: i18n.t('menu.openMenu') })).toBeInTheDocument();
+  });
+
   it('Continue reveals StepSubjects; submit calls enrollTutor in crossApp mode with subjects ONLY', async () => {
     renderPage();
     fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
@@ -238,6 +247,21 @@ describe('CrossAppWelcomePage (study)', () => {
     });
     expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeDisabled();
     expect(screen.getByText(i18n.t('enrollment.contactEmailInvalid'))).toBeInTheDocument();
+  });
+
+  it('a malformed contact phone blocks the details continue even with an email present', () => {
+    h.auth = { firebaseUser: { uid: 'b1' }, userDoc: babysitterNoContactDoc, loading: false };
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.continue') }));
+
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactEmail')), {
+      target: { value: 'sacha@contact.com' },
+    });
+    fireEvent.change(screen.getByLabelText(i18n.t('enrollment.contactPhone')), {
+      target: { value: 'not a phone' },
+    });
+    expect(screen.getByRole('button', { name: i18n.t('common.continue') })).toBeDisabled();
+    expect(screen.getByText(i18n.t('enrollment.contactPhoneInvalid'))).toBeInTheDocument();
   });
 
   it('a degenerate doc (identity gaps too) renders name, DOB, class, gender AND contact inputs', () => {

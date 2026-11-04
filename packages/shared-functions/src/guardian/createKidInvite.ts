@@ -17,6 +17,7 @@ import {
   requireFamilyParent,
   sendKidInviteEmail,
 } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface CreateKidInviteData {
   kidEmail: string;
@@ -41,7 +42,7 @@ interface CreateKidInviteData {
  * — admins are allowed to know what the parent must not.
  */
 export const createKidInvite = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

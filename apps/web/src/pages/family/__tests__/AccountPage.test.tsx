@@ -125,7 +125,7 @@ describe('family AccountPage', () => {
     // confirmed.email starts true; toggling writes only that one channel.
     fireEvent.click(
       screen.getByRole('button', {
-        name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.emailNotif')}`,
+        name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitParentConfirmed')} — ${i18n.t('notifications.emailNotif')}`,
       }),
     );
 
@@ -148,7 +148,7 @@ describe('family AccountPage', () => {
     await screen.findByText('parent@example.com');
     fireEvent.click(
       screen.getByRole('button', {
-        name: `${i18n.t('notifications.reminder')} — ${i18n.t('notifications.emailNotif')}`,
+        name: `${i18n.t('notifHub.blockShared')} · ${i18n.t('notifHub.reminders')} — ${i18n.t('notifications.emailNotif')}`,
       }),
     );
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
@@ -156,22 +156,74 @@ describe('family AccountPage', () => {
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.reminders.email', 'updatedAt']);
   });
 
-  it('never renders sync/do rows — a sit parent holds no doer profile', async () => {
-    // The defect issue #369 opens with, pinned at the surface.
+  it('a failed notif-prefs write is logged, not swallowed silently (#463)', async () => {
+    // Pre-#463 this catch was bare (`catch {}`): a failed toggle write left
+    // no trace anywhere, which is exactly the shape that turned the #446
+    // outage into an hours-long diagnosis instead of a one-minute one.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitParentConfirmed')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        '[account] save notification prefs failed',
+        expect.any(Error),
+      ),
+    );
+    consoleErrorSpy.mockRestore();
+  });
+
+  it("shows every app a parent uses -- shared, sit AND study -- but never sync/do", async () => {
+    // The account page is the ONE place notifications are tuned: a parent
+    // holds sit and study blocks, and no doer profile, so no do block (#369).
     renderPage();
     await screen.findByText('parent@example.com');
     const headings = screen.getAllByRole('heading', { level: 4 }).map((el) => el.textContent);
     expect(headings).toEqual([
-      i18n.t('notifications.blockShared'),
-      i18n.t('notifications.blockApp'),
+      i18n.t('notifHub.blockShared'),
+      i18n.t('notifHub.blockSit'),
+      i18n.t('notifHub.blockStudy'),
     ]);
+  });
+
+  it('offers the Endorsements toggle, and it writes the shared block', async () => {
+    renderPage();
+    await screen.findByText('parent@example.com');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifHub.blockShared')} · ${i18n.t('notifHub.endorsementsParent')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls.at(-1)![1];
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.references.email', 'updatedAt']);
+  });
+
+  it("a study row writes the study block -- the study page's settings live here now", async () => {
+    renderPage();
+    await screen.findByText('parent@example.com');
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifHub.blockStudy')} · ${i18n.t('notifHub.studyParentNewRequest')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls.at(-1)![1];
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.study.newRequest.email', 'updatedAt']);
   });
 
   it('push toggles are DISABLED outside PWA mode (no write at all)', async () => {
     renderPage();
     await screen.findByText('parent@example.com');
     const button = screen.getByRole('button', {
-      name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
+      name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitParentConfirmed')} — ${i18n.t('notifications.push')}`,
     });
     // The disabled attribute is what actually prevents the write in web mode:
     // a disabled button never dispatches the click at all.
@@ -189,7 +241,7 @@ describe('family AccountPage', () => {
     renderPage();
     await screen.findByText('parent@example.com');
     const button = screen.getByRole('button', {
-      name: `${i18n.t('notifications.confirmation')} — ${i18n.t('notifications.push')}`,
+      name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitParentConfirmed')} — ${i18n.t('notifications.push')}`,
     });
     expect(button).not.toBeDisabled();
     fireEvent.click(button);
@@ -197,5 +249,54 @@ describe('family AccountPage', () => {
     const payload = h.updateDoc.mock.calls[0][1];
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.sit.confirmed.push', 'updatedAt']);
     expect(payload['notifPrefs.sit.confirmed.push']).toBe(false);
+  });
+
+  it('a typed phone number SURVIVES the render it causes (seeded once per mount)', async () => {
+    // `parent` is a fresh object every render (getParentView spreads), so an
+    // unguarded `[parent]` seeding effect re-fires on the very render its own
+    // setters trigger and resets the field to the stored value — the parent
+    // cannot change their phone number at all. study-web fixed this on its
+    // copy of this page (PR #206 review); sit's copy was never updated.
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    const phoneInput = screen.getAllByRole('textbox')[0] as HTMLInputElement;
+    // Seeded from profiles.parent.phone = '+33100000000' (FR code stripped).
+    expect(phoneInput.value).toBe('100000000');
+
+    fireEvent.change(phoneInput, { target: { value: '612345678' } });
+
+    expect(phoneInput.value).toBe('612345678');
+    // And it is still the typed value one macrotask later, after every
+    // effect the change scheduled has flushed.
+    await waitFor(() => expect(phoneInput.value).toBe('612345678'));
+  });
+
+  it('saves the TYPED phone, not the value the page was seeded with', async () => {
+    // The consequence the test above guards, at the write boundary: without
+    // the guard the save payload carries the stored number back to itself.
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.change(screen.getAllByRole('textbox')[0], { target: { value: '612345678' } });
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('account.saveContact') }));
+
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const userCall = h.updateDoc.mock.calls.find((c) => c[0].path === 'users/p1')!;
+    expect(userCall[1]['profiles.parent.phone']).toBe('+33 612345678');
+  });
+  it('a failed contact save shows the translated failure copy, never the raw error text', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('internal'), { code: 'functions/internal' }),
+    );
+    renderPage();
+    await screen.findByText('parent@example.com');
+
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('account.saveContact') }));
+
+    expect(await screen.findByText(i18n.t('account.contactSaveFailed'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    consoleErrorSpy.mockRestore();
   });
 });

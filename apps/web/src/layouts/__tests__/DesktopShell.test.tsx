@@ -17,9 +17,6 @@ vi.mock('firebase/functions', () => ({
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (sel: (s: { userDoc: null }) => unknown) => sel({ userDoc: null }),
 }));
-vi.mock('@/components/ui/AppSwitchMenuItem', () => ({
-  AppSwitchMenuItem: () => <div data-testid="switch-menu-item" />,
-}));
 
 import i18n from '@/i18n';
 import { FamilyLayout } from '../FamilyLayout';
@@ -85,8 +82,12 @@ describe('sit portal shells cap routed content (issue #119)', () => {
   it('AdminLayout renders the grouped desktop sidebar with every admin destination', () => {
     renderLayout(<AdminLayout />, 'admin page');
     const nav = screen.getByRole('navigation', { name: /primary navigation/i });
-    expect(nav.className).toMatch(/\bhidden\b/);
-    expect(nav.className).toMatch(/\bmd:block\b/);
+    // The sticky/scroll/visibility classes live on SideNav's wrapping div,
+    // not the <nav> itself (#492 review) -- the <nav> no longer carries them
+    // directly since `head` moved out to be a sibling of it, not nested
+    // inside it (see shared-ui's SideNav.test.tsx for that pin).
+    expect(nav.parentElement!.className).toMatch(/\bhidden\b/);
+    expect(nav.parentElement!.className).toMatch(/\bmd:block\b/);
     // The #140 dashboard grouping, mirrored: People / Trust & safety / Operations.
     for (const section of ['People', 'Trust & safety', 'Operations']) {
       expect(within(nav).getByRole('heading', { name: section })).toBeInTheDocument();
@@ -176,7 +177,7 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
     shellReservesBarHeight(bar);
-    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+    expect(within(bar).getByRole('button', { name: /^settings$/i })).toHaveAttribute(
       'aria-current',
       'page',
     );
@@ -194,16 +195,22 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     ]);
     const bar = screen.getByRole('navigation', SWITCH_BAR);
     shellReservesBarHeight(bar);
-    expect(within(bar).getByRole('button', { name: /my account/i })).toHaveAttribute(
+    expect(within(bar).getByRole('button', { name: /^settings$/i })).toHaveAttribute(
       'aria-current',
       'page',
     );
     currentAppTabNavigatesHome(bar, /sync\/sit/, 'babysitter home');
   });
 
-  it('AdminLayout renders NO bar — which is why the burger keeps admin’s switch row', () => {
+  it('AdminLayout renders NO fixed bottom bar — which is why the burger keeps admin’s switch row below md', () => {
     renderLayout(<AdminLayout />, 'admin page');
-    expect(screen.queryByRole('navigation', SWITCH_BAR)).toBeNull();
+    // #417: AdminLayout DOES now render a "Switch app" landmark at md+ --
+    // AppSwitchInline in the SideNav head -- so this scopes to the fixed
+    // bar specifically, the same way the AccountLayout pin below does.
+    const bars = screen
+      .getAllByRole('navigation', SWITCH_BAR)
+      .filter((n) => /\bfixed\b/.test(n.className));
+    expect(bars).toHaveLength(0);
   });
 
   it('AccountLayout — the SEVENTH mounting shell — reserves the token height too (#419)', () => {
@@ -216,9 +223,10 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     renderLayout(<AccountLayout />, 'account hub', '/account', [
       { path: '/', text: 'roleless home' },
     ]);
-    // TWO landmarks share the switch label here: the md+ header exit row
-    // (#416) and the phone bar. The bar is the `fixed` one, and only ITS
-    // parent is the shell div that must reserve the height.
+    // The desktop header (below) carries a SECOND landmark with this label
+    // -- the inline switcher's own `<nav>` (#417) -- so this scopes to the
+    // real phone bar, the `fixed` one; only ITS parent is the shell div
+    // that must reserve the height.
     const bar = screen
       .getAllByRole('navigation', SWITCH_BAR)
       .find((n) => /\bfixed\b/.test(n.className));
@@ -228,5 +236,130 @@ describe('the app-switch bar is mounted in sit’s shells (#365)', () => {
     // to '/' — and #385's rule that the current-app tab actually navigates
     // must hold for the hub as well.
     currentAppTabNavigatesHome(bar!, /sync\/sit/, 'roleless home');
+  });
+});
+
+/**
+ * The hub's ONE header (#445 review). It used to be TWO: `AccountHome`
+ * (shared-ui) rendered its own always-visible sticky "Sync/Account" banner,
+ * while this layout separately rendered a `hidden md:block` exit row (Home
+ * link + app-switch menu) -- both full-bleed, both `z-40`, so at `md+` one
+ * painted over the other. There is exactly one header now, owned here, at
+ * every breakpoint.
+ */
+describe('AccountLayout renders the hub’s ONE header, every breakpoint (#445 review)', () => {
+  afterEach(cleanup);
+
+  it('titles the header "Sync/Settings" regardless of viewport (jsdom has no breakpoints — this proves it is not hidden)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    expect(header).toBeInTheDocument();
+    // Not inside a `hidden` wrapper -- unlike the old md-only exit row.
+    expect(header.className).not.toMatch(/\bhidden\b/);
+  });
+
+  it('wraps the hub in the gray platform brand scope (issue #537 D1)', () => {
+    // /account is a PLATFORM surface — role-neutral, cross-app. The
+    // .brand-platform ancestor re-points brand-* at the gray ramp; without
+    // it the hub wears sit red purely because sit hosts it.
+    renderLayout(<AccountLayout />, 'account hub');
+    expect(document.querySelector('.brand-platform')).not.toBeNull();
+  });
+
+  it('is sticky, not fixed -- this layout already sits outside PageContainer, so sticky is full-bleed here', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    expect(header.className).toMatch(/\bsticky\b/);
+    expect(header.className).not.toMatch(/\bfixed\b/);
+    expect(header.className).toMatch(/\btop-0\b/);
+  });
+
+  it('is neutral -- bg-ground-admin, never a brand colour', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    expect(header.className).toMatch(/\bbg-ground-admin\b/);
+    expect(header.className).not.toMatch(/bg-brand/);
+  });
+
+  it('keeps the Home-link and app-switch slots, now hidden md:flex EACH instead of the whole header being md:block', () => {
+    // userDoc is mocked null for this whole file, so the Home link itself
+    // does not render here (no sit role -> no portalHref) -- that slot's
+    // OWN visibility class is still assertable regardless of its contents.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    const slots = header.querySelectorAll(':scope > nav, :scope > div');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bhidden\b/);
+      expect(slot.className).toMatch(/\bmd:flex\b/);
+    }
+    // The second slot holds the REAL inline switcher (#417), which renders
+    // its own "Switch app" landmark regardless of role -- the non-fixed one;
+    // the fixed one is the phone bar outside the header.
+    const inline = within(header).getAllByRole('navigation', SWITCH_BAR);
+    expect(inline).toHaveLength(1);
+    expect(inline[0].className).not.toMatch(/\bfixed\b/);
+    expect(within(inline[0]).getByRole('button', { name: /sync\/sit/i })).toBeInTheDocument();
+  });
+
+  it('flanks the title with equal flex-1/basis-0 slots, not a fixed width -- a fixed w-24 clipped "Open sync-study" onto three wrapped lines (screenshot review of #484)', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    const slots = header.querySelectorAll(':scope > nav, :scope > div');
+    expect(slots).toHaveLength(2);
+    for (const slot of Array.from(slots)) {
+      expect(slot.className).toMatch(/\bflex-1\b/);
+      expect(slot.className).toMatch(/\bbasis-0\b/);
+      expect(slot.className).not.toMatch(/\bw-24\b/);
+    }
+    // The title itself must NOT grow -- it has to stay sized to its own
+    // content so the two equal flex-1 slots do the centring.
+    const title = screen.getByText('Sync/Settings');
+    expect(title.className).toMatch(/\bshrink-0\b/);
+  });
+
+  it('centres the title even below md, where both flanks are display:none and it is the only flex child (regression on a1e5f12)', () => {
+    // jsdom applies no layout, so this pins the CLASS that produces centring
+    // at that breakpoint rather than a measured position. At md+ the two
+    // equal flex-1 flanks already consume all the leftover space, making
+    // justify-center inert there -- it is what centres the lone title once
+    // both flanks vanish below md.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    expect(header.className).toMatch(/\bjustify-center\b/);
+  });
+
+  it('keeps the desktop exits as <nav> landmarks with DISTINCT names -- "Home" for the home link, the switch label only on the switcher, and never nested', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    // Exactly one landmark per name inside the header: two simultaneously
+    // visible navs sharing "Switch app" would be indistinguishable to a
+    // screen-reader user navigating by landmark (review on #484). Since
+    // #417 the switcher landmark is the inline switcher's OWN `<nav>`, so
+    // the flank wrapping it must NOT be a nav (that would nest two of them).
+    const switcher = within(header).getAllByRole('navigation', SWITCH_BAR);
+    expect(switcher).toHaveLength(1);
+    expect(switcher[0].parentElement!.tagName).toBe('DIV');
+    expect(switcher[0].parentElement!.closest('nav')).toBeNull();
+    const home = within(header).getAllByRole('navigation', { name: /^home$/i });
+    expect(home).toHaveLength(1);
+    expect(within(home[0]).queryByRole('navigation', SWITCH_BAR)).toBeNull();
+  });
+
+  it('never wraps the app-switch slot’s content -- whitespace-nowrap on the wrapper, not inside AppSwitchInline itself', () => {
+    // On the wrapper, not the shared component: `white-space` inherits down
+    // to the pill labels without touching AppSwitchInline's own markup,
+    // which is also embedded in every portal's AppBar.
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    const slot = within(header).getByRole('navigation', SWITCH_BAR).parentElement!;
+    expect(slot.className).toMatch(/\bwhitespace-nowrap\b/);
+  });
+
+  it('has no back button and no bell -- title and (at md+) the exit controls only', () => {
+    renderLayout(<AccountLayout />, 'account hub');
+    const header = screen.getByText('Sync/Settings').closest('header')!;
+    expect(within(header).queryByRole('button', { name: /back|retour/i })).toBeNull();
+    expect(within(header).queryAllByRole('img')).toHaveLength(0);
   });
 });

@@ -27,6 +27,23 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // #463: a bare `catch {}` (no binding) silently swallows every error
+      // with nothing logged -- the shape that turned the #446 outage from a
+      // one-minute diagnosis into hours. Bind the error and log it
+      // (console.error('[area] what failed', err)), or add a
+      // `// eslint-disable-next-line no-restricted-syntax -- <reason>` for a
+      // genuinely best-effort path (localStorage reads, analytics,
+      // best-effort cleanup).
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'CatchClause[param=null]',
+          message:
+            'catch {} swallows the error with nothing logged. Bind it (catch (err)) and log with console.error(\'[area] what failed\', err), or add // eslint-disable-next-line no-restricted-syntax -- <reason> for a genuinely best-effort path.',
+        },
+      ],
+    },
   },
   {
     // Plain JS anywhere but public/ -- eslint.config.js today, any future

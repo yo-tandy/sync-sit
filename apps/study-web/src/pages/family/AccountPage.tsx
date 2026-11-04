@@ -145,8 +145,9 @@ export function AccountPage() {
       await refreshUserDoc();
       toast(t('account.contactSaved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
-      setError(message);
+      // Never err.message: Firestore SDK text is English-only (and an Error always wins an instanceof check).
+      console.error('[account] contact save failed', err);
+      setError(t('account.contactSaveFailed'));
     } finally {
       setContactSaving(false);
     }
@@ -160,7 +161,8 @@ export function AccountPage() {
       await resetPassword(userDoc.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -203,7 +205,8 @@ export function AccountPage() {
     setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
       await savePrefs(category, channel, next);
-    } catch {
+    } catch (err) {
+      console.error('[account] save notification prefs failed', err);
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));

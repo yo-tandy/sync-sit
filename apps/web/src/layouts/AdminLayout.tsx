@@ -5,6 +5,7 @@ import { AuthGuard } from './AuthGuard';
 import { AppBar } from '@/components/ui/AppBar';
 import { PageContainer } from '@/components/ui/PageContainer';
 import { SideNav } from '@/components/ui/SideNav';
+import { AppSwitchInlineHost } from '@/components/ui/AppSwitchInlineHost';
 import {
   HomeIcon,
   UsersIcon,
@@ -68,7 +69,16 @@ export function AdminLayout() {
         <ScrollToTop />
         <AppBar role="admin" />
         <div className="md:flex">
-          <SideNav sections={sections} ariaLabel={t('menu.primaryNav')} />
+          {/* #417 (plan Q9): admin's md+ entry point for the app switch --
+              AdminLayout renders no AppSwitchBarHost, and AppBar (rendered
+              above) skips its own inline switcher for role="admin" to avoid
+              a second one. No accountHref: admin has never offered a "My
+              account" entry (its AppBar primary nav list is empty). */}
+          <SideNav
+            sections={sections}
+            ariaLabel={t('menu.primaryNav')}
+            head={<AppSwitchInlineHost homeHref="/admin" />}
+          />
           {/* min-w-0 lets DataTables shrink inside the flex row instead of
               forcing horizontal page scroll. */}
           <div className="min-w-0 flex-1">

@@ -97,7 +97,8 @@ export const useVerificationStore = create<VerificationState>((set) => ({
         documents: result.data.documents,
         loading: false,
       });
-    } catch {
+    } catch (err) {
+      console.error('[verification] fetch status failed', err);
       set({ loading: false });
     }
   },

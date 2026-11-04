@@ -26,9 +26,23 @@
   --color-brand-800: #043f12; /* icon forest green */
 
   /* Recess ground + shadow tint (#366), derived from do's own green ramp:
-     the shadow tint is brand-100 exactly (#d8f5cd), the ground one step
-     lighter than brand-50 (#eefbe9 -> #f5fbf2), matching study.css. */
+     the shadow tint is brand-100 exactly (#d8f5cd), declared in the plain
+     :root block below rather than here (#423) -- see there for why. The
+     ground is one step lighter than brand-50 (#eefbe9 -> #f5fbf2),
+     matching study.css. */
   --color-ground: #f5fbf2;
   --color-ground-raised: #ffffff;
+}
+
+/* --shadow-card-tint is a plain COLOUR, only ever read through var() by
+   --shadow-card-brand (base.css). It must NOT sit inside @theme: Tailwind
+   v4 derives a utility class from every @theme member's namespace, so a
+   --shadow-card-tint declared there generates a `shadow-card-tint` utility
+   emitting `box-shadow: #d8f5cd` -- invalid at computed-value time (a
+   colour has no offsets or blur), painting nothing while still
+   autocompleting as if it worked (#423). A plain :root custom property
+   isn't scanned for utility generation but is still visible to that
+   var() read. */
+:root {
   --shadow-card-tint: #d8f5cd;
 }

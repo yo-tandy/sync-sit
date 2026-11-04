@@ -31,6 +31,11 @@ export type { AddProfileParams, ProfileKey } from './enrollment/addProfileToUser
 
 // Callables — enrollment (family-related only)
 export { enrollFamily } from './enrollment/enrollFamily.js';
+// Unified student-identity enrollment (issue #435 milestone, PR4) — creates
+// a root-only identity BEFORE the sit/study role choice. Deploys from the
+// sit codebase (apps/functions re-exports it); study's crossApp add-profile
+// mode on enrollTutor is what actually adds the tutor role afterwards.
+export { enrollStudentIdentity } from './enrollment/enrollStudentIdentity.js';
 export { generateInviteLink } from './enrollment/generateInviteLink.js';
 export { joinFamily } from './enrollment/joinFamily.js';
 export { validateInviteLink } from './enrollment/validateInviteLink.js';
@@ -45,6 +50,18 @@ export { generateCommunityCode } from './verification/generateCommunityCode.js';
 export { lookupCommunityCode } from './verification/lookupCommunityCode.js';
 export { approveCommunityCode } from './verification/approveCommunityCode.js';
 export { getVerificationDocument } from './verification/getVerificationDocument.js';
+// Callable — verification-document uploads (issue #447): the only writer of
+// verification-documents/** once storage.rules sets that path's writes to
+// `if false`. Shares assertFamilyMember (./family/familyMembership.js) with
+// the family-photo callables below for the membership check.
+export { createVerificationDocumentUploadUrl } from './verification/createVerificationDocumentUploadUrl.js';
+
+// Callables — family photo uploads/deletes (issues #471, #483): the only
+// writer/deleter of family-photos/** once storage.rules sets that path's
+// writes AND deletes to `if false`. Share assertFamilyMember
+// (./family/familyMembership.js) for the membership check.
+export { createFamilyPhotoUploadUrl } from './family/createFamilyPhotoUploadUrl.js';
+export { deleteFamilyPhoto } from './family/deleteFamilyPhoto.js';
 
 // Callables — guardian (parental governance)
 export { createKidInvite } from './guardian/createKidInvite.js';
@@ -69,6 +86,21 @@ export { createAppHandoffCode, redeemAppHandoffCode } from './handoff/appHandoff
 // Callable — a member deletes their OWN account, across all three apps
 // (issue #368). Runs the same erasure as the admin path.
 export { deleteMyAccount } from './account/deleteMyAccount.js';
+// Re-consent gate (issue #488 decision 1): the one write behind the gate
+// every app's AuthGuard renders when a member's consentVersion is stale.
+export { acknowledgeConsent } from './account/acknowledgeConsent.js';
+
+// Callable — server-side projection for CROSS-APP `references` reads
+// (issue #346, PII minimisation follow-up from #280 / PR #337).
+export { getCrossAppReferences } from './references/getCrossAppReferences.js';
+
+// Endorsement resubmission dedup/cool-down (issue #356) — shared by
+// submitTutorEndorsement (study) and doSubmitEndorsement (do) so the two
+// callables cannot drift on the rule.
+export {
+  checkEndorsementResubmission,
+  type EndorsementResubmissionQuery,
+} from './references/endorsementResubmission.js';
 
 // Callables — admin
 export { getAdminDashboard } from './admin/getAdminDashboard.js';

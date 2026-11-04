@@ -283,6 +283,73 @@ describe('admin stays neutral (decision 25)', () => {
   });
 });
 
+describe('shadow-card-tint stays out of the @theme namespace (#423)', () => {
+  /**
+   * --shadow-card-tint (sit.css / study.css / do.css) and
+   * --shadow-card-tint-admin (base.css) hold plain COLOURS, not valid
+   * box-shadow values. Declared inside @theme, Tailwind v4 derives a
+   * utility class from every @theme member's namespace -- so a
+   * --shadow-card-tint there generates a `shadow-card-tint` utility
+   * emitting `box-shadow: <colour>`, invalid at computed-value time and so
+   * painting nothing while still autocompiling as if it worked. Verified
+   * against a real compile: with the tint deliberately routed onto a used
+   * class, tailwindcss 4.2.2 emitted exactly that broken rule; moving the
+   * declaration to a plain :root block (below @theme, not inside it) made
+   * the rule stop being generated at all, while --shadow-card-brand's
+   * var(--shadow-card-tint) read and the .bg-ground-admin override kept
+   * resolving -- var() walks the cascade, not the @theme registry, so
+   * where the custom property is declared doesn't matter to either
+   * consumer. Both tokens must still exist (the readers test above
+   * requires that); they must simply not be @theme members.
+   */
+  const TINT_TOKENS = ['--shadow-card-tint', '--shadow-card-tint-admin'];
+
+  /* Balanced-brace block extraction rather than a `[^}]*` regex: robust if
+     either block ever grows a nested rule (an @theme fallback, a
+     supports-query), where a naive non-greedy match would stop at the
+     first inner `}` instead of the block's own closing brace. */
+  function extractBlocks(css: string, opener: RegExp): string[] {
+    const blocks: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = opener.exec(css))) {
+      const start = m.index + m[0].length;
+      let depth = 1;
+      let i = start;
+      while (i < css.length && depth > 0) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') depth--;
+        i++;
+      }
+      blocks.push(css.slice(start, i - 1));
+    }
+    return blocks;
+  }
+
+  const themeBlocks = () => extractBlocks(themeCss, /@theme\s*\{/g).join('\n');
+  const rootBlocks = () => extractBlocks(themeCss, /(?<![\w-]):root\s*\{/g).join('\n');
+
+  it('finds @theme and :root blocks to check (guards the discovery itself)', () => {
+    // Without this, a change to the block syntax (or the extractor itself
+    // breaking) would make both pins below vacuously green.
+    expect(extractBlocks(themeCss, /@theme\s*\{/g).length, 'no @theme block found').toBeGreaterThan(0);
+    expect(extractBlocks(themeCss, /(?<![\w-]):root\s*\{/g).length, 'no :root block found').toBeGreaterThan(0);
+  });
+
+  it.each(TINT_TOKENS)('%s is declared, but never inside @theme', (token) => {
+    expect(
+      themeBlocks(),
+      `${token} is declared inside @theme -- Tailwind derives a utility from every @theme member's namespace, which regenerates the bogus shadow-card-tint* class the fix (#423) removed`,
+    ).not.toMatch(new RegExp(`${token}(?![\\w-])\\s*:`));
+  });
+
+  it.each(TINT_TOKENS)('%s is declared in a plain :root block', (token) => {
+    expect(
+      rootBlocks(),
+      `${token} should be declared in a plain :root block, outside @theme`,
+    ).toMatch(new RegExp(`${token}(?![\\w-])\\s*:`));
+  });
+});
+
 describe('the font is shipped, not just named (#366)', () => {
   const imports = [...baseCss.matchAll(/@import\s+['"]([^'"]+)['"]/g)].map((m) => m[1]);
   const fontPkg = imports.find((s) => /fontsource/.test(s));
@@ -491,5 +558,56 @@ describe('no control pairs a height with the radius that halves it (#395 review 
         `corners and these render as stadiums. Either move them to ` +
         `rounded-pill deliberately, step down a radius, or drop a stop.`,
     ).toEqual([]);
+  });
+
+  /* ── Platform gray vs the admin-neutral tint (#537 D1, PR #538 review) ──
+     `.brand-platform` re-points --color-brand-* at gray for shared surfaces.
+     Its brand COLOURS are deliberately unlayered (they must outrank the
+     @theme ramp), but --shadow-card-tint has a competitor on the very same
+     element: decision 25's `.bg-ground-admin` override, which lives in
+     @layer base. ChooseAppPage and AccountLayout both carry
+     `brand-platform bg-ground-admin` on one div, and an unlayered rule beats
+     a layered one regardless of specificity — so declaring the tint beside
+     the colours silently defeats the admin-neutral guarantee this file
+     exists to protect.
+
+     The fix is ordering inside one layer, which is exactly the kind of
+     wiring that rots invisibly, so it is pinned structurally here (computed
+     cascade is not reachable in jsdom — same reason every other pin in this
+     file reads source). */
+  it('declares .brand-platform\'s shadow tint INSIDE @layer base, before .bg-ground-admin', () => {
+    const layerStart = baseCss.indexOf('@layer base {');
+    expect(layerStart).toBeGreaterThan(-1);
+
+    // The tint declaration must appear in the layered block, not only in the
+    // unlayered .brand-platform rule.
+    const layered = baseCss.slice(layerStart);
+    const platformTint = layered.search(/\.brand-platform\s*\{[^}]*--shadow-card-tint\s*:/);
+    const adminTint = layered.search(/\.bg-ground-admin\s*\{[^}]*--shadow-card-tint\s*:/);
+    expect(platformTint).toBeGreaterThan(-1);
+    expect(adminTint).toBeGreaterThan(-1);
+    // Same layer + same specificity => source order decides. Admin must win.
+    expect(platformTint).toBeLessThan(adminTint);
+  });
+
+  it('does NOT declare --shadow-card-tint in the unlayered .brand-platform rule', () => {
+    // The mutation this guards: moving the tint back beside the brand colours
+    // restores the silent override of decision 25.
+    // Slice from the END of the @layer base block, found by brace-matching —
+    // not from a landmark rule inside it, which would move if the block is
+    // reordered and make this pin fail for the wrong reason.
+    const start = baseCss.indexOf('@layer base {');
+    let depth = 0;
+    let i = baseCss.indexOf('{', start);
+    for (; i < baseCss.length; i++) {
+      if (baseCss[i] === '{') depth++;
+      else if (baseCss[i] === '}' && --depth === 0) break;
+    }
+    const unlayered = baseCss.slice(i);
+    const rule = unlayered.match(/\.brand-platform\s*\{[^}]*\}/);
+    expect(rule, 'unlayered .brand-platform rule not found').not.toBeNull();
+    expect(rule![0]).not.toMatch(/--shadow-card-tint/);
+    // ...while still carrying the brand ramp it exists for.
+    expect(rule![0]).toMatch(/--color-brand-600/);
   });
 });

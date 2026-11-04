@@ -1,33 +1,55 @@
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Spinner } from './Spinner.js';
-import { APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_NAME, type AppMark, type SyncApp } from '../lib/brandMarks.js';
+import { AccountGlyph } from './AccountGlyph.js';
+import { useAppSwitchState, type AppSwitchAccount, type AppSwitchEntryProps } from './appSwitchShared.js';
 
-export interface AppSwitchBarProps {
+/**
+ * `AppSwitchBarProps` == `AppSwitchEntryProps` (#417): the field-by-field
+ * documentation below is unchanged; the shape itself now lives in
+ * `appSwitchShared.ts` so `AppSwitchInline` can share it byte for byte
+ * rather than two prop interfaces drifting apart.
+ */
+export interface AppSwitchBarProps extends AppSwitchEntryProps {
   /** The app this bar is rendered inside. Its tab is active and never hands off. */
   current: SyncApp;
   /**
-   * Sibling apps this bar offers, in display order, each with its origin.
+   * The current app's own bar-weight mark, for its own tab.
+   *
+   * A prop rather than a lookup (#422): the host imports exactly the mark it
+   * is, via `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png`, so this
+   * component never needs to hold (and no app's bundle ever ships) marks for
+   * apps it does not render a tab for.
+   */
+  currentMark: AppMark;
+  /**
+   * Sibling apps this bar offers, each with its origin and its own
+   * bar-weight mark. Order here does NOT decide display order -- `APP_ORDER`
+   * in brandMarks.ts does (#438), fixed suite-wide so the row never
+   * reshuffles depending on which app is current.
    *
    * OMITTING AN APP HIDES ITS TAB, and that is the gate for sync/do: sit and
    * study pass only each other until #304 (decision 20) is approved. The
    * component takes no view on which apps are reachable -- reachability is a
    * product decision that lives in each app's shell, not in shared-ui.
+   *
+   * `mark` is supplied by the host too (#422), imported directly via
+   * `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png` -- not resolved here
+   * from a suite-wide lookup, which is what made every app's dist carry
+   * every app's mark regardless of whether it ever renders that tab.
    */
-  siblings: ReadonlyArray<{ app: SyncApp; url: string }>;
+  siblings: ReadonlyArray<{ app: SyncApp; url: string; mark: AppMark }>;
   /**
    * Mints a one-time handoff code. Injected because shared-ui has no Firebase
    * of its own; each app passes a thin wrapper over its own callable.
    */
   mintHandoffCode: () => Promise<string>;
   /**
-   * The account tab: where it goes within THIS app, and how to get there.
+   * The account tab: the suite's ONE account hub (sync-sit `/account`) --
+   * an in-app route on sit, a handoff from study and do. See
+   * `AppSwitchAccount` for the two forms.
    *
-   * OMIT IT AND THE TAB IS NOT RENDERED. sync-do has no account route by
-   * design (platform plan §3 -- do-web ships no account page; the shared hub
-   * owns identity and do contributes only a doer-settings screen), so until
-   * the hub exists (#367) there is nowhere for that tab to go. A tab pointing
-   * at a route that does not exist is worse than an absent one.
+   * OMIT IT AND THE TAB IS NOT RENDERED.
    *
    * ONE OBJECT, not an href plus a handler, so the two cannot be
    * half-supplied. An href without a handler renders a visible, enabled,
@@ -36,7 +58,7 @@ export interface AppSwitchBarProps {
    * Same reasoning that made `pathname` required: unforgettable beats
    * conventional (PR #385 round 4).
    */
-  account?: { href: string; onNavigate: (href: string) => void };
+  account?: AppSwitchAccount;
   /**
    * The route currently on screen in THIS app.
    *
@@ -64,16 +86,19 @@ export interface AppSwitchBarProps {
  * The persistent bottom bar that switches APPS, not pages (plan §18.2,
  * decision 22; issue #365).
  *
- * Phone-only by design -- `md:hidden`. Desktop already has NavTabs and the
- * admin sidebar, and where the switch belongs there is still open (Q9), so
- * this deliberately renders nothing rather than guessing.
+ * Phone-only by design -- `md:hidden`. Desktop's rendering is
+ * `AppSwitchInline` (#417, plan Q9): the same entries from the same props,
+ * as compact pills in the top bar instead of a bottom tab row -- see its
+ * own docstring.
  *
- * That is why §9.5's burger-menu row is superseded ON PHONES ONLY. Each app
- * bar hides its `AppSwitchMenuItem` below `md` -- the same breakpoint, from
- * the other side -- so exactly one entry point exists at any width and the
- * whole-bar lock cannot be walked around via the burger. At `md+` the row is
- * still the only switcher there is, and it stays until Q9 is answered (#417).
- * sit's admin shell renders no bar at any width, so it keeps the row always.
+ * That is why §9.5's burger-menu row is superseded ON PHONES ONLY, by this
+ * bar, and at `md+` by `AppSwitchInline` -- never both at once. Below `md`
+ * each app bar hides its `AppSwitchMenuItem` (where a use of it survives
+ * Q9's resolution at all); at `md+` the inline switcher is now the entry
+ * point, so `AppSwitchMenuItem` no longer renders there either. sit's admin
+ * shell renders no bottom bar at any width; its `md+` entry point is now
+ * `AppSwitchInline` in the sidebar head, and its burger row survives ONLY
+ * below `md`, where neither the bar nor the sidebar reaches.
  *
  * Switching a sibling is a CROSS-ORIGIN move today: mint a one-time code,
  * then navigate with it in the URL fragment (fragments never reach servers or
@@ -99,72 +124,26 @@ export interface AppSwitchBarProps {
  */
 export function AppSwitchBar({
   current,
+  currentMark,
   siblings,
   mintHandoffCode,
   account,
   pathname,
   home,
 }: AppSwitchBarProps) {
-  const { t, i18n } = useTranslation();
-  const [busyApp, setBusyApp] = useState<SyncApp | null>(null);
-  const [failed, setFailed] = useState(false);
-
-  const accountActive = account !== undefined && pathname === account.href;
-
-  // The failure message belongs to ONE attempt, not to the session. This bar
-  // never unmounts, so nothing else would ever take it down: a user whose
-  // switch failed would carry the red line at the bottom of every screen
-  // until they happened to try again. Any route change ends the attempt.
-  //
-  // Adjusted DURING RENDER rather than in an effect -- React's documented
-  // "resetting state when a prop changes" shape. An effect would paint the
-  // stale message once on the new route and then re-render, and
-  // react-hooks/set-state-in-effect rejects it.
-  const [renderedAt, setRenderedAt] = useState(pathname);
-  if (renderedAt !== pathname) {
-    setRenderedAt(pathname);
-    setFailed(false);
-  }
-
-  // Staying busy through the cross-origin navigation is correct -- but the
-  // page can come BACK with that state intact when the browser restores it
-  // from bfcache (back button). `disabled={busyApp !== null}` covers every
-  // tab, so a restored page would show a permanently dead bar until reload.
-  useEffect(() => {
-    const onPageShow = (e: PageTransitionEvent) => {
-      if (!e.persisted) return;
-      setBusyApp(null);
-      setFailed(false);
-    };
-    window.addEventListener('pageshow', onPageShow);
-    return () => window.removeEventListener('pageshow', onPageShow);
-  }, []);
-
-  const switchTo = async (app: SyncApp, url: string) => {
-    if (busyApp) return;
-    setBusyApp(app);
-    setFailed(false);
-    try {
-      const code = await mintHandoffCode();
-      // Carry the CURRENT language across origins: i18n caches are per-origin
-      // localStorage, so without this the sibling opens in whatever language
-      // it last saw. Whitelisted here to mirror the receiver's en|fr allowlist.
-      const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
-      window.location.assign(
-        `${url}/handoff#code=${encodeURIComponent(code)}&lang=${encodeURIComponent(lang)}`,
-      );
-      // Stay busy: the browser is navigating away.
-    } catch {
-      setFailed(true);
-      setBusyApp(null);
-    }
-  };
-
-  // The current app first, then its siblings in the order given, then account.
-  const appTabs: ReadonlyArray<{ app: SyncApp; url?: string }> = [
-    { app: current },
-    ...siblings.filter((s) => s.app !== current),
-  ];
+  const { t } = useTranslation();
+  // State, the busy/failed machine, the bfcache un-stick effect and the
+  // fixed-order tab list are all shared with AppSwitchInline (#417) -- see
+  // appSwitchShared.ts. Only the markup below is specific to this bar.
+  const { busyApp, failed, accountActive, appTabs, switchTo, goHome, goAccount } = useAppSwitchState({
+    current,
+    currentMark,
+    siblings,
+    mintHandoffCode,
+    account,
+    pathname,
+    home,
+  });
 
   return (
     <nav
@@ -203,24 +182,21 @@ export function AppSwitchBar({
           button also carries h-full, and centers its icon+label column
           inside the row rather than inside its own content-sized box. */}
       <ul className="focus-ring-inset flex h-app-switch-row items-stretch">
-        {appTabs.map(({ app, url }) => {
-          const isCurrent = app === current;
+        {appTabs.map(({ app, url, mark }) => {
+          const isOwn = app === current;
+          // On the account hub no APP is current: the hub belongs to the whole
+          // suite, so the host app's tab yields the highlight to "My account".
+          const isCurrent = isOwn && !accountActive;
           const busy = busyApp === app;
-          const mark = BRAND_MARKS[app];
           return (
             <li key={app} className="flex-1">
               <button
                 type="button"
                 aria-current={isCurrent ? 'page' : undefined}
-                disabled={busyApp !== null || (isCurrent && !home)}
+                disabled={busyApp !== null || (isOwn && !home)}
                 onClick={() => {
-                  if (isCurrent) {
-                    // Clear here as well as on route change: tapping home while
-                    // already home navigates nowhere, so the pathname effect
-                    // above never fires and the message would outlive the
-                    // interaction that was meant to end it.
-                    setFailed(false);
-                    if (home) home.onNavigate(home.href);
+                  if (isOwn) {
+                    goHome();
                     return;
                   }
                   if (url) void switchTo(app, url);
@@ -255,10 +231,7 @@ export function AppSwitchBar({
             type="button"
             aria-current={accountActive ? 'page' : undefined}
             disabled={busyApp !== null}
-            onClick={() => {
-              setFailed(false);
-              account.onNavigate(account.href);
-            }}
+            onClick={goAccount}
             className={`flex h-full w-full flex-col items-center justify-center gap-1 px-1 py-2 text-[11px] font-semibold transition-colors ${
               // Neutral, not branded: the account is shared and app-agnostic
               // (decision 24), so it must not wear the host app's colour.
@@ -266,7 +239,7 @@ export function AppSwitchBar({
             }`}
           >
             <span className="flex h-6 w-6 items-center justify-center">
-              <AccountGlyph className="h-5 w-5" />
+              {busyApp === 'account' ? <Spinner className="h-5 w-5" /> : <AccountGlyph className="h-5 w-5" />}
             </span>
             <span className="truncate">{t('appSwitch.account')}</span>
           </button>
@@ -274,14 +247,5 @@ export function AppSwitchBar({
         )}
       </ul>
     </nav>
-  );
-}
-
-function AccountGlyph({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
-      <circle cx="12" cy="8" r="4" />
-      <path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8" strokeLinecap="round" />
-    </svg>
   );
 }

@@ -12,6 +12,7 @@ import { isActivePublishedSearch } from '@ejm/shared-core';
 import { getEjemEmail } from '@ejm/shared-core';
 import { passesAgeBackstop } from './ageBackstop.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 interface ContactPublishedSearchData {
   publishedSearchId: string;
@@ -43,7 +44,7 @@ interface ContactPublishedSearchData {
  * at may be stale by seconds or by a day.
  */
 export const contactPublishedSearch = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

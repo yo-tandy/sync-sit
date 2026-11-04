@@ -119,7 +119,8 @@ export function DoerTaskDetailPage() {
     try {
       await httpsCallable(functions, callable)(payload);
       onDone?.();
-    } catch {
+    } catch (err) {
+      console.error('[task] action failed', err);
       // Close the confirm dialogs BEFORE surfacing the error: the error
       // renders at page level, and an open modal overlay would hide it
       // (the PR #331 round-2 modal-overlay blocker, applied here too).

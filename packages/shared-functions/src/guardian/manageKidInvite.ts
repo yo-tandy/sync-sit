@@ -10,6 +10,7 @@ import {
   requireFamilyParent,
   sendKidInviteEmail,
 } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * Load an invite and verify the caller is a parent of its family. Shared gate
@@ -39,7 +40,7 @@ async function loadFamilyInvite(callerUid: string, inviteId: unknown) {
 }
 
 export const cancelKidInvite = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -62,7 +63,7 @@ export const cancelKidInvite = onCall(
  * resend deliberately UN-expires it — it is the parent's recovery path.
  */
 export const resendKidInvite = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

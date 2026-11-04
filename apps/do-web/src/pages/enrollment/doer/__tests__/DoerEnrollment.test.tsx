@@ -44,6 +44,7 @@ vi.mock('@/stores/authStore', () => ({
   ),
 }));
 
+import i18n from '@/i18n';
 import { DoerEnrollment } from '../DoerEnrollment';
 
 /** Calls to one callable name, payloads only. */
@@ -353,5 +354,37 @@ describe('DoerEnrollment — step sequences', () => {
         ),
       ).toBeTruthy(),
     );
+  });
+
+  // The final-step catch used to render err.message: an unexpected fault
+  // showed the bare token 'internal', and server messages were English-only.
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid contact phone', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s doEnrollDoer rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.state.firebaseUser = { uid: 'sitter1' };
+    h.state.userDoc = {
+      uid: 'sitter1',
+      firstName: 'Zoé',
+      lastName: 'Martin',
+      dateOfBirth: '2009-01-15',
+      contactEmail: 'zoe@test.com',
+      profiles: { babysitter: { enrollmentComplete: true } },
+    };
+    h.invoke.mockImplementation((name: string) =>
+      name === 'doEnrollDoer'
+        ? Promise.reject(Object.assign(new Error(message), { code: `functions/${code}` }))
+        : Promise.resolve({ data: {} }),
+    );
+    renderWithProviders(<DoerEnrollment />);
+
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Agree & continue' }));
+    await waitFor(() => expect(screen.getByText('What would you like to do?')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Complete sign-up' }));
+
+    await waitFor(() => expect(screen.getByText(i18n.t(key))).toBeTruthy());
+    expect(screen.queryByText(message)).toBeNull();
   });
 });

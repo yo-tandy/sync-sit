@@ -18,6 +18,8 @@ export {
   joinFamily,
   validateInviteLink,
   removeCoParent,
+  // Unified student-identity enrollment (issue #435 milestone, PR4)
+  enrollStudentIdentity,
   // Guardian (parental governance)
   createKidInvite,
   cancelKidInvite,
@@ -38,6 +40,12 @@ export {
   redeemAppHandoffCode,
   // Self-serve account deletion (issue #368) — same erasure as the admin path
   deleteMyAccount,
+  acknowledgeConsent,
+  // Server-side projection for cross-app `references` reads (issue #346).
+  // Deployed once from this codebase — same GCP project as study/do, so
+  // study-web and do-web call it the same way they call
+  // createAppHandoffCode above, with no re-export needed on their side.
+  getCrossAppReferences,
   // Verification
   submitVerification,
   reviewVerification,
@@ -47,6 +55,18 @@ export {
   lookupCommunityCode,
   approveCommunityCode,
   getVerificationDocument,
+  // Verification-document uploads (issue #447) — signed-URL callable,
+  // replaces the direct client write storage.rules used to allow. Deployed
+  // only from this codebase (same GCP project as study/do — study-web's
+  // VerificationPage calls it the same way it already calls
+  // getVerificationDocument above, with no re-export needed on its side).
+  createVerificationDocumentUploadUrl,
+  // Family photo uploads (issue #471) — signed-URL callable, same
+  // Admin-SDK-membership-check shape as getVerificationDocument above.
+  createFamilyPhotoUploadUrl,
+  // Family photo deletion (issue #483) — membership-checked delete;
+  // shares its membership gate with createFamilyPhotoUploadUrl above.
+  deleteFamilyPhoto,
   // Admin
   getAdminDashboard,
   listUsers,
@@ -76,6 +96,8 @@ export { contactPublishedSearch } from './search/contactPublishedSearch.js';
 export { addPreferredBabysitter } from './family/addPreferredBabysitter.js';
 export { removePreferredBabysitter } from './family/removePreferredBabysitter.js';
 export { lookupBabysitter } from './family/lookupBabysitter.js';
+export { findBabysittersForEndorsement } from './family/findBabysittersForEndorsement.js';
+export { getBabysitterSummaries } from './family/getBabysitterSummaries.js';
 export { respondToContactSharing } from './family/respondToContactSharing.js';
 export { respondToRequest } from './appointments/respondToRequest.js';
 export { cancelAppointment } from './appointments/cancelAppointment.js';

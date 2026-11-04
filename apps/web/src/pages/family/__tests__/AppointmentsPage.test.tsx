@@ -25,7 +25,15 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
-vi.mock('firebase/functions', () => ({ httpsCallable: () => vi.fn() }));
+vi.mock('firebase/functions', () => ({
+  // getBabysitterSummaries (issue #529) answers with an empty batch here —
+  // every card falls back to the generic label, as the unreadable-doc path
+  // did before; other callables stay inert stubs.
+  httpsCallable: (_fns: unknown, name: string) =>
+    name === 'getBabysitterSummaries'
+      ? () => Promise.resolve({ data: { summaries: [] } })
+      : vi.fn(),
+}));
 
 vi.mock('firebase/firestore', () => ({
   collection: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
@@ -54,8 +62,8 @@ vi.mock('@/hooks/useFamilyAppointments', () => ({
 // The card component has its own data needs (holidays, reference lookups);
 // stub it so these tests pin the PAGE's sectioning, not the card internals.
 vi.mock('@/components/appointments/ExpandableBabysitterCard', () => ({
-  ExpandableBabysitterCard: ({ appointment, variant }: { appointment: { appointmentId: string }; variant: string }) => (
-    <div data-testid={`card-${appointment.appointmentId}`}>{variant}</div>
+  ExpandableBabysitterCard: ({ appointment, variant, defaultExpanded }: { appointment: { appointmentId: string }; variant: string; defaultExpanded?: boolean }) => (
+    <div data-testid={`card-${appointment.appointmentId}`} data-expanded={String(!!defaultExpanded)}>{variant}</div>
   ),
 }));
 
@@ -64,9 +72,9 @@ import { render, cleanup, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { FamilyAppointmentsPage } from '../AppointmentsPage';
 
-function renderPage() {
+function renderPage(state?: { focusAppointmentId?: string }) {
   return render(
-    <MemoryRouter initialEntries={['/family/appointments']}>
+    <MemoryRouter initialEntries={[{ pathname: '/family/appointments', state }]}>
       <FamilyAppointmentsPage />
     </MemoryRouter>,
   );
@@ -202,5 +210,22 @@ describe('family AppointmentsPage — loading skeletons (UX F12, issue #126)', (
     renderPage();
     expect(screen.queryByTestId('skeleton-card')).toBeNull();
     expect(screen.getByTestId('card-a2')).toBeTruthy();
+  });
+});
+
+describe('family AppointmentsPage — opened from a landing-page row', () => {
+  it('expands only the card the row was tapped for', () => {
+    h.apts.pending = [apt('a1', 'pending')];
+    h.apts.confirmed = [apt('a2', 'confirmed'), apt('a3', 'confirmed')];
+    renderPage({ focusAppointmentId: 'a2' });
+    expect(screen.getByTestId('card-a2').dataset.expanded).toBe('true');
+    expect(screen.getByTestId('card-a1').dataset.expanded).toBe('false');
+    expect(screen.getByTestId('card-a3').dataset.expanded).toBe('false');
+  });
+
+  it('expands nothing when reached from the menu', () => {
+    h.apts.confirmed = [apt('a2', 'confirmed')];
+    renderPage();
+    expect(screen.getByTestId('card-a2').dataset.expanded).toBe('false');
   });
 });

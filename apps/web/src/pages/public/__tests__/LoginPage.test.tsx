@@ -3,6 +3,8 @@ import { describe, it, expect, vi } from 'vitest';
 // Capture the props the sit LoginPage passes into the shared LoginPage.
 let captured: Record<string, unknown> = {};
 vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   LoginPage: (props: Record<string, unknown>) => {
     captured = props;
     return null;
@@ -32,5 +34,13 @@ describe('sit LoginPage wrapper', () => {
     // Foreign-profile-only / unknown users fall back to /signup, not dead-end '/'.
     expect(route(undefined)).toBe('/signup');
     expect(route('something-else')).toBe('/signup');
+  });
+
+  // issue #435 milestone, PR5: /signup is retired — the "create an account"
+  // link goes straight to /enroll, the unified landing page, instead of
+  // taking the extra /signup -> /enroll redirect hop.
+  it('points the "create an account" link at /enroll, not /signup', () => {
+    render(<LoginPage />);
+    expect(captured.signUpTo).toBe('/enroll');
   });
 });

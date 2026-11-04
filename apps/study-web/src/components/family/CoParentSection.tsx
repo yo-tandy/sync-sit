@@ -65,13 +65,15 @@ export function CoParentSection() {
           const userSnap = await getDoc(doc(db, 'users', pid));
           const u = userSnap.data();
           list.push({ uid: pid, name: u ? `${u.firstName} ${u.lastName}` : t('invite.familyMemberFallback') });
+        // eslint-disable-next-line no-restricted-syntax -- best-effort: per-member name enrichment falls back to a generic label
         } catch {
           list.push({ uid: pid, name: t('invite.familyMemberFallback') });
         }
       }
       setMembers(list);
       setError(null);
-    } catch {
+    } catch (err) {
+      console.error('[coParent] load members failed', err);
       // The families/{id} read is gated on isFamilyMember, so permission-denied
       // is reachable for a parent whose family pointer has gone stale -- the
       // same divergence removeCoParent defends against. Without this catch the
@@ -111,6 +113,7 @@ export function CoParentSection() {
     if (!inviteLink) return;
     try {
       await navigator.clipboard.writeText(inviteLink);
+    // eslint-disable-next-line no-restricted-syntax -- best-effort: clipboard write unsupported/denied; execCommand fallback below handles it
     } catch {
       const input = document.createElement('input');
       input.value = inviteLink;

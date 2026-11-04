@@ -1,0 +1,197 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { screen, fireEvent, render, cleanup, waitFor } from '@testing-library/react';
+
+const h = vi.hoisted(() => ({
+  calls: [] as { name: string; payload: unknown }[],
+  navigate: vi.fn(),
+  auth: {
+    firebaseUser: null as unknown,
+    userDoc: null as Record<string, unknown> | null,
+    loading: false,
+  },
+  refreshUserDoc: vi.fn(() => Promise.resolve()),
+  enrollBabysitterError: null as unknown,
+  handoffError: null as unknown,
+  assignedUrls: [] as string[],
+}));
+
+vi.mock('@/config/firebase', () => ({ functions: {}, db: {}, auth: {} }));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
+    h.calls.push({ name, payload });
+    if (name === 'enrollBabysitter') {
+      if (h.enrollBabysitterError) return Promise.reject(h.enrollBabysitterError);
+      return Promise.resolve({ data: { success: true, uid: 'u1' } });
+    }
+    if (name === 'createAppHandoffCode') {
+      if (h.handoffError) return Promise.reject(h.handoffError);
+      return Promise.resolve({ data: { code: 'abc123' } });
+    }
+    return Promise.resolve({ data: {} });
+  },
+}));
+vi.mock('react-router', async (orig) => ({
+  ...(await orig<typeof import('react-router')>()),
+  useNavigate: () => h.navigate,
+}));
+vi.mock('@/stores/authStore', () => {
+  const storeState = () => ({
+    firebaseUser: h.auth.firebaseUser,
+    userDoc: h.auth.userDoc,
+    loading: h.auth.loading,
+    refreshUserDoc: h.refreshUserDoc,
+  });
+  return {
+    useAuthStore: Object.assign(() => storeState(), {
+      getState: () => storeState(),
+      subscribe: () => () => {},
+    }),
+  };
+});
+vi.mock('@ejm/sit-core', () => ({
+  getSitRole: (userDoc: { profiles?: { babysitter?: unknown; parent?: unknown }; isAdmin?: boolean } | null) => {
+    if (userDoc?.profiles?.babysitter) return 'babysitter';
+    if (userDoc?.profiles?.parent) return 'parent';
+    if (userDoc?.isAdmin) return 'admin';
+    return undefined;
+  },
+}));
+vi.mock('@/components/ui', () => ({
+  Spinner: () => <div>spinner</div>,
+}));
+vi.mock('@ejm/shared-ui', () => ({
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  APP_NAME: { sit: 'sync/sit', study: 'sync/study', do: 'sync/do' },
+  useDocumentGround: () => {},
+  LanguageSelector: () => <div>lang-selector</div>,
+  enrollmentErrorReason: (err: { details?: { reason?: unknown } } | null) => {
+    const reason = err?.details?.reason;
+    return reason === 'profile-exists' || reason === 'role-exclusive' || reason === 'send-cap'
+      ? reason
+      : null;
+  },
+  ageGateErrorCode: (err: { details?: { code?: unknown } } | null) => {
+    const code = err?.details?.code;
+    return code === 'age/under-15' || code === 'age/mismatch' ? code : null;
+  },
+}));
+
+import { I18nextProvider } from 'react-i18next';
+import { MemoryRouter } from 'react-router';
+import i18n from '@/i18n';
+import { ChooseAppPage } from '../ChooseAppPage';
+
+const rootOnlyDoc = {
+  firstName: 'Iris',
+  ejemEmail: 'iris28@ejm.org',
+  profiles: {},
+};
+
+function renderPage() {
+  return render(
+    <I18nextProvider i18n={i18n}>
+      <MemoryRouter>
+        <ChooseAppPage />
+      </MemoryRouter>
+    </I18nextProvider>,
+  );
+}
+
+const originalAssign = window.location.assign;
+
+beforeEach(() => {
+  cleanup();
+  h.calls.length = 0;
+  h.navigate = vi.fn();
+  h.auth = { firebaseUser: { uid: 'u1' }, userDoc: rootOnlyDoc, loading: false };
+  h.refreshUserDoc = vi.fn(() => Promise.resolve());
+  h.enrollBabysitterError = null;
+  h.handoffError = null;
+  h.assignedUrls = [];
+  i18n.changeLanguage('en');
+  // window.location.assign is not implemented in jsdom.
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, assign: (url: string) => h.assignedUrls.push(url) },
+  });
+});
+
+afterEach(() => {
+  Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, assign: originalAssign } });
+});
+
+describe('ChooseAppPage', () => {
+  it('renders Babysitter and Tutor as selectable, and Doer as disabled with a coming-soon badge', () => {
+    // ROLE labels, not app names (issue #537 D6): the tile says what the
+    // user will DO; the brand mark beside it says which app that leads to.
+    renderPage();
+    expect(screen.getByText('Babysitter')).toBeInTheDocument();
+    expect(screen.getByText('Tutor')).toBeInTheDocument();
+    expect(screen.getByText('Doer')).toBeInTheDocument();
+    expect(screen.queryByText('sync/sit')).not.toBeInTheDocument();
+    expect(screen.getByText(i18n.t('unifiedEnrollment.comingSoon'))).toBeInTheDocument();
+    // do's tile is not a clickable button — only sit/study are.
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(2);
+  });
+
+  // Decision 20 forbids sit/study reachability INTO do — unaffected by this
+  // page's gate accepting a broader set of verified identities (issue #435
+  // PR4 review discussion on #474): a sync-do doer-only user reaching this
+  // screen still sees do as a disabled "coming soon" tile, not a third
+  // option.
+  it('do stays a disabled coming-soon tile for a doer-only user too', () => {
+    h.auth.userDoc = {
+      firstName: 'Dana',
+      ejemEmail: 'dana28@ejm.org',
+      profiles: { doer: { enrollmentComplete: true } },
+    };
+    renderPage();
+    expect(screen.getByText(i18n.t('unifiedEnrollment.comingSoon'))).toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(2);
+  });
+
+
+  it('renders inside the gray platform brand scope (issue #537 D1)', () => {
+    // The chooser is a PLATFORM surface: a .brand-platform ancestor re-points
+    // every brand-* utility below it at the gray ramp (base.css). Pinned on
+    // the class because that is the entire mechanism — no scope, sit red.
+    const { container } = renderPage();
+    expect(container.querySelector('.brand-platform')).not.toBeNull();
+  });
+
+  it('choosing sit calls enrollBabysitter in crossApp mode and resumes at /enroll/babysitter', async () => {
+    renderPage();
+    fireEvent.click(screen.getByText('Babysitter'));
+
+    await waitFor(() => {
+      expect(h.navigate).toHaveBeenCalledWith('/enroll/babysitter');
+    });
+    const call = h.calls.find((c) => c.name === 'enrollBabysitter');
+    expect(call?.payload).toEqual({ crossApp: true, consentVersion: '1.0' });
+    expect(h.refreshUserDoc).toHaveBeenCalled();
+  });
+
+  it('choosing study mints a handoff code and navigates to the study handoff URL', async () => {
+    renderPage();
+    fireEvent.click(screen.getByText('Tutor'));
+
+    await waitFor(() => {
+      expect(h.assignedUrls).toHaveLength(1);
+    });
+    expect(h.calls.some((c) => c.name === 'createAppHandoffCode')).toBe(true);
+    expect(h.assignedUrls[0]).toContain('/handoff#code=abc123');
+    expect(h.assignedUrls[0]).toContain('lang=en');
+  });
+
+  it('surfaces a translated error on enrollBabysitter rejection without navigating', async () => {
+    h.enrollBabysitterError = { code: 'functions/failed-precondition', details: { reason: 'role-exclusive' } };
+    renderPage();
+    fireEvent.click(screen.getByText('Babysitter'));
+
+    const msg = i18n.t('signup.roleExclusiveBabysitter');
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    expect(h.navigate).not.toHaveBeenCalledWith('/enroll/babysitter');
+  });
+});

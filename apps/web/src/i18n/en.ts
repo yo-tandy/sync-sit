@@ -8,6 +8,9 @@ export default {
   },
   // Common
   common: {
+    // Shared AddressAutocomplete (issue #524): the two strings it used to hardcode.
+    addressPlaceholder: 'Start typing an address...',
+    addressPoweredBy: 'Powered by adresse.data.gouv.fr',
     save: 'Save',
     cancel: 'Cancel',
     back: 'Back',
@@ -79,6 +82,8 @@ export default {
     saving: 'Saving...',
     signingIn: 'Signing in...',
     invalidCode: 'Invalid verification code',
+    codeExpired: 'This verification code has expired. Please request a new one.',
+    codeWrongClass: "This code can't be used for this sign-up. Please request a new one.",
     tooManyAttempts: 'Too many failed attempts. Please request a new code.',
     errorInvalidCredentials: 'Incorrect email or password.',
     errorTooManyAttempts: 'Too many attempts. Please try again later.',
@@ -115,6 +120,7 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveBabysitter: "Babysitting is for EJM students — parent accounts can't enroll as babysitters.",
+    roleExclusiveParent: "Family accounts are for parents — student accounts (babysitter or tutor) can't enroll as a parent.",
   },
 
   welcomeCross: {
@@ -155,6 +161,9 @@ export default {
     ejemEmailHint: 'Use your official EJM email. The last 2 digits must be your graduation year.',
     ejemDomainRequired: 'Email must be an @ejm.org address',
     serverError: 'Something went wrong. Please try again.',
+    submitInvalid: 'Some of your details could not be accepted. Please check them and try again.',
+    joinExpired: 'Your verification code or this invite link is no longer valid. Request a new code, or ask for a new invite link.',
+    joinInvalid: 'Your verification code is incorrect, or some details could not be accepted. Please check them and try again.',
     emailLabel: 'Email address *',
     aboutYou: 'About you',
     aboutYouDesc: 'Tell families a bit about yourself.',
@@ -204,6 +213,11 @@ export default {
     completeSignUp: 'Complete sign up',
     creatingAccount: 'Creating account...',
     yourFamily: 'Your family',
+    // Shared parent wizard (issue #440): keys the shared StepFamilyInfo reads.
+    parentLastName: 'Last name',
+    familyAddressLabel: 'Address *',
+    petsHint: 'e.g. Cat, small dog',
+    completeSignup: 'Complete sign-up',
     yourFamilyDesc: 'Tell us about your family.',
     familyName: 'Family name *',
     pets: 'Pets',
@@ -258,6 +272,8 @@ export default {
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender *',
+    languages: 'Languages spoken *',
+    languagesHint: 'Mark every language you can speak with families.',
     contactInfoTitle: 'How can families reach you?',
     contactInfoSubtitle: 'Provide at least one contact method — email or phone.',
     contactEmail: 'Contact email',
@@ -268,7 +284,7 @@ export default {
     whatsappLabel: 'WhatsApp',
     whatsappSameAsPhone: 'Same as my phone number',
     contactVisibilityConsent: "I'm aware that families who want to reach me will get access to this contact information once I'm visible in search.",
-    contactVisibilityWarning: "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+    contactVisibilityWarning: "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
     additionalInfoTitle: 'A few optional extras',
     additionalInfoSubtitle: 'All of this is optional — you can fill it in, or skip it and add it later.',
     bioLabel: 'About me (optional)',
@@ -281,6 +297,22 @@ export default {
     photoSizeError: 'Photo must be smaller than 5 MB.',
     addressLabel: 'Address (optional)',
     addressHint: 'This helps optimize your search results — families see how far away you are.',
+    roleStudent: "I'm a student",
+    roleStudentDesc: 'Babysit, tutor, or both — one account across the whole EJM community.',
+    roleParent: "I'm a parent",
+    roleParentDesc: 'Find a babysitter, book a tutor, and manage your family.',
+    studentTitle: 'Create your account',
+    chooseAppTitle: "You're all set — what next?",
+    chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    // Role labels, not app names, on the chooser tiles (issue #537 D6):
+    // the user is choosing WHAT THEY DO; the brand mark beside the label
+    // already says which app that leads to.
+    chooseSitRole: 'Babysitter',
+    chooseStudyRole: 'Tutor',
+    chooseDoRole: 'Doer',
+    chooseSitDesc: 'Offer babysitting to EJM families.',
+    chooseStudyDesc: 'Offer tutoring to EJM families.',
+    chooseDoDesc: 'Odd jobs and errands for EJM families.',
   },
 
   // Babysitter Dashboard
@@ -297,6 +329,7 @@ export default {
     rejected: 'Rejected',
     activateTitle: 'Activate your profile?',
     activateDesc: 'Families will be able to find you in search results and send you babysitting requests.',
+    activateConsent: "I'm aware that families who want to reach me will get access to my contact information (email, phone, WhatsApp) once I'm visible in search.",
     deactivateTitle: 'Deactivate your profile?',
     deactivateDesc: "You won't appear in search results and families won't be able to find you.",
     activate: 'Activate',
@@ -351,8 +384,15 @@ export default {
   },
 
   accountHub: {
-    title: 'My account',
+    // Brand string (#445), not a translated label -- identical in every
+    // language, same convention as "Sync/Sit" / "Sync/Study" (see
+    // `APP_NAME` in shared-ui's brandMarks). Titles AccountLayout's sticky
+    // header, the hub's ONE header at every breakpoint (#445 review).
+    brandTitle: 'Sync/Settings',
     subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+    // The neutral section's OWN heading (#445): "Account", distinct from
+    // `myAccount` ("My account"), which is that section's first ROW.
+    neutralSection: 'Account',
     myAccount: 'My account',
     myFamily: 'My family',
     supervisedKids: 'Supervised kids',
@@ -363,9 +403,36 @@ export default {
     search: 'Search',
     endorsements: 'Endorsements',
     favorites: 'Favorites',
+    // #491 -- the account hub footer (DeleteAccountSection, @ejm/shared-ui).
+    deleteMyAccount: 'Delete my account',
+    deleteDialogTitle: 'Delete my account?',
+    deleteDialogBody:
+      'This permanently deletes your account. Your profile, appointments, tutoring sessions, tasks, and references are removed from sync/sit, sync/study and sync/do. This cannot be undone.',
+    deleteConfirmLabel: 'Type {{word}} to confirm',
+    deleteConfirmButton: 'Yes, delete my account',
+    deleteErrorLastAdmin: "You're the last admin. Appoint another admin before deleting your account.",
+    deleteErrorReauth: 'For your security, please sign in again before deleting your account.',
+  },
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: "We've updated our terms",
+    body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+    agreePrefix: 'I have read and accept the',
+    terms: 'Terms of Service',
+    and: 'and the',
+    privacy: 'Privacy Policy',
+    accept: 'Accept and continue',
+    staleClient: 'This app is out of date. Reload the page and try again.',
+    signOut: 'Sign out instead',
+  },
+  accountDeleted: {
+    title: 'Your account has been deleted',
+    body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',
+    backHome: 'Go to the homepage',
   },
   appSwitch: {
-    account: 'My account',
+    account: 'Settings',
     barLabel: 'Switch app',
     toStudy: 'Open sync-study',
     error: 'Could not switch apps. Please try again.',
@@ -629,7 +696,9 @@ export default {
     noAppointmentsDesc: 'Search for a babysitter to get started. Your requests and confirmed appointments will appear here.',
     declined: 'Declined',
     babysitterFallback: 'Babysitter',
-    ageSuffix: 'ans',
+    ageSuffix: 'yo',
+    preferredBadge: 'Preferred',
+    returningBadge: 'Returning babysitter',
     classLabel: 'Class:',
     agesRange: 'Ages {{min}}–{{max}}',
     upToKids: ', up to {{count}} kids',
@@ -701,6 +770,8 @@ export default {
     withdrawTitle: 'Withdraw this request?',
     withdrawDesc: 'The family will no longer see your request. You can answer their published search again afterwards.',
     withdrawReason: 'Withdrawn by the babysitter',
+    cancelUnavailable: 'This appointment can no longer be cancelled.',
+    noLongerPending: 'This request is no longer pending.',
     waitingForFamilyDesc: 'You answered this family\u2019s published search. They decide next \u2014 their address appears here once they accept.',
     confirmAppointment: 'Confirm Appointment',
     confirmDesc: 'We recommend contacting the family first to coordinate details.',
@@ -794,6 +865,9 @@ export default {
     saved: 'Family info saved!',
     kidNote: 'About this child (optional)',
     kidNotePlaceholder: 'What would you like babysitters to know about your child?',
+    uploadError: 'Something went wrong while saving. Please try again.',
+    uploadErrorUnauthorized: 'You don\'t have permission to update this family. Try signing out and back in, or contact support if the problem continues.',
+    uploadErrorConnection: 'There was a connection problem. Please try again.',
   },
 
   // Invite
@@ -826,25 +900,49 @@ export default {
   },
 
   // Notifications
+  // The one account page's notification settings, every app the member
+  // uses (components/NotifPrefsSection). Worded per app and per side.
+  notifHub: {
+    blockShared: 'All Sync apps',
+    blockSit: 'Sync/Sit',
+    blockStudy: 'Sync/Study',
+    blockDo: 'Sync/Do',
+    reminders: 'Reminders',
+    remindersDesc: '24 hours before a scheduled babysitting or session',
+    endorsementsParent: 'Endorsements',
+    endorsementsParentDesc: 'Updates about endorsements you submitted',
+    endorsementsProvider: 'Endorsements',
+    endorsementsProviderDesc: 'When someone submits an endorsement for you',
+    sitParentConfirmed: 'Confirmation',
+    sitParentConfirmedDesc: 'When a request is accepted or confirmed',
+    sitParentCancelled: 'Decline / Cancellation',
+    sitParentCancelledDesc: 'When a babysitter declines your request or cancels a confirmed appointment',
+    sitProviderNewRequest: 'New request',
+    sitProviderNewRequestDesc: 'When a family sends you a babysitting request',
+    sitProviderCancelled: 'Cancellation',
+    sitProviderCancelledDesc: 'When an appointment is cancelled',
+    studyParentNewRequest: 'Session proposals',
+    studyParentNewRequestDesc: 'When your tutor proposes a session',
+    studyParentConfirmed: 'Confirmation',
+    studyParentConfirmedDesc: 'When a tutor accepts your request',
+    studyProviderNewRequest: 'New request',
+    studyProviderNewRequestDesc: 'When a family sends you a tutoring request',
+    studyProviderConfirmed: 'Confirmation',
+    studyProviderConfirmedDesc: 'When a family accepts a session or one of your proposals',
+    studyCancelled: 'Cancellation',
+    studyCancelledDesc: 'When a session is cancelled',
+    doNewRequest: 'New offers and requests',
+    doNewRequestDesc: 'When someone offers to help with your task or asks you to help with theirs',
+    doConfirmed: 'Accepted and done',
+    doConfirmedDesc: 'When an offer is accepted or a task is marked done',
+    doCancelled: 'Declined and cancelled',
+    doCancelledDesc: 'When an offer is declined or a task is cancelled',
+  },
   notifications: {
     title: 'Notification Preferences',
     desc: 'Choose how you want to be notified.',
     push: 'Push',
     emailNotif: 'Email',
-    blockShared: 'All Sync apps',
-    blockApp: 'Sync/Sit',
-    newRequest: 'New request',
-    newRequestDesc: 'When a family sends you a babysitting request',
-    confirmation: 'Confirmation',
-    confirmationDesc: 'When a request is accepted or confirmed',
-    cancellation: 'Cancellation',
-    cancellationDesc: 'When an appointment is cancelled',
-    declineOrCancel: 'Decline / Cancellation',
-    declineOrCancelDesc: 'When a babysitter declines your request or cancels a confirmed appointment',
-    reminder: 'Reminder',
-    reminderDesc: '24 hours before a scheduled appointment',
-    references: 'Endorsement updates',
-    referencesDesc: 'When a family submits an endorsement for you',
     referenceSubmitted: 'Endorsement submitted',
     referenceDesc: 'When a family submits an endorsement for you',
     savePreferences: 'Save Preferences',
@@ -949,6 +1047,12 @@ export default {
     confirmUnblock: 'Are you sure you want to unblock this user?',
     confirmDelete: 'Are you sure you want to delete this user? This action cannot be undone.',
     confirmDeleteAppointment: 'Are you sure you want to cancel this appointment? Both parties will be notified.',
+    // Issues #421/#500: the last active admin cannot be deleted or blocked
+    // away — appoint another admin first. One message, both actions: the
+    // confirm dialog's error slot is shared.
+    lastAdminError:
+      'This is the last active admin. Appoint another admin before deleting or blocking this account.',
+    actionFailed: 'That action failed. Please try again.',
     confirmResetPassword: 'Send a password reset email to this user?',
     userBlocked: 'User blocked successfully',
     userUnblocked: 'User unblocked successfully',
@@ -1027,6 +1131,8 @@ export default {
     identityLastName: 'Last name',
     identityDob: 'Date of birth',
     identityCorrectionFailed: 'Identity correction failed',
+    identityCorrectionInvalid: 'Identity correction failed: check the name and date of birth and try again.',
+    exportFailed: 'Could not export the data. Please try again.',
     identityCannotBeEmpty: 'Identity fields cannot be emptied — enter a replacement value.',
     searchAppointments: 'Search by name, family, or date...',
     recurring: 'Recurring',
@@ -1166,6 +1272,7 @@ export default {
     enrollmentAccess: {
       title: 'Enrollment access',
       desc: 'Pre-approved emails and enrollment exemptions',
+      invalidInput: 'Check the email address (and the note, if any) and try again.',
     },
     governance: {
       menuTitle: 'Supervision',
@@ -1233,6 +1340,8 @@ export default {
     upload: 'Upload',
     fileTooLarge: 'File is too large. Maximum size is 10 MB.',
     uploadError: 'An error occurred while uploading. Please try again.',
+    uploadErrorUnauthorized: 'You don\'t have permission to upload for this family. Try signing out and back in, or contact support if the problem continues.',
+    uploadErrorConnection: 'There was a connection problem. Please try again.',
     fillRequired: 'Please fill in the required fields and select a file.',
     addEnrollmentDoc: 'Add enrollment document',
     childFullName: 'Child\'s full name',
@@ -1259,7 +1368,7 @@ export default {
     approveTitle: 'Approve Verification',
     approveConfirm: 'Are you sure you want to approve this document?',
     rejectTitle: 'Reject Verification',
-    rejectDesc: 'Provide a reason for rejecting this document.',
+    rejectDesc: 'A reason is required. It is emailed to the family\'s parents (their replies reach the support inbox), so write it for them.',
     rejectionReasonPlaceholder: 'Reason for rejection...',
     enrollmentDesc: 'Upload your child\'s EJM enrollment or re-enrollment document.',
     enrollmentNote: 'The admin will verify the document against your family\'s registered information (parents and children).',
@@ -1285,6 +1394,8 @@ export default {
     checkboxConfirmEjm: 'I confirm that they have kids in EJM',
     approveSuccess: 'Account approved successfully!',
     communityAlreadyVerified: 'This request is no longer valid — this family has already been verified.',
+    communityCodeInvalid: 'That code isn’t valid. Check it and try again.',
+    communityCodeExpired: 'This code has expired. Ask for a new one.',
   },
 
   // Appointment actions
@@ -1315,6 +1426,10 @@ export default {
     cancelledLateBadge: 'Cancelled late',
     lateCancelWarning: 'This cancellation is inside the {{window}} notice window and will be recorded.',
     modifyInsideWindow: 'This appointment is inside the cancellation notice window, so its time can no longer be changed. You can still cancel it (recorded as late) or message the babysitter.',
+    respondErrorNotPending: 'This request is no longer pending, so it can’t be answered anymore.',
+    cancelErrorState: 'This appointment can no longer be cancelled.',
+    modifyErrorState: 'This appointment can no longer be modified.',
+    resubmitErrorState: 'This request can’t be resubmitted anymore.',
     resubmit: 'Resubmit',
     resubmitTitle: 'Resubmit Request',
     resubmitDesc: 'Edit the details and add a note explaining the changes. The babysitter will be notified.',

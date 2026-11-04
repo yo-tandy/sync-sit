@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
-type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'destructive';
 type ButtonSize = 'default' | 'sm' | 'icon';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -26,6 +26,10 @@ const variantClasses: Record<ButtonVariant, string> = {
   outline:
     'bg-white text-gray-950 border-[1.5px] border-gray-300 hover:border-gray-950',
   ghost: 'bg-transparent text-brand-600 hover:bg-brand-50',
+  // `--color-error-*` (base.css), never `--color-brand-*`: a destructive
+  // action reads the same red in every app regardless of which one's own
+  // brand colour happens to be red already (sit's is).
+  destructive: 'bg-error-600 text-white hover:bg-error-600/90 disabled:opacity-50',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

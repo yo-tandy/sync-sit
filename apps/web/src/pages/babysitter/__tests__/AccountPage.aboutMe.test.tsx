@@ -146,4 +146,16 @@ describe('BabysitterAccountPage about me', () => {
 
     expect(aboutMeBox().value).toBe('Typed but unsaved');
   });
+
+  it('a rejected save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    renderPage();
+    fireEvent.change(aboutMeBox(), { target: { value: 'New bio' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
+  });
 });

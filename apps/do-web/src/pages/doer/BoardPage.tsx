@@ -124,7 +124,8 @@ export function BoardPage() {
         if (resetSeq !== null) setSettledReset(resetSeq);
         setLoadedCategory(category);
         setError(false);
-      } catch {
+      } catch (err) {
+        console.error('[board] load tasks failed', err);
         if (generation !== generationRef.current) return;
         setError(true);
       }

@@ -11,8 +11,10 @@ import {
   StepPassword,
   enrollmentErrorReason,
   ageGateErrorCode,
+  AuthColumn,
+  enrollmentSubmitErrorKey,
 } from '@ejm/shared-ui';
-import { ADMIN_CONFIG_DEFS, hasAnyContact, type User } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, hasAnyContact, type User } from '@ejm/shared-core';
 import { getDoerProfile, type TaskCategory } from '@ejm/do-core';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
@@ -23,10 +25,6 @@ import { StepProfile } from './StepProfile';
 import type { ProfileData } from './StepProfile';
 import { StepDoerDetails } from './StepDoerDetails';
 import type { DoerDetailsData } from './StepDoerDetails';
-
-/** Version of the sync-do terms the consent tick accepts (recorded by
- * doEnrollDoer as consentAt/consentVersion, plan §11.4). */
-const CONSENT_VERSION = '2026-08-28';
 
 type StepId = 'email' | 'verify' | 'consent' | 'profile' | 'details';
 
@@ -228,7 +226,10 @@ export function DoerEnrollment() {
       setStep(step + 1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+        // Never echo err.message: an unexpected fault arrives as the bare token
+        // 'internal', and deliberate server messages are English-only.
+        console.error('[enrollment] send verification code failed', err);
+        setError(t('enrollment.serverError'));
       }
     } finally {
       setLoading(false);
@@ -297,6 +298,7 @@ export function DoerEnrollment() {
           const unsub = useAuthStore.subscribe(check);
           check(useAuthStore.getState());
         });
+      // eslint-disable-next-line no-restricted-syntax -- swallowed by design: the auth-store wait below already handles the timeout case
       } catch {
         // Swallowed by design — see above.
       }
@@ -313,8 +315,10 @@ export function DoerEnrollment() {
         setSignedOutSuccess(settled.firebaseUser ? 'profileLoad' : 'login');
       }
     } catch (err: unknown) {
+      console.error('[enrollment] doer enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);
@@ -453,7 +457,7 @@ export function DoerEnrollment() {
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep ? (
         <EnrollmentAppBar />
       ) : (
@@ -467,6 +471,6 @@ export function DoerEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

@@ -13,6 +13,8 @@
  * The whole card is aria-hidden — screen readers should hear the page's real
  * loading/loaded announcements, not a decorative placeholder.
  */
+import { twMerge } from 'tailwind-merge';
+
 interface SkeletonCardProps {
   /** Number of grey bars (default 3). */
   lines?: number;
@@ -26,11 +28,17 @@ interface SkeletonCardProps {
 const barWidths = ['w-3/5', 'w-full', 'w-2/5'];
 
 export function SkeletonCard({ lines = 3, avatar = false, className = '' }: SkeletonCardProps) {
+  // twMerge, not template interpolation (#429): same `bg-*`/`p-*` base/
+  // override conflict as Card — see the note there. SkeletonCard shares
+  // Card's base string, so it shares the risk.
   return (
     <div
       aria-hidden="true"
       data-testid="skeleton-card"
-      className={`motion-safe:animate-pulse rounded-lg border border-gray-200 bg-ground-raised p-4 ${className}`}
+      className={twMerge(
+        'motion-safe:animate-pulse rounded-lg border border-gray-200 bg-ground-raised p-4',
+        className
+      )}
     >
       <div className="flex items-start gap-3">
         {avatar && <div className="h-12 w-12 flex-shrink-0 rounded-full bg-gray-200" />}

@@ -12,6 +12,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 
 const h = vi.hoisted(() => ({
   updateDoc: vi.fn(() => Promise.resolve()),
+  // Callable traffic (issue #529): the picker's name search (PR1) and the
+  // by-uid babysitter summaries (PR2).
+  calls: [] as { name: string; payload: unknown }[],
+  searchResults: [] as unknown[],
+  summaries: [] as { uid: string; firstName: string; lastName: string }[],
   references: [
     {
       referenceId: 'ref-1',
@@ -47,6 +52,16 @@ vi.mock('@/hooks/useSubmittedEndorsements', () => ({
 vi.mock('@/components/endorsements/EndorsementDialog', () => ({
   EndorsementDialog: () => null,
 }));
+vi.mock('firebase/functions', () => ({
+  // Issue #529: both of this page's babysitter reads are callables now —
+  // the picker's name search (PR1) and the by-uid summaries (PR2); the
+  // roster download through firebase/firestore is gone.
+  httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
+    h.calls.push({ name, payload });
+    if (name === 'getBabysitterSummaries') return Promise.resolve({ data: { summaries: h.summaries } });
+    return Promise.resolve({ data: { results: h.searchResults } });
+  },
+}));
 vi.mock('firebase/firestore', () => ({
   doc: (_db: unknown, ...path: string[]) => ({ path: path.join('/') }),
   collection: vi.fn(),
@@ -63,6 +78,9 @@ import { SubmittedEndorsementsPage } from '../SubmittedEndorsementsPage';
 afterEach(() => {
   cleanup();
   h.updateDoc.mockClear();
+  h.calls.length = 0;
+  h.searchResults = [];
+  h.summaries = [];
 });
 
 describe('SubmittedEndorsementsPage — delete confirmation', () => {
@@ -105,5 +123,58 @@ describe('SubmittedEndorsementsPage — delete confirmation', () => {
 
     expect(screen.queryByRole('dialog', { name: 'submittedReferences.confirmDeleteTitle' })).toBeNull();
     expect(h.updateDoc).not.toHaveBeenCalled();
+  });
+});
+
+// Issue #529: the add-reference picker searches through a callable that
+// returns five display fields — never by downloading the babysitter roster
+// through the users collection.
+describe('SubmittedEndorsementsPage — babysitter picker search', () => {
+  it('sends the typed name to findBabysittersForEndorsement and renders what comes back', async () => {
+    h.searchResults = [
+      { uid: 'bs-9', firstName: 'Lea', lastName: 'Bernard', photoUrl: null, classLevel: 'Terminale' },
+    ];
+    render(<SubmittedEndorsementsPage />);
+    // The add button is icon-only; it is the round brand button in the header.
+    fireEvent.click(document.querySelector('button.bg-brand-600')!);
+    fireEvent.change(screen.getByPlaceholderText('preferred.searchPlaceholder'), { target: { value: 'Lea' } });
+
+    await vi.waitFor(() => {
+      expect(h.calls.find((c) => c.name === 'findBabysittersForEndorsement')).toBeTruthy();
+    }, { timeout: 2000 });
+    expect(h.calls.find((c) => c.name === 'findBabysittersForEndorsement')!.payload).toEqual({ query: 'lea' });
+    expect(await screen.findByText(/Lea/)).toBeInTheDocument();
+    // No Firestore roster query was issued.
+    expect(h.calls.every((c) => c.name === 'findBabysittersForEndorsement' || c.name === 'getBabysitterSummaries')).toBe(true);
+  });
+
+  it('does not search below two characters', async () => {
+    render(<SubmittedEndorsementsPage />);
+    fireEvent.click(document.querySelector('button.bg-brand-600')!);
+    fireEvent.change(screen.getByPlaceholderText('preferred.searchPlaceholder'), { target: { value: 'L' } });
+    await new Promise((r) => setTimeout(r, 500));
+    // (The by-uid summaries call for the reference rows fires on mount; only
+    // the picker search must stay silent.)
+    expect(h.calls.filter((c) => c.name === 'findBabysittersForEndorsement')).toHaveLength(0);
+  });
+});
+
+// Issue #529: reference rows resolve their babysitter's name through the
+// getBabysitterSummaries callable, never by reading users/{uid}.
+describe('SubmittedEndorsementsPage — babysitter names', () => {
+  it('asks getBabysitterSummaries for the referenced uids and renders the formatted name', async () => {
+    h.summaries = [{ uid: 'bs-1', firstName: 'Lea', lastName: 'Bernard' }];
+    render(<SubmittedEndorsementsPage />);
+    await vi.waitFor(() => {
+      const c = h.calls.find((x) => x.name === 'getBabysitterSummaries');
+      expect(c).toBeTruthy();
+      expect(c!.payload).toEqual({ uids: ['bs-1'] });
+    });
+    // The name lands in the card through a t() interpolation, which this
+    // suite's i18n stub flattens to the key — so the observable contract
+    // here is the request itself: one batch, only the missing uids, no
+    // per-uid Firestore reads.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(h.calls.filter((x) => x.name === 'getBabysitterSummaries')).toHaveLength(1);
   });
 });

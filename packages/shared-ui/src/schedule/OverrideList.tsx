@@ -2,7 +2,7 @@ import { useState, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card, Button, Dialog, Input, Select } from '../components/index.js';
 import { XIcon, PlusIcon, CalendarIcon } from '../components/Icons.js';
-import { slotIndexToTime, timeToSlotIndex, setSlotRange, createEmptySlots } from '@ejm/shared-core';
+import { slotIndexToTime, setSlotRange, createEmptySlots } from '@ejm/shared-core';
 import type { ScheduleOverrideDoc } from '@ejm/shared-core';
 
 interface OverrideListProps {
@@ -72,16 +72,9 @@ function describeOverride(override: ScheduleOverrideDoc, t: (key: string) => str
 }
 
 function buildSlots(start: string, end: string): boolean[] {
-  const startIdx = timeToSlotIndex(start);
-  const endIdx = timeToSlotIndex(end);
-  const slots = createEmptySlots();
-  if (startIdx < endIdx) {
-    return setSlotRange(slots, start, end, true);
-  } else {
-    for (let i = startIdx; i < 96; i++) slots[i] = true;
-    for (let i = 0; i < endIdx; i++) slots[i] = true;
-    return slots;
-  }
+  // The past-midnight wrap this used to hand-roll is `setSlotRange`'s own
+  // behaviour now (issue #510) — one definition of the storage convention.
+  return setSlotRange(createEmptySlots(), start, end, true);
 }
 
 type FormMode = null | 'availability' | 'block';

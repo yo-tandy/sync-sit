@@ -1,8 +1,9 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { Spinner } from '@/components/ui';
-import { getSitRole, getBabysitterProfile } from '@ejm/sit-core';
-import { isTutor } from '@ejm/shared-core';
+import { getSitRole } from '@ejm/sit-core';
+import { isTutor, needsReconsent } from '@ejm/shared-core';
+import { ConsentGateHost } from '@/components/ConsentGateHost';
 
 type SitRole = 'babysitter' | 'parent' | 'admin';
 
@@ -49,6 +50,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     );
   }
 
+  // Re-consent gate (issue #488 decision 1): the consent documents were
+  // bumped after this member last accepted them. Nothing of the app renders
+  // -- not even the role-less hub -- until they accept the current ones or
+  // sign out. Before role routing on purpose: a stale record is stale in
+  // every portal.
+  if (needsReconsent(userDoc)) return <ConsentGateHost />;
+
   // Role-agnostic surface: signed in is the whole requirement.
   if (!role) return <>{children}</>;
 
@@ -67,10 +75,24 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
     return <Navigate to="/signup" replace />;
   }
 
-  // Redirect babysitters with incomplete enrollment to enrollment flow
-  if (sitRole === 'babysitter' && getBabysitterProfile(userDoc)?.enrollmentComplete === false) {
-    return <Navigate to="/enroll/babysitter" replace />;
-  }
+  // NO enrollment-completeness ejection (issue #537 D8). This guard used to
+  // send any babysitter with `enrollmentComplete === false` straight back to
+  // /enroll/babysitter, which made the offering step's own "Skip for now"
+  // unusable: skipping could only work by claiming the enrollment WAS
+  // complete, so the flag lied and a skipped profile could later be flipped
+  // searchable with no rate, no kid ages and no area.
+  //
+  // #537 makes the offering stage skippable by design — "it just means that
+  // the account is not active on that sub app" — so completeness is a
+  // VISIBILITY question, not an access question. `computeEffectiveSearchable`
+  // already refuses to surface an incomplete profile whatever the user's own
+  // toggle says, and the dashboard already renders the "Complete your profile
+  // to become visible to families" CTA. Both keep working; only the coercion
+  // is gone.
+  //
+  // This converges sit onto study's guard, which has always passed incomplete
+  // tutors through with the same reasoning stated in its own comment: gating
+  // search activation is the dashboard's job, never the guard's.
 
   return <>{children}</>;
 }

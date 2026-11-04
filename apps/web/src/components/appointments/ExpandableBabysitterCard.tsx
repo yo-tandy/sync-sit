@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { collection, getDocs, query as fsQuery, where as fsWhere, limit as fsLimit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-import { db, functions } from '@/config/firebase';
+import { functions } from '@/config/firebase';
 import { Button, Badge, Card, Dialog } from '@/components/ui';
 import { AppointmentNotes } from './AppointmentNotes';
 import { AppointmentNoteDialog } from './AppointmentNoteDialog';
@@ -15,14 +14,11 @@ import { getDateTag } from '@/lib/dateTag';
 import { DateTag } from '@/components/ui/DateTag';
 import { buildCalendarUrl } from '@/lib/calendar';
 import {
-  endorsementSources,
   endorsementLabelKey,
-  toCrossAppEndorsement,
-  ENDORSEMENT_PER_SOURCE_LIMIT,
-  PUBLIC_ENDORSEMENT_STATUSES,
   type CrossAppEndorsement,
 } from '@ejm/shared-core';
 import { SIT_ORIGIN_LABEL_PREFIX } from '@/lib/endorsementLabels';
+import { fetchEndorsementSources } from '@/lib/crossAppReferences';
 
 const borderColors: Record<string, string> = {
   pending: '#f59e0b',
@@ -62,6 +58,7 @@ export function ExpandableBabysitterCard({
   onAccept,
   onDecline,
   existingReference,
+  defaultExpanded = false,
 }: {
   appointment: AppointmentDoc;
   info?: BabysitterSummary;
@@ -77,10 +74,18 @@ export function ExpandableBabysitterCard({
   onAccept?: () => void;
   onDecline?: () => void;
   existingReference?: ReferenceDoc;
+  /** Open on mount and scroll into view — the card a landing-page row was
+   * tapped for. */
+  defaultExpanded?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('fr') ? 'fr-FR' : 'en-GB';
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const cardRef = useRef<HTMLDivElement>(null);
+  // Mount-only: a later re-render must not yank the page back to this card.
+  useEffect(() => {
+    if (defaultExpanded) cardRef.current?.scrollIntoView?.({ block: 'start' });
+  }, []);
   const badgeLabels = useBadgeLabels();
   const { periods: holidayPeriods } = useHolidays();
   const name = info?.name || t('familyDashboard.babysitterFallback');
@@ -180,7 +185,8 @@ export function ExpandableBabysitterCard({
     try {
       await callSetNote('');
       setNoteRemoveOpen(false);
-    } catch {
+    } catch (err) {
+      console.error('[appointments] remove note failed', err);
       // Erasure-specific copy: the author's question here is "is the note
       // gone?" — "couldn't save" would answer the wrong one.
       setNoteError(t('familyDashboard.notes.removeError'));
@@ -202,35 +208,17 @@ export function ExpandableBabysitterCard({
     refsRequestedFor.current = babysitterUserId;
     if (refsInFlight.current) return; // a load is already running
     refsInFlight.current = true;
-    const sources = endorsementSources('sit');
+    const sources = fetchEndorsementSources(babysitterUserId);
     // allSettled, NOT all: with one query the failure mode was "this card's
     // endorsements are missing"; with three, Promise.all would let a failure in
     // a SECONDARY source (an unbuilt sibling composite, a transient error) hide
     // sit's own primary signal. Degrade to fewer entries, never to none.
-    Promise.allSettled(
-      sources.map(({ field }) =>
-        getDocs(fsQuery(
-          collection(db, 'references'),
-          fsWhere(field, '==', babysitterUserId),
-          // Load-bearing: the H2-hardened references read rule grants an
-          // unrelated family only the public-status disjunct, provable only
-          // from the QUERY. Fix the query if this denies, never the rule.
-          fsWhere('status', 'in', PUBLIC_ENDORSEMENT_STATUSES),
-          fsLimit(ENDORSEMENT_PER_SOURCE_LIMIT)
-        ))
-      )
-    ).then((settled) => {
+    Promise.allSettled(sources.map((s) => s.promise)).then((settled) => {
       // Only stale if the card has since been pointed at a DIFFERENT
       // babysitter; a mere collapse is not staleness.
       if (refsRequestedFor.current !== babysitterUserId) return;
       // Concatenated in source order, so sit's own references lead.
-      setRefs(settled.flatMap((r, i) =>
-        r.status === 'fulfilled'
-          ? r.value.docs.map((d) =>
-              toCrossAppEndorsement(sources[i].app, d.id, d.data() as Record<string, unknown>)
-            )
-          : []
-      ));
+      setRefs(settled.flatMap((r) => (r.status === 'fulfilled' ? r.value : [])));
       // Only a WHOLE load is cacheable; a partial one must retry on re-expand.
       if (settled.every((r) => r.status === 'fulfilled')) {
         refsCompleteFor.current = babysitterUserId;
@@ -248,6 +236,9 @@ export function ExpandableBabysitterCard({
 
   return (
     <Card borderColor={borderColors[variant]} className="mb-2">
+      {/* Scroll anchor; the margin clears the sticky app bar and
+          a pending group's date label. */}
+      <div ref={cardRef} className="scroll-mt-24" />
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
@@ -258,8 +249,21 @@ export function ExpandableBabysitterCard({
           <div>
             <div className="flex items-center gap-1.5">
               <p className="text-sm font-semibold text-gray-900">{name}</p>
-              {isPreferred && <span title="Preferred">❤️</span>}
-              {isReturning && <span className="text-blue-500" title="Returning">⭐</span>}
+              {isPreferred && (
+                <span role="img" aria-label={t('familyDashboard.preferredBadge')} title={t('familyDashboard.preferredBadge')}>
+                  ❤️
+                </span>
+              )}
+              {isReturning && (
+                <span
+                  className="text-blue-500"
+                  role="img"
+                  aria-label={t('familyDashboard.returningBadge')}
+                  title={t('familyDashboard.returningBadge')}
+                >
+                  ⭐
+                </span>
+              )}
             </div>
             {/* Pending: show age + class */}
             {variant === 'pending' && info?.age && (
@@ -368,9 +372,17 @@ export function ExpandableBabysitterCard({
                       <div className="ml-4 mt-1 mb-2 space-y-1">
                         {ref.text && <p className="text-xs text-gray-600 italic">"{ref.text}"</p>}
                         {/* Referee contact + kid counts are sit's own reference
-                            shape — gated on the source so a sibling product
-                            that later carries contact fields cannot have them
-                            rendered as babysitting-referee links here. */}
+                            shape. KEPT knowingly post-#346: a sibling row's
+                            `ref` now comes from the `getCrossAppReferences`
+                            projection, which structurally cannot carry these
+                            fields — so this gate is currently redundant, not
+                            load-bearing for THESE rows. It stays as the
+                            render-side safeguard against a future regression
+                            (a widened projection, or a call site that
+                            bypasses the callable and maps a raw sibling doc
+                            through `toCrossAppEndorsement` directly), at zero
+                            cost. Removing it would trade a free assertion for
+                            nothing. */}
                         {ref.sourceApp === 'sit' && (<>
                         {ref.refEmail && (
                           <a href={`mailto:${ref.refEmail}`} onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5 text-xs text-brand-600">

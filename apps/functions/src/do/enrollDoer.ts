@@ -8,6 +8,7 @@ import {
   checkEnrollmentAge,
   getEjemEmail,
   getContact,
+  isPlausiblePhone,
   type User,
 } from '@ejm/shared-core';
 import {
@@ -73,19 +74,6 @@ const CONTACT_MAX = 200;
 /** The platform's contact-email validator — study's tutor enrollment schema
  *  uses the same zod shape (`tutor.ts:88`). */
 const contactEmailShape = z.string().email();
-/**
- * Phone/WhatsApp shape (PR #320 round 3). NO platform precedent exists —
- * sit and study both accept bare strings (`tutor.ts:89-90`,
- * `sit-core/validation/enrollment.ts:57`) — so this is the new one, stated:
- * a plausible phone is drawn from the phone charset (digits, spaces,
- * parens, dots, dashes, optional leading +) and carries at least 6 digits.
- * Deliberately loose (no country/format semantics): the point is only that
- * junk like 'x' cannot be the channel that satisfies the ≥1-contact
- * requirement — decision 16's reveal must serve something dialable.
- */
-function isPlausiblePhone(v: string): boolean {
-  return /^\+?[0-9 ().-]+$/.test(v) && v.replace(/\D/g, '').length >= 6;
-}
 
 /** Manual guards in the publishSearch house style (plan §8). */
 function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
@@ -125,8 +113,8 @@ function validateEnrollmentInput(input: unknown): DoerEnrollmentInput {
   // root, so junk like 'x' must not count as "something for decision 16's
   // reveal to serve" — and the guarantee is only as strong as the WEAKEST
   // accepted channel. Email: study's tutor-schema validator
-  // (z.string().email()). Phone/WhatsApp: isPlausiblePhone above (the new
-  // precedent — the siblings have none).
+  // (z.string().email()). Phone/WhatsApp: shared-core isPlausiblePhone (the rule
+  // study's tutor enrollment and every client form now share).
   if (typeof e.contactEmail === 'string' && e.contactEmail.trim()) {
     if (!contactEmailShape.safeParse(e.contactEmail.trim()).success) {
       throw new HttpsError('invalid-argument', 'Invalid contact email');

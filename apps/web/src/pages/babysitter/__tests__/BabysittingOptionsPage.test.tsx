@@ -125,4 +125,15 @@ describe('BabysittingOptionsPage (post-#171 scope)', () => {
     expect(payload['profiles.babysitter.maxKids']).toBe(3);
     expect(payload['profiles.babysitter.kidAgeRange']).toEqual({ min: 3, max: 12 });
   });
+
+  it('a rejected save shows translated copy, never the raw SDK message', async () => {
+    h.updateDoc.mockRejectedValueOnce(
+      Object.assign(new Error('Missing or insufficient permissions.'), { code: 'permission-denied' }),
+    );
+    renderPage();
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText(i18n.t('common.error'))).toBeInTheDocument();
+    expect(screen.queryByText(/insufficient permissions/i)).toBeNull();
+  });
 });

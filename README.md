@@ -127,7 +127,9 @@ pnpm install
 
 # Start Firebase emulators (runs under the demo-test project — auth,
 # functions, firestore, storage; hosting is excluded because its named
-# targets only resolve for the real sync-sit project)
+# targets only resolve for the real sync-sit project). Builds
+# packages/*/dist + both functions codebases first, so this always runs
+# current code rather than whatever was last built (issue #413).
 pnpm emulators
 
 # Integration tests can run WITHOUT killing this dev stack via the second
@@ -201,7 +203,7 @@ The cross-app switch target is configurable (defaults to the production URLs bak
 | `pnpm build` | Build sit web app for production |
 | `pnpm build:study` / `pnpm build:do` | Build the study / do web apps |
 | `pnpm build:functions` | Compile Cloud Functions |
-| `pnpm emulators` | Start Firebase emulators (lane 1) |
+| `pnpm emulators` | Build shared packages + both functions codebases, then start Firebase emulators (lane 1) |
 | `pnpm seed:admin` | Create admin user in emulator |
 | `pnpm seed:test-data` | Seed families, babysitters and sample appointments |
 | `pnpm seed:admin:lane3` / `pnpm seed:test-data:lane3` | The same, into emulator lane 3 (`lane2` / `lane4` too; or `LANE=N pnpm seed:admin`) |
@@ -323,14 +325,29 @@ bash scripts/fix-cloud-run-permissions.sh
 
 The post-deploy script runs automatically via `firebase.json` postdeploy hooks.
 
+**One-time bucket CORS (required once per project, not part of `firebase deploy`):** family photos AND
+verification documents are uploaded by the browser with a direct `PUT` to `storage.googleapis.com` on a
+signed URL (issue #471, extended to verification documents by #447 — the latter uploads from BOTH the sit
+and study origins, since both apps' VerificationPage write there), so the default bucket needs the CORS
+policy in `storage.cors.json`. Apply it once, and again whenever an origin is added (#447 added the
+`sync-study*` origins to the existing `sync-sit*` set — **re-apply after merging #447**):
+
+```bash
+gcloud storage buckets update gs://<project>.appspot.com --cors-file=storage.cors.json
+gcloud storage buckets describe gs://<project>.appspot.com --format="json(cors_config)"   # verify
+```
+
+Without it every family-photo/verification-document upload fails in the browser with a CORS error while all
+tests stay green (CORS is enforced by the browser; neither the emulator nor the rules suite can see it).
+
 ## Security
 
 - **Firestore rules** — document-level access control with role-based permissions
-- **Storage rules** — family-scoped writes (10MB cap, renderable-type denylist: html/xhtml/svg/xml) on verification docs, callable-only reads (v4-signed URLs, forced download); owner-scoped profile photos; authenticated family photos
+- **Storage rules** — verification docs: no client writes — a membership-checked callable (`createVerificationDocumentUploadUrl`) mints a v4-signed PUT URL bound to content type, extension allowlist, and a 10MB `x-goog-content-length-range` (#447, replacing the cross-service `firestore.get()` membership check that caused the #446 outage); deletes denied outright (server-side cleanup only, via the Admin SDK); callable-only reads (v4-signed URLs, forced download) unchanged; profile photos: owner-scoped writes + denylist; family photos: no client writes — the same signed-URL shape (#471), delete still `request.auth != null` unscoped (tracked: #483)
 - **Verification codes** — `crypto.randomInt()` with 5-attempt rate limiting, 10-minute expiry
 - **Input validation** — Zod schemas on all enrollment functions
 - **Immutable fields** — role, status, uid, email protected via Firestore rules
-- **CORS** — open (functions protected by Firebase Auth)
+- **CORS** — functions: open (protected by Firebase Auth); storage bucket: `storage.cors.json` allows `PUT` from the app origins only (see Deployment)
 - **Security headers** — X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
 
 ## License

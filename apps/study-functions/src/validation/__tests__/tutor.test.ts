@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  suppliedPhoneError,
   tutorEnrollmentSchema,
   tutorImmutableProfileSchema,
   tutorSessionPrefsSchema,
@@ -26,8 +27,13 @@ describe('tutorEnrollmentSchema', () => {
     expect(tutorEnrollmentSchema.safeParse(validEnrollment).success).toBe(true);
   });
 
-  it('rejects an empty subjects array — enrollment must produce a searchable tutor', () => {
-    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(false);
+  it('accepts an empty subjects array — the wizard lets tutors skip subjects and add them later', () => {
+    expect(tutorEnrollmentSchema.safeParse({ ...validEnrollment, subjects: [] }).success).toBe(true);
+  });
+
+  it('still requires the subjects field itself', () => {
+    const { subjects: _s, ...rest } = validEnrollment;
+    expect(tutorEnrollmentSchema.safeParse(rest).success).toBe(false);
   });
 
   it('rejects a zero rate (must be positive, matching the wizard gate)', () => {
@@ -193,5 +199,25 @@ describe('toDobDate — the stored-DOB normalizer the age gate depends on', () =
     expect(toDobDate(null)).toBeNull();
     expect(toDobDate(undefined)).toBeNull();
     expect(toDobDate(42)).toBeNull();
+  });
+});
+
+describe('suppliedPhoneError', () => {
+  it('passes plausible or absent phones', () => {
+    expect(suppliedPhoneError({ contactPhone: '+33 6 12 34 56 78', whatsapp: '0612345678' })).toBeNull();
+    expect(suppliedPhoneError({ contactEmail: 'a@b.com' })).toBeNull();
+    expect(suppliedPhoneError({ contactPhone: '   ' })).toBeNull();
+    expect(suppliedPhoneError(undefined)).toBeNull();
+  });
+
+  it('flags a junk contact phone', () => {
+    expect(suppliedPhoneError({ contactPhone: 'x' })).toBe('Invalid contact phone');
+    expect(suppliedPhoneError({ contactPhone: '12345' })).toBe('Invalid contact phone');
+  });
+
+  it('flags a junk WhatsApp number', () => {
+    expect(suppliedPhoneError({ contactPhone: '0612345678', whatsapp: 'call me' })).toBe(
+      'Invalid WhatsApp number',
+    );
   });
 });

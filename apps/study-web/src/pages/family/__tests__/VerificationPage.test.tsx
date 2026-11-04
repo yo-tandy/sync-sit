@@ -1,15 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '@/__tests__/test-utils';
+import { renderWithProviders, i18n } from '@/__tests__/test-utils';
 
 // The page drives the SHARED verification callables through the real
 // verificationStore (getVerificationStatus / submitVerification /
-// generateCommunityCode / lookupCommunityCode / approveCommunityCode) and
-// uploads to the shared bucket via firebase/storage. Callables are dispatched
-// by name through h.callable; storage is fully mocked. getDownloadURL is
-// mocked ONLY to pin its absence: calling it after an upload always failed
-// (storage.rules denies reads on verification-documents/**) — that regression
-// was fixed in sit (8f7802c) and must not be re-ported here.
+// generateCommunityCode / lookupCommunityCode / approveCommunityCode), PLUS
+// its own direct createVerificationDocumentUploadUrl call (issue #447) —
+// callables are dispatched by name through h.callable; the signed PUT
+// itself goes through the global `fetch`, stubbed per-test below (mirrors
+// sit's FamilySettingsPage.test.tsx pattern for the #471 family-photo
+// upload). getDownloadURL is mocked ONLY to pin its absence: calling it
+// after an upload always failed (storage.rules denies reads on
+// verification-documents/**) — that regression was fixed in sit (8f7802c)
+// and must not be re-ported here.
 const h = vi.hoisted(() => ({
   auth: {
     userDoc: {
@@ -19,9 +22,6 @@ const h = vi.hoisted(() => ({
   },
   // (name, payload) => Promise<{ data }>. Reassigned/inspected per test.
   callable: vi.fn(),
-  uploadBytes: vi.fn<(ref: { path: string }, data: File) => Promise<void>>(() =>
-    Promise.resolve(),
-  ),
   getDownloadURL: vi.fn<(ref: { path: string }) => Promise<string>>(() =>
     Promise.resolve('https://should-never-be-called'),
   ),
@@ -38,8 +38,6 @@ vi.mock('firebase/functions', () => ({
 }));
 
 vi.mock('firebase/storage', () => ({
-  ref: (_storage: unknown, path: string) => ({ path }),
-  uploadBytes: (...args: [ref: { path: string }, data: File]) => h.uploadBytes(...args),
   getDownloadURL: (...args: [ref: { path: string }]) => h.getDownloadURL(...args),
 }));
 
@@ -49,6 +47,8 @@ vi.mock('@/stores/authStore', () => ({
 
 import { VerificationPage } from '../VerificationPage';
 import { useVerificationStore } from '@/stores/verificationStore';
+
+const fetchMock = vi.fn();
 
 type Verification = {
   identityStatus: string;
@@ -76,6 +76,10 @@ function defaultCallable(name: string, payload: unknown) {
       return Promise.resolve({ data: { code: 'ABC123', expiresAt: new Date(Date.now() + 3600_000).toISOString() } });
     case 'lookupCommunityCode':
       return Promise.resolve({ data: { familyName: 'Levi', firstName: 'Noa', lastName: 'Levi', familyId: 'fam2' } });
+    case 'createVerificationDocumentUploadUrl':
+      return Promise.resolve({
+        data: { url: 'https://signed.example.com/put', path: 'verification-documents/fam1/identity-uuid.pdf' },
+      });
     default:
       return Promise.resolve({ data: {} });
   }
@@ -99,6 +103,13 @@ beforeEach(() => {
     lookupLoading: false,
     approving: false,
   });
+  fetchMock.mockReset();
+  fetchMock.mockResolvedValue({ ok: true, status: 200 } as Response);
+  vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('family VerificationPage', () => {
@@ -147,7 +158,7 @@ describe('family VerificationPage', () => {
     expect(screen.getByText('Approve a friend')).toBeInTheDocument();
   });
 
-  it('uploads to verification-documents/{familyId}/ and submits the constructed fileUrl WITHOUT getDownloadURL', async () => {
+  it('calls createVerificationDocumentUploadUrl, PUTs with the bound headers, and submits the constructed fileUrl WITHOUT getDownloadURL', async () => {
     renderWithProviders(<VerificationPage />);
     await screen.findAllByText('Not Submitted');
 
@@ -155,10 +166,25 @@ describe('family VerificationPage', () => {
     fireEvent.change(screen.getByLabelText('Identity'), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
-    await waitFor(() => expect(h.uploadBytes).toHaveBeenCalledTimes(1));
-    const [storageRef, uploaded] = h.uploadBytes.mock.calls[0];
-    expect(storageRef.path).toMatch(/^verification-documents\/fam1\/\d+-id\.pdf$/);
-    expect(uploaded).toBe(file);
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith('createVerificationDocumentUploadUrl', {
+        familyId: 'fam1',
+        kind: 'identity',
+        contentType: 'application/pdf',
+        fileName: 'id.pdf',
+        sizeBytes: file.size,
+      }),
+    );
+    // Both headers are bound into the V4 signature server-side, so both
+    // must ride on the PUT or GCS rejects it with SignatureDoesNotMatch.
+    expect(fetchMock).toHaveBeenCalledWith('https://signed.example.com/put', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/pdf',
+        'x-goog-content-length-range': '0,10485760',
+      },
+      body: file,
+    });
 
     await waitFor(() => expect(h.callable).toHaveBeenCalledWith('submitVerification', expect.anything()));
     const [, payload] = h.callable.mock.calls.find((c) => c[0] === 'submitVerification') as [
@@ -171,7 +197,7 @@ describe('family VerificationPage', () => {
     // never fetched: storage.rules denies reads on verification-documents/**,
     // so a getDownloadURL round-trip always failed (regression pinned here).
     expect(payload.fileUrl).toBe(
-      `https://firebasestorage.googleapis.com/v0/b/sync-sit.appspot.com/o/${encodeURIComponent(storageRef.path)}`,
+      'https://firebasestorage.googleapis.com/v0/b/sync-sit.appspot.com/o/verification-documents%2Ffam1%2Fidentity-uuid.pdf',
     );
     expect(h.getDownloadURL).not.toHaveBeenCalled();
 
@@ -181,7 +207,7 @@ describe('family VerificationPage', () => {
     );
   });
 
-  it('submits an enrollment document as type ejm_enrollment from the enrollment tab', async () => {
+  it('submits an enrollment document as type ejm_enrollment, with kind: enrollment, from the enrollment tab', async () => {
     renderWithProviders(<VerificationPage />);
     await screen.findAllByText('Not Submitted');
 
@@ -190,6 +216,12 @@ describe('family VerificationPage', () => {
     fireEvent.change(screen.getByLabelText('EJM Enrollment'), { target: { files: [file] } });
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
+    await waitFor(() =>
+      expect(h.callable).toHaveBeenCalledWith(
+        'createVerificationDocumentUploadUrl',
+        expect.objectContaining({ kind: 'enrollment' }),
+      ),
+    );
     await waitFor(() => expect(h.callable).toHaveBeenCalledWith('submitVerification', expect.anything()));
     const [, payload] = h.callable.mock.calls.find((c) => c[0] === 'submitVerification') as [
       string,
@@ -210,11 +242,18 @@ describe('family VerificationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
     expect(await screen.findByText(/File is too large/)).toBeInTheDocument();
-    expect(h.uploadBytes).not.toHaveBeenCalled();
+    expect(h.callable).not.toHaveBeenCalledWith('createVerificationDocumentUploadUrl', expect.anything());
     expect(h.callable).not.toHaveBeenCalledWith('submitVerification', expect.anything());
   });
 
-  it('surfaces the upload error and keeps the form usable when the submit fails', async () => {
+  // Issue #447/#448 — uploads now go through createVerificationDocumentUploadUrl
+  // then a signed PUT (mirroring sit's family-photo flow, issue #471), and the
+  // upload catch was bare before #448: no logging, one generic message for
+  // every failure. These pin that the raw error is logged and that actionable
+  // codes on EITHER half of the flow (the callable, or the PUT) get their own,
+  // non-technical copy.
+  it('surfaces the upload error, logs it, and keeps the form usable when the submit fails with no code', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     h.callable.mockImplementation((name: string, payload: unknown) =>
       name === 'submitVerification'
         ? Promise.reject(new Error('boom'))
@@ -228,6 +267,45 @@ describe('family VerificationPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
 
     expect(await screen.findByText(/An error occurred while uploading/)).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', expect.any(Error));
+    consoleError.mockRestore();
+  });
+
+  it('logs the raw error and shows the permission-denied copy when the callable rejects with functions/permission-denied', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const deniedError = Object.assign(new Error('denied'), { code: 'functions/permission-denied' });
+    h.callable.mockImplementation((name: string, payload: unknown) =>
+      name === 'createVerificationDocumentUploadUrl' ? Promise.reject(deniedError) : defaultCallable(name, payload),
+    );
+
+    renderWithProviders(<VerificationPage />);
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Identity'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(
+      await screen.findByText(/don't have permission to upload for this family/),
+    ).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', deniedError);
+    consoleError.mockRestore();
+  });
+
+  it('shows the connection-problem copy when the signed PUT itself fails', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    fetchMock.mockResolvedValue({ ok: false, status: 403 } as Response);
+
+    renderWithProviders(<VerificationPage />);
+    await screen.findAllByText('Not Submitted');
+
+    const file = new File(['doc-bytes'], 'id.pdf', { type: 'application/pdf' });
+    fireEvent.change(screen.getByLabelText('Identity'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Upload' }));
+
+    expect(await screen.findByText('There was a connection problem. Please try again.')).toBeInTheDocument();
+    expect(consoleError).toHaveBeenCalledWith('[verification] upload failed', expect.objectContaining({ code: 'upload/network' }));
+    consoleError.mockRestore();
   });
 
   it('generates and displays a community code with its expiry (unverified family)', async () => {
@@ -342,5 +420,60 @@ describe('family VerificationPage', () => {
       await screen.findByText('This request is no longer valid — this family has already been verified.'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/raw server text/)).not.toBeInTheDocument();
+  });
+
+  describe('community approve/lookup error copy (never the raw callable message)', () => {
+    async function lookupWith(err: unknown) {
+      statusResponse = {
+        verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+        documents: [],
+      };
+      h.callable.mockImplementation((name: string, payload: unknown) =>
+        name === 'lookupCommunityCode' ? Promise.reject(err) : defaultCallable(name, payload),
+      );
+      renderWithProviders(<VerificationPage />);
+      await screen.findByText('Approve a friend');
+      fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'zz99xx' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+    }
+
+    it('unexpected fault (functions/internal) shows the generic translated copy, not the bare token', async () => {
+      await lookupWith(Object.assign(new Error('internal'), { code: 'functions/internal' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityApproveFailed'))).toBeInTheDocument();
+      expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    });
+
+    it('not-found maps to the invalid-code copy', async () => {
+      await lookupWith(Object.assign(new Error('Invalid code'), { code: 'functions/not-found' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityCodeInvalid'))).toBeInTheDocument();
+      expect(screen.queryByText('Invalid code')).not.toBeInTheDocument();
+    });
+
+    it('deadline-exceeded maps to the expired-code copy', async () => {
+      await lookupWith(Object.assign(new Error('This code has expired'), { code: 'functions/deadline-exceeded' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityCodeExpired'))).toBeInTheDocument();
+      expect(screen.queryByText('This code has expired')).not.toBeInTheDocument();
+    });
+
+    it('an approve rejection (functions/internal) also shows the generic copy', async () => {
+      statusResponse = {
+        verification: { identityStatus: 'approved', enrollmentStatus: 'approved', isFullyVerified: true, isEjmFamily: true },
+        documents: [],
+      };
+      h.callable.mockImplementation((name: string, payload: unknown) =>
+        name === 'approveCommunityCode'
+          ? Promise.reject(Object.assign(new Error('internal'), { code: 'functions/internal' }))
+          : defaultCallable(name, payload),
+      );
+      renderWithProviders(<VerificationPage />);
+      await screen.findByText('Approve a friend');
+      fireEvent.change(screen.getByPlaceholderText('Enter code'), { target: { value: 'ZZ99XX' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Look Up' }));
+      fireEvent.click(await screen.findByLabelText(i18n.t('family.verification.checkboxKnowPerson')));
+      fireEvent.click(screen.getByLabelText(i18n.t('family.verification.checkboxConfirmEjm')));
+      fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+      expect(await screen.findByText(i18n.t('family.verification.communityApproveFailed'))).toBeInTheDocument();
+      expect(screen.queryByText('internal')).not.toBeInTheDocument();
+    });
   });
 });

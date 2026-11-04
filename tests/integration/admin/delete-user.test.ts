@@ -9,9 +9,12 @@ import {
 import {
   seedTestData,
   seedAppointment,
+  seedSearch,
   seedStudySession,
   seedStudyInstance,
   seedOverrideClaim,
+  seedContactSharingRequest,
+  seedStudyContactRequest,
   type SeedData,
 } from '../../setup/seed.js';
 
@@ -408,6 +411,228 @@ describe('deleteUser', () => {
       // incremented, so the deletion must not create/decrement it.
       const tutorDoc = await db.collection('users').doc(seed.tutor1.uid).get();
       expect(tutorDoc.data()!.profiles.tutor.endorsementCount).toBeUndefined();
+    });
+  });
+
+  /**
+   * Issue #408 item 2 — `searches/{searchId}` never appeared in any of the
+   * three GDPR paths. `sendContactRequest` writes one search doc 1:1 with
+   * the appointment it produces, storing `address`, `latLng`, `kidIds`,
+   * `familyId` and `createdByUserId` — none of which the erasure ever
+   * touched, so the address copy survived a hard delete. Full deletion
+   * (not anonymization), same disposition as `references` above.
+   */
+  describe('searches (GDPR, issue #408 item 2)', () => {
+    it('deleting the CREATOR deletes the searches they personally created, leaving another family\'s untouched', async () => {
+      const db = getDb();
+
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        status: 'pending',
+      });
+      const ownSearchId = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+      });
+      await db.collection('appointments').doc(apptId).update({ searchId: ownSearchId });
+
+      const otherFamilySearchId = await seedSearch({
+        familyId: seed.family2Id,
+        createdByUserId: seed.parent3.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent1.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(ownSearchId).get()).exists).toBe(false);
+      expect((await db.collection('searches').doc(otherFamilySearchId).get()).exists).toBe(true);
+
+      const logs = await db
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', seed.parent1.uid)
+        .get();
+      expect(logs.docs).toHaveLength(1);
+      expect(logs.docs[0].data().details.deletedSearches).toBeGreaterThanOrEqual(1);
+    });
+
+    it('deleting a co-parent who is NOT the last parent leaves the surviving co-parent\'s searches alone', async () => {
+      const db = getDb();
+
+      // parent2 is being deleted but is not family1's last parent (parent1
+      // survives) — only the search parent2 personally created is removed.
+      const byDeletedParent = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+      });
+      const bySurvivingParent = await seedSearch({
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(byDeletedParent).get()).exists).toBe(false);
+      expect((await db.collection('searches').doc(bySurvivingParent).get()).exists).toBe(true);
+    });
+
+    it('deleting the LAST parent deletes the family\'s searches via familyId (even one created by a departed parent)', async () => {
+      const db = getDb();
+
+      // createdByUserId no longer resolvable — only the family key still
+      // ties the doc to family2, mirroring the references familyKeyedRef case.
+      const familyKeyedSearch = await seedSearch({
+        familyId: seed.family2Id,
+        createdByUserId: 'deleted',
+      });
+
+      // parent3 is family2's sole parent.
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      expect((await db.collection('searches').doc(familyKeyedSearch).get()).exists).toBe(false);
+    });
+  });
+
+  /**
+   * Issue #408 ledger — `contactSharingRequests` (sit) and
+   * `studyContactRequests` (study) were in neither `exportUserData` nor the
+   * erasure, although `nameFanOut` already sweeps both for identity
+   * corrections. One doc per request, shared by two parties: deleted from
+   * every side the erased member is on, family-wide only for the last parent.
+   */
+  describe('contact requests (GDPR, issue #408 ledger)', () => {
+    const exists = async (col: string, id: string) =>
+      (await getDb().collection(col).doc(id).get()).exists;
+    const auditDetails = async (uid: string) => {
+      const logs = await getDb()
+        .collection('auditLogs')
+        .where('action', '==', 'delete_user')
+        .where('targetUserId', '==', uid)
+        .get();
+      expect(logs.docs).toHaveLength(1);
+      return logs.docs[0].data().details as Record<string, number>;
+    };
+
+    it("deleting a BABYSITTER deletes every sharing request addressed to them, across families, and no one else's", async () => {
+      const toDeleted1 = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        parentUserId: seed.parent1.uid,
+      });
+      const toDeleted2 = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family2Id,
+        parentUserId: seed.parent3.uid,
+      });
+      const toOther = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter2.uid,
+        familyId: seed.family1Id,
+        parentUserId: seed.parent1.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.babysitter1.uid }, adminToken);
+
+      expect(await exists('contactSharingRequests', toDeleted1)).toBe(false);
+      expect(await exists('contactSharingRequests', toDeleted2)).toBe(false);
+      expect(await exists('contactSharingRequests', toOther)).toBe(true);
+      const details = await auditDetails(seed.babysitter1.uid);
+      expect(details.deletedContactSharingRequests).toBe(2);
+      expect(details.deletedStudyContactRequests).toBe(0);
+    });
+
+    it('deleting a TUTOR deletes every study request addressed to them, including one they initiated, and none for another tutor', async () => {
+      const familyMade = await seedStudyContactRequest({
+        tutorUserId: seed.tutor1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        parentUserId: seed.parent1.uid,
+      });
+      const tutorMade = await seedStudyContactRequest({
+        tutorUserId: seed.tutor1.uid,
+        familyId: seed.family2Id,
+        createdByUserId: seed.tutor1.uid,
+        initiatedBy: 'tutor',
+      });
+      const otherTutor = await seedStudyContactRequest({
+        tutorUserId: seed.tutor2.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        parentUserId: seed.parent1.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.tutor1.uid }, adminToken);
+
+      expect(await exists('studyContactRequests', familyMade)).toBe(false);
+      expect(await exists('studyContactRequests', tutorMade)).toBe(false);
+      expect(await exists('studyContactRequests', otherTutor)).toBe(true);
+      expect((await auditDetails(seed.tutor1.uid)).deletedStudyContactRequests).toBe(2);
+    });
+
+    it('deleting a CO-PARENT who is not the last parent deletes only the requests they personally made', async () => {
+      // parent2 leaves; parent1 keeps family1. The family's other requests --
+      // parent1's own, and a tutor-initiated one with no parent yet -- are
+      // the surviving parent's to keep, exactly the `searches` rule.
+      const byLeaver = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        parentUserId: seed.parent2.uid,
+      });
+      const bySurvivor = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter2.uid,
+        familyId: seed.family1Id,
+        parentUserId: seed.parent1.uid,
+      });
+      const studyByLeaver = await seedStudyContactRequest({
+        tutorUserId: seed.tutor1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent2.uid,
+        parentUserId: seed.parent2.uid,
+      });
+      const studyTutorInitiated = await seedStudyContactRequest({
+        tutorUserId: seed.tutor2.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.tutor2.uid,
+        initiatedBy: 'tutor',
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent2.uid }, adminToken);
+
+      expect(await exists('contactSharingRequests', byLeaver)).toBe(false);
+      expect(await exists('contactSharingRequests', bySurvivor)).toBe(true);
+      expect(await exists('studyContactRequests', studyByLeaver)).toBe(false);
+      expect(await exists('studyContactRequests', studyTutorInitiated)).toBe(true);
+    });
+
+    it("deleting the LAST parent deletes the family's requests via familyId, even a tutor-initiated one with no parent on it", async () => {
+      // parent3 is family2's sole parent. The tutor-initiated request has no
+      // parentUserId and a tutor as createdByUserId -- only familyId ties it
+      // to the family being erased.
+      const tutorInitiated = await seedStudyContactRequest({
+        tutorUserId: seed.tutor1.uid,
+        familyId: seed.family2Id,
+        createdByUserId: seed.tutor1.uid,
+        initiatedBy: 'tutor',
+      });
+      const sharing = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family2Id,
+        parentUserId: seed.parent3.uid,
+      });
+      const otherFamily = await seedContactSharingRequest({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        parentUserId: seed.parent1.uid,
+      });
+
+      await callFunction('deleteUser', { targetUserId: seed.parent3.uid }, adminToken);
+
+      expect(await exists('studyContactRequests', tutorInitiated)).toBe(false);
+      expect(await exists('contactSharingRequests', sharing)).toBe(false);
+      expect(await exists('contactSharingRequests', otherFamily)).toBe(true);
+      const details = await auditDetails(seed.parent3.uid);
+      expect(details.deletedContactSharingRequests).toBe(1);
+      expect(details.deletedStudyContactRequests).toBe(1);
     });
   });
 

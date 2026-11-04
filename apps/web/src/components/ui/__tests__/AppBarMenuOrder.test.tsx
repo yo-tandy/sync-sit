@@ -33,7 +33,10 @@ function openParentMenu() {
       </MemoryRouter>
     </I18nextProvider>,
   );
-  fireEvent.click(screen.getAllByRole('button')[0]);
+  // NOT `getAllByRole('button')[0]` any more (#417): the desktop app switch
+  // also renders buttons in this closed bar under jsdom (no CSS, so its
+  // `hidden md:flex` doesn't remove them from this query).
+  fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
 }
 
 /** Menu entries in DOM order, as a caller sees them top to bottom. */

@@ -23,10 +23,24 @@
   /* Recess ground + shadow tint (#366). Both are DERIVED from this ramp
      rather than picked, because the first pass at study on the #124 canvas
      invented blues instead of lifting them, and it showed. The shadow tint is
-     brand-100 exactly (#dde8f9). The ground is one step lighter than brand-50
-     (#eef3fc -> #f4f7fd): brand-50 itself is too saturated to sit under a
-     white card without the card reading as tinted rather than raised. */
+     brand-100 exactly (#dde8f9), declared in the plain :root block below
+     rather than here (#423) -- see there for why. The ground is one step
+     lighter than brand-50 (#eef3fc -> #f4f7fd): brand-50 itself is too
+     saturated to sit under a white card without the card reading as tinted
+     rather than raised. */
   --color-ground: #f4f7fd;
   --color-ground-raised: #ffffff;
+}
+
+/* --shadow-card-tint is a plain COLOUR, only ever read through var() by
+   --shadow-card-brand (base.css). It must NOT sit inside @theme: Tailwind
+   v4 derives a utility class from every @theme member's namespace, so a
+   --shadow-card-tint declared there generates a `shadow-card-tint` utility
+   emitting `box-shadow: #dde8f9` -- invalid at computed-value time (a
+   colour has no offsets or blur), painting nothing while still
+   autocompleting as if it worked (#423). A plain :root custom property
+   isn't scanned for utility generation but is still visible to that
+   var() read. */
+:root {
   --shadow-card-tint: #dde8f9;
 }

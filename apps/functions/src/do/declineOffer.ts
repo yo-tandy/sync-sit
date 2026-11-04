@@ -7,6 +7,7 @@ import { callerFamilyId } from './taskAccess.js';
 import { loadActiveCaller, validOfferId } from './offerAccess.js';
 import { notifyDoSafely, sendDoNotificationSafely } from './notify.js';
 import { buildTaskOfferDeclined } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doDeclineOffer` (plan §8): the owner family declines a single `pending`
@@ -23,7 +24,7 @@ import { buildTaskOfferDeclined } from './notifyContent.js';
  * decline again; `DO_OFFER_MAX_PER_TASK` bounds the pile-up.
  */
 export const doDeclineOffer = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

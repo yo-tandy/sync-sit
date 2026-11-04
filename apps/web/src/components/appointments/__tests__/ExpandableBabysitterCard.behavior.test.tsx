@@ -45,6 +45,13 @@ vi.mock('firebase/firestore', () => ({
   getDoc: vi.fn().mockResolvedValue({ exists: () => false }),
   getDocs: vi.fn().mockResolvedValue({ docs: [] }),
 }));
+// None of these tests exercise a callable directly (they assert on the
+// onCancel/onAccept/onDecline/onEdit/onResubmit PROPS), but expanding the
+// card unconditionally fires getCrossAppReferences for study/do now (issue
+// #346) — a no-op stub keeps that load harmless here.
+vi.mock('firebase/functions', () => ({
+  httpsCallable: () => () => Promise.resolve({ data: { items: [] } }),
+}));
 
 const info: BabysitterSummary = {
   uid: 'bs-1',
@@ -93,6 +100,27 @@ describe('ExpandableBabysitterCard late-cancellation record (issue #237)', () =>
     );
     expandCard();
     expect(screen.queryByText('appointment.cancelledLateBadge')).not.toBeInTheDocument();
+  });
+});
+
+describe('preferred/returning badges are accessible, not hover-only (issue #131)', () => {
+  // Before the fix, both badges carried only a hardcoded English `title`,
+  // unreachable on touch and unreliable for screen readers. They now expose
+  // a translated `role="img"` + `aria-label`, so they surface in the
+  // accessibility tree with no hover required.
+  it('gives the preferred badge an accessible name', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" isPreferred />);
+    expect(screen.getByRole('img', { name: 'familyDashboard.preferredBadge' })).toBeInTheDocument();
+  });
+
+  it('gives the returning badge an accessible name', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" isReturning />);
+    expect(screen.getByRole('img', { name: 'familyDashboard.returningBadge' })).toBeInTheDocument();
+  });
+
+  it('renders neither badge when the babysitter is neither preferred nor returning', () => {
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" />);
+    expect(screen.queryByRole('img')).not.toBeInTheDocument();
   });
 });
 
@@ -316,5 +344,31 @@ describe('rejected cards: who declined decides the affordance', () => {
     );
     expandCard();
     expect(screen.getByText('appointment.edit')).toBeInTheDocument();
+  });
+});
+
+describe('opening on a tapped landing-page row', () => {
+  // jsdom has no layout, so scrollIntoView is absent: stub it to observe it.
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('starts expanded and scrolls itself into view with defaultExpanded', () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(
+      <ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" defaultExpanded />,
+    );
+    // The class line lives only in the expanded view.
+    expect(screen.getByText(/familyDashboard\.classLabel/)).toBeInTheDocument();
+    expect(scroll).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays collapsed and leaves the scroll alone by default', () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    render(<ExpandableBabysitterCard appointment={appointment} info={info} variant="confirmed" />);
+    expect(screen.queryByText(/familyDashboard\.classLabel/)).toBeNull();
+    expect(scroll).not.toHaveBeenCalled();
   });
 });

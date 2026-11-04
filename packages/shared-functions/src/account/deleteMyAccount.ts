@@ -11,6 +11,7 @@ import {
 } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { effectiveAuthTimeSeconds } from '../auth/effectiveAuthTime.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * Time within which the member must have presented a CREDENTIAL for a
@@ -255,7 +256,7 @@ export async function notifyGuardiansOfSelfDelete(
  * a veto over erasure.
  */
 export const deleteMyAccount = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -333,6 +334,11 @@ export const deleteMyAccount = onCall(
         cancelledAppointments: erased.cancelledCount,
         familyDeleted: erased.isLastParent && !!erased.familyId,
         deletedReferences: erased.refDocsDeleted,
+        // issue #408 item 2 — counts only, no personal data (same convention
+        // as `deletedReferences`).
+        deletedSearches: erased.searchesDeleted,
+        deletedContactSharingRequests: erased.contactSharingRequestsDeleted,
+        deletedStudyContactRequests: erased.studyContactRequestsDeleted,
         deletedDoTasks: erased.doErasure.tasksDeleted,
         deletedDoOffers: erased.doErasure.offersDeleted,
         deletedDoPhotoObjects: erased.doErasure.photoObjectsDeleted,

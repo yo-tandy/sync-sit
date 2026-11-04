@@ -1,5 +1,8 @@
 export default {
   common: {
+    // AddressAutocomplete partagé (issue #524) : les deux chaînes qu'il codait en dur.
+    addressPlaceholder: 'Commencez à saisir une adresse...',
+    addressPoweredBy: 'Propulsé par adresse.data.gouv.fr',
     back: 'Retour',
     continue: 'Continuer',
     done: 'Terminé',
@@ -15,6 +18,19 @@ export default {
     helloNoName: 'Bonjour',
   },
 
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: 'Nos conditions ont été mises à jour',
+    body: "Avant de continuer, veuillez lire et accepter les Conditions d'utilisation et la Politique de confidentialité en vigueur.",
+    agreePrefix: "J'ai lu et j'accepte les",
+    terms: "Conditions d'utilisation",
+    and: 'et la',
+    privacy: 'Politique de confidentialité',
+    accept: 'Accepter et continuer',
+    staleClient: "Cette application n'est pas à jour. Rechargez la page et réessayez.",
+    signOut: 'Me déconnecter plutôt',
+  },
   auth: {
     login: 'Se connecter',
     loginTitle: 'Bon retour',
@@ -39,6 +55,9 @@ export default {
     resendCode: 'Renvoyer le code',
     verifying: 'Vérification...',
     invalidCode: 'Code de vérification invalide',
+    codeExpired: 'Ce code de vérification a expiré. Veuillez en demander un nouveau.',
+    codeWrongClass: 'Ce code de vérification ne peut pas être utilisé pour cette inscription. Veuillez en demander un nouveau.',
+    tooManyAttempts: 'Trop de tentatives. Veuillez demander un nouveau code.',
     createPassword: 'Créez votre mot de passe',
     confirmPassword: 'Confirmer le mot de passe',
     passwordMismatch: 'Les mots de passe ne correspondent pas',
@@ -421,6 +440,7 @@ export default {
       errorTooShort: 'Merci d\'écrire au moins {{min}} caractères.',
       errorNameRequired: 'Merci d\'indiquer le nom que les familles verront.',
       errorAlreadyExists: 'Votre famille a déjà recommandé cet(te) étudiant(e).',
+      errorCooldown: 'Cet(te) étudiant(e) a refusé votre dernière demande. Vous pourrez réessayer le {{date}}.',
       errorNoCompletedTask: "Vous pouvez recommander un(e) étudiant(e) une fois qu'une tâche que vous lui avez confiée est terminée.",
       errorPermission: "Vous ne pouvez pas recommander cet(te) étudiant(e).",
       errorInvalid: 'Vérifiez ce que vous avez écrit et réessayez.',
@@ -670,6 +690,7 @@ export default {
     emailLabel: 'Adresse email',
     ejemEmailHint: "Utilisez votre email EJM officiel. Les 2 derniers chiffres doivent correspondre à votre année d'obtention du diplôme.",
     serverError: 'Erreur serveur. Veuillez réessayer.',
+    submitInvalid: "Certaines de vos informations n'ont pas pu être acceptées. Veuillez les vérifier et réessayer.",
     confirmConsentTitle: 'Presque terminé',
     identityOnFile: 'Inscription au nom de {{name}} — votre identité est déjà enregistrée depuis votre autre profil Sync.',
     alreadyEnrolled: 'Ce compte possède déjà ce rôle.',
@@ -701,6 +722,7 @@ export default {
     contactSection: 'Coordonnées',
     contactHint: 'Indiquez au moins un moyen pour les familles de vous joindre. Vous pourrez les modifier plus tard.',
     contactEmailInvalid: 'Saisissez une adresse e-mail complète (ex. nom@exemple.com).',
+    contactPhoneInvalid: 'Saisissez un numéro de téléphone valide (chiffres, éventuellement précédés de +).',
     contactEmail: 'Email de contact',
     contactPhone: 'Téléphone de contact',
     completeSignup: "Terminer l'inscription",
@@ -756,6 +778,8 @@ export default {
     classLabel: 'Classe *',
     selectClass: 'Choisir la classe',
     gender: 'Genre *',
+    languages: 'Langues parlées *',
+    languagesHint: 'Indiquez toutes les langues que vous pouvez parler avec les familles.',
     contactInfoTitle: 'Comment les familles peuvent-elles vous contacter ?',
     contactInfoSubtitle: 'Indiquez au moins un moyen de contact — email ou téléphone.',
     contactEmail: 'Email de contact',
@@ -779,6 +803,16 @@ export default {
     photoSizeError: 'La photo doit faire moins de 5 Mo.',
     addressLabel: 'Adresse (optionnel)',
     addressHint: "Cela permet d'optimiser vos résultats de recherche — les familles voient à quelle distance vous vous trouvez.",
+    roleStudent: 'Je suis élève',
+    roleStudentDesc: 'Babysitting, soutien scolaire, ou les deux — un seul compte pour toute la communauté EJM.',
+    roleParent: 'Je suis parent',
+    roleParentDesc: 'Trouvez une babysitter, réservez un cours, et gérez votre famille.',
+    studentTitle: 'Créez votre compte',
+    chooseAppTitle: "C'est fait — et maintenant ?",
+    chooseAppSubtitle: 'Vos informations sont enregistrées. Choisissez où terminer votre inscription.',
+    chooseSitDesc: 'Proposez du babysitting aux familles EJM.',
+    chooseStudyDesc: 'Proposez du soutien scolaire aux familles EJM.',
+    chooseDoDesc: 'Petits services et courses pour les familles EJM.',
   },
 
   validation: {
@@ -786,8 +820,11 @@ export default {
   },
 
   accountHub: {
-    title: 'Mon compte',
+    // Brand string (#445), not translated -- identical in every language,
+    // same convention as "Sync/Sit" / "Sync/Study".
+    brandTitle: 'Sync/Paramètres',
     subtitle: 'Partagé entre sync/sit, sync/study et sync/do.',
+    neutralSection: 'Compte',
     myAccount: 'Mon compte',
     myFamily: 'Ma famille',
     supervisedKids: 'Enfants supervisés',
@@ -800,10 +837,8 @@ export default {
     favorites: 'Favoris',
   },
   appSwitch: {
-    account: 'Mon compte',
+    account: 'Paramètres',
     barLabel: "Changer d'application",
-    toSit: 'Ouvrir sync-sit',
-    toStudy: 'Ouvrir sync-study',
     error: "Impossible de changer d'application. Veuillez réessayer.",
   },
 

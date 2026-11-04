@@ -26,6 +26,9 @@ export default {
     confirmRemove: 'Remove',
   },
   common: {
+    // Shared AddressAutocomplete (issue #524): the two strings it used to hardcode.
+    addressPlaceholder: 'Start typing an address...',
+    addressPoweredBy: 'Powered by adresse.data.gouv.fr',
     save: 'Save',
     cancel: 'Cancel',
     continue: 'Continue',
@@ -193,6 +196,19 @@ export default {
     },
   },
 
+  // Re-consent gate (issue #488 decision 1) -- shown by AuthGuard instead of
+  // the app when the consent documents were bumped after this member accepted.
+  consentGate: {
+    title: "We've updated our terms",
+    body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+    agreePrefix: 'I have read and accept the',
+    terms: 'Terms of Service',
+    and: 'and the',
+    privacy: 'Privacy Policy',
+    accept: 'Accept and continue',
+    staleClient: 'This app is out of date. Reload the page and try again.',
+    signOut: 'Sign out instead',
+  },
   auth: {
     login: 'Log in',
     loginTitle: 'Welcome back',
@@ -217,6 +233,8 @@ export default {
     resendCode: 'Resend code',
     verifying: 'Verifying...',
     invalidCode: 'Invalid verification code',
+    codeExpired: 'This verification code has expired. Please request a new one.',
+    codeWrongClass: "This code can't be used for this sign-up. Please request a new one.",
     createPassword: 'Create your password',
     confirmPassword: 'Confirm password',
     passwordMismatch: "Passwords don't match",
@@ -257,6 +275,10 @@ export default {
   signup: {
     crossAppBanner: "You're signed in — pick a role to add to your existing account.",
     roleExclusiveTutor: "Tutoring is for EJM students — parent accounts can't enroll as tutors.",
+    // Defense-in-depth copy for a direct /enroll/parent visit by a provider
+    // account (tutor or babysitter) — issue #440 audit found this key
+    // missing, so ParentEnrollment.tsx was rendering the raw key.
+    roleExclusiveParent: "Family accounts are for parents — student accounts (tutor or babysitter) can't enroll as a parent.",
   },
 
   welcomeCross: {
@@ -287,8 +309,15 @@ export default {
   },
 
   accountHub: {
-    title: 'My account',
+    // Brand string (#445), not a translated label -- identical in every
+    // language, same convention as "Sync/Sit" / "Sync/Study" (see
+    // `APP_NAME` in shared-ui's brandMarks). Titles AccountLayout's sticky
+    // header, the hub's ONE header at every breakpoint (#445 review).
+    brandTitle: 'Sync/Settings',
     subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+    // The neutral section's OWN heading (#445): "Account", distinct from
+    // `myAccount` ("My account"), which is that section's first ROW.
+    neutralSection: 'Account',
     myAccount: 'My account',
     myFamily: 'My family',
     supervisedKids: 'Supervised kids',
@@ -301,7 +330,7 @@ export default {
     favorites: 'Favorites',
   },
   appSwitch: {
-    account: 'My account',
+    account: 'Settings',
     barLabel: 'Switch app',
     toSit: 'Open sync-sit',
     error: 'Could not switch apps. Please try again.',
@@ -381,6 +410,7 @@ export default {
       inactive: 'Inactive',
       activateTitle: 'Activate your profile?',
       activateDesc: 'Families will be able to find you in search results and send you tutoring requests.',
+      activateConsent: "I'm aware that families who want to reach me will get access to my contact information (email, phone, WhatsApp) once I'm visible in search.",
       deactivateTitle: 'Deactivate your profile?',
       deactivateDesc: "You won't appear in search results and families won't be able to find you.",
       activate: 'Activate',
@@ -513,6 +543,9 @@ export default {
       viewDates: 'View dates',
       hideDates: 'Hide dates',
       noOccurrences: 'No occurrences scheduled yet.',
+      instancesLoading: 'Loading dates…',
+      instancesLoadError: "Couldn't load this series' dates.",
+      instancesRetry: 'Try again',
       cancelSession: 'Cancel session',
       modifiedBadge: 'Modified',
       modifiedDetail: 'The family changed: {{fields}}. Review the new details above.',
@@ -714,6 +747,7 @@ export default {
     settings: {
       saved: 'Family details saved!',
       saveFailed: 'Failed to save family details',
+      loadFailed: 'Could not load your family details. Please try again.',
       sharedHint:
         'Your family details and children are shared with the Sync/Sit babysitting app — changes here update both.',
       familyName: 'Family name',
@@ -955,6 +989,8 @@ export default {
       upload: 'Upload',
       fileTooLarge: 'File is too large. Maximum size is 10 MB.',
       uploadError: 'An error occurred while uploading. Please try again.',
+      uploadErrorUnauthorized: 'You don\'t have permission to upload for this family. Try signing out and back in, or contact support if the problem continues.',
+      uploadErrorConnection: 'There was a connection problem. Please try again.',
       whyRequired: 'Sync/Study connects EJM families with student tutors. To keep everyone safe — especially the students — we need to verify that all parents on the platform are who they say they are and are part of the EJM community. You can verify through documents below, or ask a verified parent to vouch for you using the community verification option. Verification is shared with Sync/Sit: completing it in either app unlocks both.',
       fullyVerified: 'Verification Complete',
       fullyVerifiedDesc: 'Your family has been fully verified. You can now use all features.',
@@ -980,6 +1016,9 @@ export default {
       approve: 'Approve',
       approveSuccess: 'Account approved successfully!',
       communityAlreadyVerified: 'This request is no longer valid — this family has already been verified.',
+      communityCodeInvalid: 'That code was not found. Check it and try again.',
+      communityCodeExpired: 'This code has expired. Ask the person to request a new one.',
+      communityApproveFailed: 'Something went wrong. Please try again.',
     },
     sessions: {
       title: 'Your sessions',
@@ -1013,6 +1052,9 @@ export default {
       viewDates: 'View dates',
       hideDates: 'Hide dates',
       noOccurrences: 'No occurrences scheduled yet.',
+      instancesLoading: 'Loading dates…',
+      instancesLoadError: "Couldn't load this series' dates.",
+      instancesRetry: 'Try again',
       cancelRequest: 'Cancel request',
       cancelSession: 'Cancel session',
       modifySession: 'Modify',
@@ -1089,6 +1131,7 @@ export default {
         'Your endorsement has been sent to {{name}}. It goes live on their profile only after they accept it.',
       errorTooShort: 'Please write at least 10 characters.',
       errorAlreadyExists: 'You\'ve already endorsed this tutor.',
+      errorCooldown: 'This tutor declined your last request. You can ask again on {{date}}.',
       errorPermission: 'Endorsements require an accepted contact request with this tutor.',
       errorInvalid: 'That endorsement can\'t be submitted — please check the text and try again.',
       error: 'Something went wrong. Please try again.',
@@ -1265,6 +1308,11 @@ export default {
     familyName: 'Family name *',
     parentLastName: 'Last name',
     addressLabel: 'Address *',
+    // Used by the shared StepFamilyInfo (@ejm/shared-ui, issue #440 PR3) —
+    // distinct from addressLabel above so the shared component can be
+    // rendered under a family-specific label without colliding with other
+    // steps that also use addressLabel.
+    familyAddressLabel: 'Address *',
     pets: 'Pets',
     petsHint: 'e.g. Cat, small dog',
     notesForTutors: 'Notes for tutors',
@@ -1297,6 +1345,7 @@ export default {
     emailLabel: 'Email address',
     ejemEmailHint: 'Use your official EJM email. The last 2 digits must be your graduation year.',
     serverError: 'Server error. Please try again.',
+    submitInvalid: 'Some of your details could not be accepted. Please check them and try again.',
     firstName: 'First name *',
     lastName: 'Last name *',
     dateOfBirth: 'Date of birth *',
@@ -1313,10 +1362,16 @@ export default {
     welcomeSubtitle: "Your name, date of birth and class can't be changed later",
     subjectsTitle: 'What do you teach?',
     subjectsSubtitle: 'Families find you by subject — add each subject you offer, the class levels you cover, and your hourly rate.',
-    subjectsEmpty: 'Add at least one subject to continue.',
+    subjectsEmpty: 'Add a subject, or skip this step and add them later.',
+    subjectsSkip: 'Skip for now',
+    subjectsSkipConfirm: "The subjects you've entered won't be saved.",
+    subjectsSkipConfirmYes: 'Skip anyway',
+    subjectsSkipConfirmNo: 'Keep editing',
+    subjectsSkipHint: "You can add subjects later from Subjects & Rates. Families can't find you until you do.",
     contactSection: 'Contact details',
     contactHint: 'Provide at least one way for families to reach you. You can change these later.',
     contactEmailInvalid: 'Enter a full email address (e.g. name@example.com).',
+    contactPhoneInvalid: 'Enter a valid phone number (digits, optionally starting with +).',
     completeSignup: 'Complete sign-up',
     aboutMe: 'About me',
     aboutMePlaceholder: 'Tell families a bit about yourself, your teaching style, experience...',
@@ -1353,6 +1408,8 @@ export default {
     classLabel: 'Class *',
     selectClass: 'Select class',
     gender: 'Gender *',
+    languages: 'Languages spoken *',
+    languagesHint: 'Mark every language you can speak with families.',
     contactInfoTitle: 'How can families reach you?',
     contactInfoSubtitle: 'Provide at least one contact method — email or phone.',
     contactEmail: 'Contact email',
@@ -1363,7 +1420,7 @@ export default {
     whatsappLabel: 'WhatsApp',
     whatsappSameAsPhone: 'Same as my phone number',
     contactVisibilityConsent: "I'm aware that families who want to reach me will get access to this contact information once I'm visible in search.",
-    contactVisibilityWarning: "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+    contactVisibilityWarning: "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
     additionalInfoTitle: 'A few optional extras',
     additionalInfoSubtitle: 'All of this is optional — you can fill it in, or skip it and add it later.',
     bioLabel: 'About me (optional)',
@@ -1376,6 +1433,16 @@ export default {
     photoSizeError: 'Photo must be smaller than 5 MB.',
     addressLabel: 'Address (optional)',
     addressHint: 'This helps optimize your search results — families see how far away you are.',
+    roleStudent: "I'm a student",
+    roleStudentDesc: 'Babysit, tutor, or both — one account across the whole EJM community.',
+    roleParent: "I'm a parent",
+    roleParentDesc: 'Find a babysitter, book a tutor, and manage your family.',
+    studentTitle: 'Create your account',
+    chooseAppTitle: "You're all set — what next?",
+    chooseAppSubtitle: 'Your details are saved. Pick where you want to finish enrolling.',
+    chooseSitDesc: 'Offer babysitting to EJM families.',
+    chooseStudyDesc: 'Offer tutoring to EJM families.',
+    chooseDoDesc: 'Odd jobs and errands for EJM families.',
   },
 
   privacy: {

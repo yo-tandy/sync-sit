@@ -5,12 +5,37 @@ import { useParams, useNavigate, Link } from 'react-router';
 import { useTranslation, Trans } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { enrollmentErrorReason } from '@ejm/shared-ui';
+import { AuthColumn, callableErrorCode, enrollmentErrorReason, verificationCodeError } from '@ejm/shared-ui';
 import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { Button, Input, TopNav, StepIndicator, Spinner } from '@/components/ui';
 import { MailIcon } from '@/components/ui/Icons';
 import { CodeInput } from '@/components/forms/CodeInput';
+
+// Credentialed joinFamily rejections → i18n keys. Never err.message: an
+// unexpected fault arrives as the bare token 'internal' and the deliberate
+// messages are English-only. The code is first checked HERE (the code step
+// does not call verifyCode), and joinFamily reuses codes across the invite
+// and the code: not-found is 'Invalid invite link' / 'No verification code
+// found' / 'Family not found', deadline-exceeded is either expiry, and
+// invalid-argument is a wrong code or a refused field -- so those keys word
+// both causes. No account-exists copy (issue #148).
+function joinErrorKey(err: unknown): string {
+  const codeError = verificationCodeError(err);
+  if (codeError === 'wrong-class') return 'auth.codeWrongClass';
+  if (codeError === 'too-many-attempts') return 'auth.tooManyAttempts';
+  switch (callableErrorCode(err)) {
+    case 'not-found':
+    case 'deadline-exceeded':
+      return 'enrollment.joinExpired';
+    case 'failed-precondition':
+      return 'invite.invalidLinkDesc';
+    case 'invalid-argument':
+      return 'enrollment.joinInvalid';
+    default:
+      return 'enrollment.serverError';
+  }
+}
 
 export function JoinFamilyPage() {
   const { t } = useTranslation();
@@ -47,7 +72,7 @@ export function JoinFamilyPage() {
   // held, so a submit racing the config read arms at 60 against a longer
   // server window. The sync effect below extends (never shortens) a
   // running countdown when the configured value lands -- same guard as
-  // StepVerify / StepParentVerify.
+  // the shared StepVerify (the parent wizard uses it too since issue #440).
   const armedWithRef = useRef(resendCooldownS);
 
   useEffect(() => {
@@ -66,7 +91,8 @@ export function JoinFamilyPage() {
         const result = await validateInvite({ token: token! });
         setFamilyName(result.data.familyName || 'your family');
         setLoading(false);
-      } catch {
+      } catch (err) {
+        console.error('[enrollment] validate invite token failed', err);
         setInvalidToken(true);
         setLoading(false);
       }
@@ -113,8 +139,16 @@ export function JoinFamilyPage() {
       await refreshUserDoc();
       navigate('/family');
     } catch (err: unknown) {
+      console.error('[enrollment] confirm join family failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to join family');
+        // Token-only join: not-found / deadline-exceeded / failed-precondition
+        // are all the invite (invalid, expired, used). Never echo err.message.
+        const code = callableErrorCode(err);
+        setError(
+          code === 'not-found' || code === 'deadline-exceeded' || code === 'failed-precondition'
+            ? t('invite.invalidLinkDesc')
+            : t('enrollment.serverError'),
+        );
       }
       setSubmitting(false);
     }
@@ -131,8 +165,10 @@ export function JoinFamilyPage() {
       setResendCooldown(resendCooldownS);
       setStep(1);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to send verification code';
-      setError(message);
+      // Never echo err.message: an unexpected fault arrives as the bare token
+      // 'internal', and deliberate server messages are English-only.
+      console.error('[enrollment] send verification code failed', err);
+      setError(t('enrollment.serverError'));
     } finally {
       setSubmitting(false);
     }
@@ -147,7 +183,8 @@ export function JoinFamilyPage() {
     try {
       const verifyEmail = httpsCallable(functions, 'verifyParentEmail');
       await verifyEmail({ email, app: 'sit' });
-    } catch {
+    } catch (err) {
+      console.error('[enrollment] resend verification code failed', err);
       // silent
     }
   };
@@ -181,8 +218,9 @@ export function JoinFamilyPage() {
 
       navigate('/family');
     } catch (err: unknown) {
+      console.error('[enrollment] join family failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to join family');
+        setError(t(joinErrorKey(err)));
       }
     } finally {
       setSubmitting(false);
@@ -204,7 +242,7 @@ export function JoinFamilyPage() {
 
   if (invalidToken) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-brand-50 text-3xl">❌</div>
@@ -214,7 +252,7 @@ export function JoinFamilyPage() {
           </p>
           <Button onClick={() => navigate('/')}>Go to home</Button>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
@@ -224,7 +262,7 @@ export function JoinFamilyPage() {
   // membered doc (either field, incl. legacy root) dead-ends here.
   if (firebaseUser && hasFamilyMembership(userDoc)) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
           <h2 className="mb-6 text-xl font-bold">{t('enrollment.alreadyInFamily')}</h2>
@@ -235,7 +273,7 @@ export function JoinFamilyPage() {
             Go to my family
           </Link>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
@@ -244,7 +282,7 @@ export function JoinFamilyPage() {
   // confirm button that joins with the token alone.
   if (firebaseUser) {
     return (
-      <div>
+      <AuthColumn>
         <TopNav title="Join Family" backTo="/" />
         <div className="px-6 py-8">
           <h2 className="mb-2 text-xl font-bold">Join the {familyName} family</h2>
@@ -256,12 +294,12 @@ export function JoinFamilyPage() {
             {submitting ? 'Joining...' : t('enrollment.joinFamilyConfirm', { familyName })}
           </Button>
         </div>
-      </div>
+      </AuthColumn>
     );
   }
 
   return (
-    <div>
+    <AuthColumn>
       <TopNav
         title="Join Family"
         backTo={step === 0 ? '/' : undefined}
@@ -402,6 +440,6 @@ export function JoinFamilyPage() {
           </Button>
         </div>
       )}
-    </div>
+    </AuthColumn>
   );
 }

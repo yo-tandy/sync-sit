@@ -1,37 +1,6 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // CURRENTLY UNUSED — callerData() and canWriteFamilyDocs() below have no
-    // caller while the issue #153 membership check is lifted (see the
-    // verification-documents block). Kept, not deleted: this cross-service
-    // lookup is the thing that breaks in production, and keeping the helpers
-    // makes restoring the check a one-line change once the signed-URL callable
-    // lands. Do NOT wire either back into a rule without first confirming
-    // cross-service calls actually work in prod — an emulator pass does not
-    // prove that (the emulator serves these lookups unconditionally).
-
-    // Helper: the requester's user document (cross-service Firestore lookup).
-    // Mirrors firestore.rules callerData(); .get(key, default) avoids errors
-    // when a field is absent (e.g. admin docs have no `profiles`). If the doc
-    // does not exist the lookup errors, which evaluates as deny.
-    function callerData() {
-      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data;
-    }
-
-    // Helper: may the holder of user-doc data `d` write into family `familyId`'s
-    // verification path? Takes the data map as an argument (firestore.rules
-    // idiom — parentFamilyId(d), bsField(d, ...)) so callerData() is invoked
-    // exactly once per evaluation: cross-service lookups are billed as
-    // Firestore reads, and we don't rely on the engine deduping them.
-    // The isAdmin disjunct is intentional break-glass parity with the
-    // isAdmin() disjuncts throughout firestore.rules — no live client flow
-    // has admins uploading here (the admin UI only reads, via the
-    // getVerificationDocument callable).
-    function canWriteFamilyDocs(d, familyId) {
-      return d.get('isAdmin', false) == true
-             || d.get('profiles', {}).get('parent', {}).get('familyId', null) == familyId;
-    }
-
     // Helper: is this contentType a browser-renderable/scriptable document?
     // Narrow DENYLIST (issue #281), deliberately not an allowlist: browsers
     // report File.type inconsistently (empty or application/octet-stream for
@@ -42,10 +11,18 @@ service firebase.storage {
     // type — xhtml+xml and svg+xml script directly; the rest via an
     // <?xml-stylesheet?> XSLT that can emit arbitrary HTML, and Firefox
     // treats every *+xml media type as an XML document). The +xml suffix
-    // match dominates enumerating them. No legitimate verification flow
-    // produces any of these — phones/scanners emit JPEG/PNG/PDF
-    // (accept="image/*" admits SVG only incidentally) — so the breadth
-    // costs nothing.
+    // match dominates enumerating them. No legitimate verification or
+    // photo-upload flow produces any of these — phones/scanners/cameras
+    // emit JPEG/PNG/HEIC/PDF (accept="image/*" admits SVG only incidentally)
+    // — so the breadth costs nothing.
+    //
+    // Reused (issue #287) on every client-writable path below that stores
+    // browser-supplied bytes served back inline via getDownloadURL:
+    // profile-photos, family-photos, and do-uploads, alongside the original
+    // verification-documents use. Every one of those objects is fetched
+    // through firebasestorage.googleapis.com, which renders text/html and
+    // image/svg+xml live and inline — the same admin/user-phishing surface
+    // issue #281 closed for verification documents.
     // A raw-SDK caller controls the string byte-for-byte and browsers honor
     // 'Text/HTML', 'text/html; charset=x' and leading-whitespace spellings,
     // so: lower().trim() + prefix match, and (?s) so an embedded newline
@@ -58,67 +35,134 @@ service firebase.storage {
                  .matches('(?s)(text/html|text/xml|application/xml|.*\\+xml).*');
     }
 
-    // Verification documents — size- and type-bounded writes by any signed-in
-    // caller. Size is capped at the 10MB both web clients already enforce.
-    // Content type: narrow denylist only — see isRenderableDocType above
-    // (defense-in-depth behind the read side's responseDisposition:
-    // 'attachment', issue #281).
-    // Deletes fall through to the implicit deny below — no client deletes
-    // these; server-side cleanup uses the Admin SDK, which bypasses rules.
-    // Reads go through getVerificationDocument cloud function (checks family ownership)
+    // Verification documents — writes are callable-mediated (issue #447,
+    // closing out issue #446/#449).
     //
-    // TEMPORARY — the issue #153 family-membership check is REMOVED here.
+    // History: this path used to carry a family-membership check
+    // (`canWriteFamilyDocs(callerData(), familyId)`) evaluated at RULE time
+    // via a cross-service `firestore.get()` into users/{uid}. That call
+    // failed in PRODUCTION (missing IAM grant) and, because rules fail
+    // closed on an errored call, it 403'd EVERY parent's upload — not just
+    // non-members' — for the entire window between the 2026-08-28 deploy
+    // that first shipped it and the interim fix that lifted it (issue #446).
+    // The lifted interim rule (no membership check at all, just size +
+    // contentType bounds) is preserved in git history/PR #446 for reference.
     //
-    // It read `canWriteFamilyDocs(callerData(), familyId)`, where callerData()
-    // is a cross-service `firestore.get()` into users/{uid}. That call fails in
-    // PRODUCTION and, because rules fail closed on an errored call, it denied
-    // EVERY parent's upload with a 403 — not just some.
+    // Rather than re-attempt the cross-service construct — which #449's
+    // guard (tests/rules/cross-service-guard.test.ts) now fails CI on for
+    // any new occurrence — the membership check moves SERVER-SIDE into
+    // `createVerificationDocumentUploadUrl`
+    // (packages/shared-functions/src/verification/createVerificationDocumentUploadUrl.ts),
+    // the same shape `createFamilyPhotoUploadUrl` (issue #471) already
+    // proved out for family-photos below: an Admin-SDK read of users/{uid}
+    // (no rules involved), re-implemented contentType/extension checks (a
+    // signed-URL upload authenticates as the service account and never
+    // evaluates THESE rules at all), and a short-lived V4 signed PUT URL.
+    // So `create, update` are unconditional denials here: there is no
+    // client write path into this prefix anymore, narrow or otherwise.
     //
-    // Timeline: the check lived in this file for a while but only reached prod
-    // in the 2026-08-28 storage-rules deploy (the first since 2026-07-07 —
-    // ruleset 07885e12, the first deployed storage ruleset containing
-    // firestore.get). Last successful upload: 2026-08-23. Every attempt after
-    // 2026-08-28 fails.
+    // Reads stay denied here too (admin/owner only, via the unchanged
+    // getVerificationDocument callable) — this path has never allowed a
+    // direct client read.
     //
-    // Ruled out: rules drift (deployed ruleset == git, byte-for-byte), user
-    // data (all 40 prod parents have a valid profiles.parent.familyId matching
-    // their family's parentIds), the caller's token, file size, contentType,
-    // App Check (not configured), Firestore database id ((default)), and
-    // bucket/Firestore region (both europe-west1). Granting the Rules service
-    // agent roles/firebaserules.firestoreServiceAgent and re-releasing the
-    // rules did NOT fix it. Discriminating test: profile-photos writes (no
-    // cross-service call) succeed from the same session that 403s here.
-    //
-    // This restores the exact rule that shipped 2026-04-02 → 2026-08-28.
-    // Residual risk: an authenticated caller who knows a familyId can WRITE
-    // into that family's verification folder. Reads stay denied here (admin/
-    // owner only, via the getVerificationDocument callable), so this is an
-    // integrity risk (planting a document for admin review), not a disclosure
-    // one.
-    //
-    // The real fix, tracked in the follow-up issue: move the membership check
-    // server-side into a signed-upload-URL callable (the getVerificationDocument
-    // pattern in reverse), then set this back to `allow write: if false` —
-    // signed URLs bypass rules, so no cross-service call is needed at all.
+    // Delete has no clause here (falls through to denial, same as before
+    // this change) — no client deletes these; server-side cleanup uses the
+    // Admin SDK, which bypasses rules.
     match /verification-documents/{familyId}/{allPaths=**} {
       allow read: if false;
-      allow create, update: if request.auth != null
-                   && request.resource.size <= 10 * 1024 * 1024
-                   && !isRenderableDocType(request.resource.contentType);
+      allow create, update: if false;
     }
 
     // Profile photos — only the owner can write their own photo
     // App uploads with path: profile-photos/{uid}.{ext}
+    //
+    // Content type: narrow denylist only — see isRenderableDocType above
+    // (issue #287; PR #466 confirmed this path had NO contentType
+    // constraint at all before this change, and that clients may still
+    // pass an empty/application/octet-stream type — the null/no-match
+    // fallthrough in isRenderableDocType keeps that allowed).
+    //
+    // Split into create/update vs. delete (review round on PR #470),
+    // mirroring verification-documents below: `allow write` covers
+    // create/update/delete, and on a delete request.resource is null, so a
+    // combined `write` rule referencing request.resource.contentType denies
+    // EVERY delete. profile-photos has a real, currently-live delete flow —
+    // apps/web family/babysitter AccountPage.tsx and apps/study-web tutor
+    // AccountPage.tsx call deleteObject() on the old avatar when the user
+    // removes/replaces their photo, swallowing the error
+    // (`.catch(() => {})`) — so the bug would have silently orphaned a
+    // readable photo (of a minor, in the tutor case) on every remove.
     match /profile-photos/{fileName} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null
+      allow create, update: if request.auth != null
+                   && fileName[0:request.auth.uid.size()] == request.auth.uid
+                   && !isRenderableDocType(request.resource.contentType);
+      allow delete: if request.auth != null
                    && fileName[0:request.auth.uid.size()] == request.auth.uid;
     }
 
-    // Family photos — authenticated users can upload/read
+    // Family photos — authenticated users can read; writes AND deletes are
+    // callable-mediated (issues #471, #483).
+    //
+    // Write scoping — RESOLVED (issue #471, follow-up to #287). #287 found
+    // that `family-photos/{familyId}.{ext}` could in principle be narrowed
+    // to "caller is a member of that family", the same way profile-photos
+    // is narrowed to the caller's own uid, but doing so at RULE-EVALUATION
+    // TIME needs the caller's familyId available in the rule, and there is
+    // no rule-local source for it: no custom claim carries familyId onto
+    // the ID token, and the only remaining route — a cross-service
+    // `firestore.get()` into users/{uid} — is exactly the construct that
+    // took down production in #446 (fails closed on an errored call,
+    // denying every parent's write, not just non-members') and that PR
+    // #462's cross-service guard test (issue #449) now fails the suite on
+    // for any NEW occurrence. So #287 shipped the contentType denylist only
+    // and left writes open to any authenticated user, pinned as a known gap.
+    //
+    // This PR closes that gap WITHOUT a rule-local familyId check: writes
+    // move behind `createFamilyPhotoUploadUrl` (packages/shared-functions/
+    // src/family/createFamilyPhotoUploadUrl.ts), which checks membership
+    // with the Admin SDK (no rules involved — reads Firestore directly,
+    // mirroring the now-dead canWriteFamilyDocs helper above EXACTLY:
+    // isAdmin(caller) || caller.profiles.parent.familyId === familyId),
+    // validates contentType (isRenderableDocType, re-implemented in TS —
+    // signed-URL uploads never evaluate THESE rules, the signed URL
+    // authenticates as the service account and bypasses them entirely) and
+    // the object's file extension, and returns a short-lived V4 signed PUT
+    // URL. So `create, update` become unconditional denials here: there is
+    // no client write path into this prefix anymore, narrow or otherwise.
+    //
+    // Delete — CLOSED (issue #483, follow-up to #471/#482). #482 left
+    // `delete` unscoped (`request.auth != null`) here, reasoning that a
+    // delete cannot plant attacker-controlled content, so its residual
+    // risk was integrity/availability only (an authenticated stranger — a
+    // babysitter, an unrelated family — could delete another family's
+    // photo), not the content-injection surface #287/#471 exist to close.
+    // That risk-class distinction still holds, but an unscoped delete is
+    // still a live griefing/availability vector worth closing, and the
+    // same constraint that forced writes behind a callable applies to
+    // deletes too: no rule-local source for the caller's familyId exists
+    // without either a custom claim (none exists) or the cross-service
+    // `firestore.get()` that took down production in #446 and that PR
+    // #462's guard (issue #449) now fails CI on for any new occurrence.
+    //
+    // So deletes move behind `deleteFamilyPhoto` (packages/shared-functions/
+    // src/family/deleteFamilyPhoto.ts), which checks membership with the
+    // Admin SDK — sharing `assertFamilyMember` (packages/shared-functions/
+    // src/family/familyMembership.ts) with `createFamilyPhotoUploadUrl`
+    // above, ONE implementation of `isAdmin(caller) ||
+    // caller.profiles.parent.familyId === familyId` — validates the object
+    // path is a direct child of `family-photos/{familyId}/` (no traversal,
+    // no other family's path), deletes idempotently via the Admin SDK, and
+    // clears the family doc's `photoUrl` if it pointed at the deleted
+    // object. FamilySettingsPage's replace/remove cleanup of the PREVIOUS
+    // photo object now goes through this callable instead of a direct
+    // client-SDK `deleteObject`. So `delete` becomes an unconditional
+    // denial here too: there is no client write OR delete path into this
+    // prefix anymore, narrow or otherwise.
     match /family-photos/{allPaths=**} {
       allow read: if request.auth != null;
-      allow write: if request.auth != null;
+      allow create, update: if false;
+      allow delete: if false;
     }
 
     // ── sync-do task photos (plan §7.4) — the two-path pipeline ──
@@ -153,10 +197,20 @@ service firebase.storage {
       // (§8). Deletes fall through to the implicit deny (request.resource
       // is null on delete): cleanup is the stripper's and the sweep's job,
       // via the Admin SDK.
+      //
+      // isRenderableDocType is ALSO required here (issue #287 audit): the
+      // image/.* allowlist alone does not exclude image/svg+xml — an SVG
+      // is scriptable and renders live exactly like HTML (see the helper's
+      // comment above), and 'image/svg+xml' matches 'image/.*' byte-for-
+      // byte. The allowlist stays (it's the right shape for a
+      // single-uploader-controlled prefix with no legitimate non-image use
+      // — unlike profile-photos/family-photos, which admit whatever a
+      // browser's File.type reports); the denylist closes the one gap in it.
       allow write: if request.auth != null
                    && request.auth.uid == uid
                    && request.resource.size < 10 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+                   && request.resource.contentType.matches('image/.*')
+                   && !isRenderableDocType(request.resource.contentType);
     }
 
     // Default: deny all other access

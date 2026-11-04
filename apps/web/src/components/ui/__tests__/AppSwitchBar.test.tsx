@@ -12,9 +12,16 @@ import { AppSwitchBar } from '@ejm/shared-ui';
  * §18.2). Lives in apps/web because shared-ui has no test harness of its own
  * (#348) -- the component under test is shared, the runner is sit's.
  */
+
+// Fake marks, not real assets (#422): these tests exercise the component's
+// prop contract, not shared-ui's actual PNGs -- `mark`/`currentMark` are now
+// supplied by the host, so the fixture just needs `-48.`/`-96.` substrings
+// for the "uses bar-weight marks" assertion below.
+const fakeMark = (app: string) => ({ sm: `${app}-48.png`, md: `${app}-96.png` });
+
 const SIBLINGS = [
-  { app: 'study' as const, url: 'https://sync-study-app.web.app' },
-  { app: 'do' as const, url: 'https://sync-do-app.web.app' },
+  { app: 'study' as const, url: 'https://sync-study-app.web.app', mark: fakeMark('study') },
+  { app: 'do' as const, url: 'https://sync-do-app.web.app', mark: fakeMark('do') },
 ];
 
 /**
@@ -31,6 +38,7 @@ function renderBar(props: Partial<React.ComponentProps<typeof AppSwitchBar>> = {
     <I18nextProvider i18n={i18n}>
       <AppSwitchBar
         current="sit"
+        currentMark={fakeMark('sit')}
         siblings={SIBLINGS.slice(0, 1)}
         mintHandoffCode={mint}
         account={{ href: '/family/account', onNavigate: onNavigateAccount }}
@@ -68,7 +76,7 @@ describe('AppSwitchBar', () => {
     renderBar();
     expect(screen.getByRole('button', { name: /sync\/sit/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /sync\/study/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeInTheDocument();
   });
 
   it('OMITTING an app hides its tab — this is decision 20s gate for sync/do', () => {
@@ -81,6 +89,49 @@ describe('AppSwitchBar', () => {
   it('renders a do tab when — and only when — do is passed as a sibling', () => {
     renderBar({ siblings: SIBLINGS });
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
+  });
+
+  it('keeps a FIXED suite-wide order regardless of which app is current (#438)', () => {
+    // Before the fix, `current` was always sorted first: sit's bar rendered
+    // sit,study but study's bar rendered study,sit for the same two apps --
+    // the row visually reshuffled on every switch. sit, study, do is now the
+    // one true order no matter which app hosts the bar.
+    const names = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll('ul > li button')).map(
+        (b) => b.querySelector('span:last-child')?.textContent,
+      );
+
+    const sitBar = render(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar
+          current="sit"
+          currentMark={fakeMark('sit')}
+          siblings={[SIBLINGS[0]]}
+          mintHandoffCode={vi.fn()}
+          account={{ href: '/family/account', onNavigate: vi.fn() }}
+          home={{ href: '/family', onNavigate: vi.fn() }}
+          pathname="/family"
+        />
+      </I18nextProvider>,
+    );
+    expect(names(sitBar.container)).toEqual(['sync/sit', 'sync/study', 'Settings']);
+    sitBar.unmount();
+
+    const studyBar = render(
+      <I18nextProvider i18n={i18n}>
+        <AppSwitchBar
+          current="study"
+          currentMark={fakeMark('study')}
+          siblings={[{ app: 'sit', url: 'https://sync-sit-app.web.app', mark: fakeMark('sit') }]}
+          mintHandoffCode={vi.fn()}
+          account={{ href: '/tutor/account', onNavigate: vi.fn() }}
+          home={{ href: '/tutor', onNavigate: vi.fn() }}
+          pathname="/tutor"
+        />
+      </I18nextProvider>,
+    );
+    expect(names(studyBar.container)).toEqual(['sync/sit', 'sync/study', 'Settings']);
+    studyBar.unmount();
   });
 
   it('marks the current app as the active tab', () => {
@@ -152,7 +203,7 @@ describe('AppSwitchBar', () => {
     // A second tap on a DIFFERENT app would mint a second code and race the
     // first navigation.
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /my account/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeDisabled();
   });
 
   it('surfaces a failure and re-enables, without navigating', async () => {
@@ -188,7 +239,7 @@ describe('AppSwitchBar', () => {
       fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
       await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
 
-      fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
       expect(screen.queryByRole('alert')).toBeNull();
     });
 
@@ -213,12 +264,12 @@ describe('AppSwitchBar', () => {
     renderBar({ mintHandoffCode: vi.fn().mockResolvedValue('code123') });
     fireEvent.click(screen.getByRole('button', { name: /sync\/study/ }));
     await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: /my account/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeDisabled();
 
     await act(async () => {
       window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
     });
-    expect(screen.getByRole('button', { name: /my account/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^settings$/i })).toBeEnabled();
   });
 
   it('ignores a NON-restore pageshow — a first load must not cancel a live switch', async () => {
@@ -266,7 +317,7 @@ describe('AppSwitchBar', () => {
       expect(screen.getByRole('button', { name: /sync\/sit/ }).className).toMatch(
         /(?<![\w-])h-full(?![\w-])/,
       );
-      expect(screen.getByRole('button', { name: /my account/i }).className).toMatch(
+      expect(screen.getByRole('button', { name: /^settings$/i }).className).toMatch(
         /(?<![\w-])h-full(?![\w-])/,
       );
     });
@@ -299,7 +350,7 @@ describe('AppSwitchBar', () => {
 
   it('navigates in-app for the account tab — no handoff, it is same-origin', () => {
     const { mint, onNavigateAccount } = renderBar();
-    fireEvent.click(screen.getByRole('button', { name: /my account/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
 
     expect(onNavigateAccount).toHaveBeenCalledWith('/family/account');
     expect(mint).not.toHaveBeenCalled();
@@ -314,6 +365,7 @@ describe('AppSwitchBar', () => {
       <I18nextProvider i18n={i18n}>
         <AppSwitchBar
           current="do"
+          currentMark={fakeMark('do')}
           siblings={SIBLINGS}
           mintHandoffCode={vi.fn()}
           pathname="/doer"
@@ -321,7 +373,7 @@ describe('AppSwitchBar', () => {
         />
       </I18nextProvider>,
     );
-    expect(screen.queryByRole('button', { name: /my account/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^settings$/i })).toBeNull();
     expect(screen.getByRole('button', { name: /sync\/do/ })).toBeInTheDocument();
   });
 
@@ -351,5 +403,98 @@ describe('AppSwitchBar', () => {
       expect(img.getAttribute('src') ?? '').toMatch(/-48\./);
       expect(img.getAttribute('srcset') ?? '').toMatch(/-96\./);
     }
+  });
+
+  it("keeps the account tab current on the hub's sub-pages, and only there", () => {
+    const { navigateTo } = renderBar();
+    navigateTo('/family/account/profile');
+    expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
+    // A sibling path that merely shares the prefix is NOT the hub.
+    navigateTo('/family/accounts');
+    expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+  });
+
+  describe('on the account hub, no app is current', () => {
+    // The hub belongs to the whole suite, not to the app hosting it: while
+    // it is on screen "My account" is the ONLY current entry, and the host
+    // app's tab keeps working as its way home.
+    it('drops aria-current from the host app and gives it to My account', () => {
+      const { navigateTo } = renderBar();
+      navigateTo('/family/account');
+      expect(screen.getByRole('button', { name: /^settings$/i })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).not.toHaveAttribute('aria-current');
+      expect(screen.getByRole('button', { name: /sync\/study/ })).not.toHaveAttribute('aria-current');
+    });
+
+    it('the host app tab still takes you home from the hub', () => {
+      const { navigateTo, onNavigateHome } = renderBar();
+      navigateTo('/family/account');
+      const own = screen.getByRole('button', { name: /sync\/sit/ });
+      expect(own).toBeEnabled();
+      fireEvent.click(own);
+      expect(onNavigateHome).toHaveBeenCalledWith('/family');
+      expect(h.assign).not.toHaveBeenCalled();
+    });
+
+    it('the host app is current again once you leave the hub', () => {
+      const { navigateTo } = renderBar();
+      navigateTo('/family/account');
+      navigateTo('/family');
+      expect(screen.getByRole('button', { name: /sync\/sit/ })).toHaveAttribute('aria-current', 'page');
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+    });
+  });
+
+  describe('handoff-form account tab (one hub on sync-sit)', () => {
+    const HUB = { href: '/account', handoffUrl: 'https://sync-sit.com' };
+
+    it('mints a code and leaves for the hub with next=/account in the FRAGMENT', async () => {
+      const { mint } = renderBar({ current: 'study', account: HUB });
+      fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(mint).toHaveBeenCalledTimes(1);
+      expect(h.assign).toHaveBeenCalledWith(
+        'https://sync-sit.com/handoff#code=code123&lang=en&next=%2Faccount',
+      );
+    });
+
+    it('is never aria-current, even on a same-named route in this app', () => {
+      const { navigateTo } = renderBar({ current: 'study', account: HUB });
+      navigateTo('/account');
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toHaveAttribute('aria-current');
+    });
+
+    it('surfaces a failed mint without navigating, and re-enables', async () => {
+      renderBar({
+        current: 'study',
+        account: HUB,
+        mintHandoffCode: vi.fn().mockRejectedValue(new Error('boom')),
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^settings$/i }));
+      expect(await screen.findByRole('alert')).toBeInTheDocument();
+      expect(h.assign).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /^settings$/i })).not.toBeDisabled();
+    });
+
+    it('ignores a second tap while the first handoff is in flight', async () => {
+      let resolve!: (code: string) => void;
+      const mint = vi.fn(() => new Promise<string>((r) => (resolve = r)));
+      renderBar({ current: 'study', account: HUB, mintHandoffCode: mint, siblings: [{ app: 'sit', url: 'https://sync-sit.com', mark: fakeMark('sit') }] });
+      const tab = screen.getByRole('button', { name: /^settings$/i });
+      fireEvent.click(tab);
+      fireEvent.click(tab);
+      fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
+      expect(mint).toHaveBeenCalledTimes(1);
+      await act(async () => resolve('code123'));
+      expect(h.assign).toHaveBeenCalledTimes(1);
+      expect(h.assign.mock.calls[0][0]).toContain('next=%2Faccount');
+    });
+
+    it('app tabs still carry NO next -- only the account tab deep-links', async () => {
+      renderBar({ current: 'study', account: HUB, siblings: [{ app: 'sit', url: 'https://sync-sit.com', mark: fakeMark('sit') }] });
+      fireEvent.click(screen.getByRole('button', { name: /sync\/sit/ }));
+      await waitFor(() => expect(h.assign).toHaveBeenCalledTimes(1));
+      expect(h.assign.mock.calls[0][0]).not.toContain('next=');
+    });
   });
 });

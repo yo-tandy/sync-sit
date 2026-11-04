@@ -158,6 +158,42 @@ describe('adminConfig', () => {
   });
 
   describe('effect on callables (ADMIN_CONFIG_TTL_MS=0)', () => {
+    // Environment probe (issue #523). These pins only hold when the FUNCTIONS
+    // EMULATOR process was started with ADMIN_CONFIG_TTL_MS=0 — the value
+    // `pnpm test:integration` exports reaches vitest, not an emulator started
+    // separately, and the lane scripts pass it through emulators:exec. With
+    // the default 60 s cache the two direct-write cases below fail alone and
+    // the cap-1 case fails in the full suite (the emulator warms several
+    // runtime workers; updateAdminConfig only invalidates its own). Rather
+    // than three confusing "expected undefined to be RESOURCE_EXHAUSTED"
+    // failures, say what is wrong: warm the cache with a publish at the code
+    // default, plant cap 1 by a direct write (no invalidation), publish again
+    // — a caching emulator lets it through.
+    beforeAll(async () => {
+      const db = getDb();
+      await db.doc('adminConfig/values').delete().catch(() => {});
+      await callFunction('publishSearch', publishPayload({ date: dateFromNow(10) }), parentToken);
+      await db.doc('adminConfig/values').set({ publishedSearchMaxActive: 1 });
+      let capHeld = false;
+      try {
+        await callFunction('publishSearch', publishPayload({ date: dateFromNow(11) }), parentToken);
+      } catch (err) {
+        capHeld = (err as { code?: string }).code === 'RESOURCE_EXHAUSTED';
+      }
+      // Leave nothing behind for the per-test beforeEach to misread.
+      await db.doc('adminConfig/values').delete().catch(() => {});
+      const pub = await db.collection('publishedSearches').get();
+      await Promise.all(pub.docs.map((d) => d.ref.delete()));
+      if (!capHeld) {
+        throw new Error(
+          'The functions emulator is caching adminConfig (a direct write to adminConfig/values was ' +
+            'not seen by the next publishSearch). Start it with ADMIN_CONFIG_TTL_MS=0 — e.g. ' +
+            '`pnpm test:integration:lane2` — instead of running vitest against a separately ' +
+            'started emulator (issue #523).',
+        );
+      }
+    });
+
     it('a lowered publishedSearchMaxActive takes effect: second publish rejected at cap 1', async () => {
       await callFunction('updateAdminConfig', { updates: { publishedSearchMaxActive: 1 } }, adminToken);
       await callFunction('publishSearch', publishPayload(), parentToken);

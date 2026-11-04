@@ -1919,11 +1919,16 @@ discovered in an incident.
   live tasks (a `where('familyId','==',…)` pass over `doTasks`), so the
   documents never reference objects the erasure removed.
   `DoerEndorsementDoc` (decision 12) is family-authored text about a named
-  student and belongs in both lists too; the `references` collection is
-  absent from `exportUserData`/`deleteUser` entirely today — a pre-existing
-  platform gap covering sit references and study endorsements as well,
-  tracked as **issue #295** (shared-functions change, so its own PR outside
-  this ladder).
+  student and belongs in both lists too. **Resolved (issue #295, closed):**
+  `references` is no longer absent from either path.
+  `packages/shared-functions/src/admin/deleteUser.ts:428-465` and
+  `packages/shared-functions/src/admin/exportUserData.ts:134-161` both query
+  `references` three ways — by each `REFERENCE_PROVIDER_KEYS` provider field
+  (`babysitterUserId`/`tutorUserId`/`doerUserId`), by `submittedByUserId`, and
+  by `submittedByFamilyId` (the last parent's family docs) — covering sit
+  references, study endorsements and `DoerEndorsementDoc` alike. #412's
+  Privacy §7 ("the references and endorsements connected to your account are
+  erased on deletion") is written to this code.
 - Retention: expired `open` tasks are deleted by the daily sweep; `cancelled`
   tasks (and their offers) are deleted once older than 30 days — the same
   window `cleanupOldData` already applies to cancelled/rejected appointments.
@@ -2027,27 +2032,27 @@ two members reconstruct what was agreed; that is the limit.
 and this is the record of it rather than a PR comment.** The two in-product
 sites shipped in PR7 and are pinned by tests: the posting flow's review step
 and the acceptance dialog both render `family.post.liabilityNotice`, EN and
-FR. The **ToS half did not ship, deliberately.** All three apps render the
-shared `packages/shared-ui/src/pages/TermsPage.tsx` with only the brand
-interpolated, and that page is babysitting-specific throughout — §2's service
-description and, decisively, §8 "Platform Role and Limitation of Liability",
-which names babysitters exclusively and says nothing about a student
-assembling furniture or house-sitting. Closing it is not an appended
-sentence: it is the counsel pass **issue #308** already scopes (per-app
-service description, the handshake-only stance, minors' occasional-work
-rules), and this section itself calls the ToS wording a Tandy SARL item and
-the plan's one launch blocker. Editing it inside a build PR would be exactly
-the unreviewed legal copy #308 exists to prevent.
+FR. **The ToS half has since shipped too, via #412 (issue #308's copy pass,
+merged 2026-09-04).** `packages/shared-ui/src/pages/TermsPage.tsx` §2 now
+enumerates all three Sync apps and Sync/Do's seven service categories
+(gardening and plant care; packing, moving and clearing boxes; flat-pack
+furniture assembly; help at parties; IT and device help; errands; pet care
+and house checks), and §8 "Platform Role and Limitation of Liability" is
+rewritten to decision 15: the platform performs the introduction only,
+insurance sits on the family side, there is no damage-claim or dispute
+surface, and the exclusions cover property, animals and homes rather than
+naming babysitters exclusively.
 
-The **privacy policy has the same gap and the same owner**: `PrivacyPage.tsx`'s
-retention list enumerates only sit-era categories, so task photos of home
-interiors and decision 19's 6-month task retention are a new data category
-with no policy line. Both halves therefore sit with #308.
+The **privacy policy shipped in the same PR**: `PrivacyPage.tsx` §7 now
+carries the 180-day completed-engagement retention window, the 30-day
+cancelled-task window, automatic deletion of expired unclaimed tasks, and an
+explicit inventory of the records that have no automatic expiry; §2 lists
+Sync/Do task photos as their own data category. #412 is the copy delivery
+this section called for — the counsel pass below is the step that remains.
 
-**Open for the owner:** confirm that deferring the ToS and privacy-policy
-wording to #308 is the intended reading of decision 15's "stated in the
-terms", given the in-product halves are live. Nothing else in the PR10 row
-is outstanding.
+**Resolved (2026-09-10):** #308 was actioned and #412 is the result — the
+ToS and privacy-policy wording now live in the shared pages rather than
+being deferred. Nothing else in the PR10 row is outstanding.
 
 **Still worth a lawyer's eye before launch, not before build:** whether French
 rules on minors' occasional work bear on any of this, and whether the ToS

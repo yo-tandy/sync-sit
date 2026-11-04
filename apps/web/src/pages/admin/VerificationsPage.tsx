@@ -93,7 +93,7 @@ export function AdminVerificationsPage() {
   const handleConfirmReject = async () => {
     setActionLoading(true);
     try {
-      await reviewVerification(rejectDialog.verificationId, 'rejected', rejectionReason);
+      await reviewVerification(rejectDialog.verificationId, 'rejected', rejectionReason.trim());
       setRejectDialog({ open: false, verificationId: '' });
       loadVerifications();
     } finally {
@@ -306,6 +306,8 @@ export function AdminVerificationsPage() {
         <textarea
           className="mb-4 w-full rounded-lg border border-gray-300 p-3 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
           rows={3}
+          maxLength={1000}
+          aria-label={t('verification.rejectionReasonPlaceholder')}
           placeholder={t('verification.rejectionReasonPlaceholder')}
           value={rejectionReason}
           onChange={(e) => setRejectionReason(e.target.value)}
@@ -314,7 +316,7 @@ export function AdminVerificationsPage() {
           <Button variant="outline" onClick={() => setRejectDialog({ ...rejectDialog, open: false })}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleConfirmReject} disabled={actionLoading}>
+          <Button onClick={handleConfirmReject} disabled={actionLoading || rejectionReason.trim().length === 0}>
             {actionLoading ? t('common.saving') : t('verification.reject')}
           </Button>
         </div>

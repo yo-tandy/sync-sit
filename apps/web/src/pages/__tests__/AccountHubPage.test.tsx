@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
   assign: vi.fn(),
   mint: vi.fn(),
   callable: vi.fn(),
+  logout: vi.fn(),
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
@@ -19,8 +20,10 @@ vi.mock('firebase/functions', () => ({
   },
 }));
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector?: (s: { userDoc: unknown }) => unknown) =>
-    selector ? selector({ userDoc: h.userDoc }) : { userDoc: h.userDoc },
+  useAuthStore: (selector?: (s: { userDoc: unknown; logout: () => Promise<void> }) => unknown) =>
+    selector
+      ? selector({ userDoc: h.userDoc, logout: h.logout })
+      : { userDoc: h.userDoc, logout: h.logout },
 }));
 
 vi.mock('react-router', async () => ({
@@ -55,6 +58,7 @@ describe('AccountHubPage (sit)', () => {
     h.assign.mockReset();
     h.callable.mockReset();
     h.mint.mockReset().mockResolvedValue({ data: { code: 'abc+/=' } });
+    h.logout.mockReset().mockResolvedValue(undefined);
     vi.stubGlobal('location', { assign: h.assign });
   });
   afterEach(() => {
@@ -74,6 +78,15 @@ describe('AccountHubPage (sit)', () => {
     // portal you arrived from. It sits beside them.
     renderHub(PARENT);
     expect(screen.queryByRole('button', { name: /back|retour/i })).toBeNull();
+  });
+
+  it('orders sections Account, Sync/Sit, Sync/Study for a member who holds both roles (#445)', () => {
+    // The sticky "Sync/Account" header itself is owned by AccountLayout
+    // (#445 review), not this page/AccountHome -- see
+    // apps/web/src/layouts/__tests__/DesktopShell.test.tsx for that pin.
+    renderHub(PARENT);
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Account', 'sync/sit', 'sync/study']);
   });
 
   it('shows a study section even though this is the sit app', () => {
@@ -97,6 +110,28 @@ describe('AccountHubPage (sit)', () => {
    * location.assign instead of the session handoff. So each one now CLICKS a
    * row and asserts which mechanism fired -- and that the other did not.
    */
+  it('opens the Account rows INSIDE the hub, not in the family portal', () => {
+    renderHub(PARENT);
+    const account = screen.getByText('Account').closest('section')!;
+    const expected: Array<[string, string]> = [
+      ['My account', '/account/profile'],
+      ['My family', '/account/family'],
+      ['Supervised kids', '/account/kids'],
+      ['Verification', '/account/verification'],
+    ];
+    for (const [label, href] of expected) {
+      fireEvent.click(within(account).getByText(label));
+      expect(h.navigate).toHaveBeenLastCalledWith(href);
+    }
+  });
+
+  it("opens a student's My account inside the hub too", () => {
+    renderHub(STUDENT);
+    const account = screen.getByText('Account').closest('section')!;
+    fireEvent.click(within(account).getByText('My account'));
+    expect(h.navigate).toHaveBeenLastCalledWith('/account/profile');
+  });
+
   it('a sit row navigates in-app and never leaves the origin', async () => {
     renderHub(PARENT);
     const sit = screen.getByText('sync/sit').closest('section')!;
@@ -105,16 +140,17 @@ describe('AccountHubPage (sit)', () => {
     expect(h.assign).not.toHaveBeenCalled();
   });
 
-  it('the study row mints a handoff code and lands on /handoff, not a deep link', async () => {
+  it('a study row mints a handoff code and lands on /handoff with a validated next, not a plain link', async () => {
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    fireEvent.click(within(study).getByText('Open sync-study'));
+    fireEvent.click(within(study).getByText('Sessions'));
     await waitFor(() => expect(h.assign).toHaveBeenCalled());
     expect(h.callable).toHaveBeenCalledWith('createAppHandoffCode');
     // Fragment, not query: fragments never reach servers or logs. Code is
     // encoded -- 'abc+/=' round-trips only if encodeURIComponent is applied.
+    // The parent-shaped destination is carried as `next`, itself encoded.
     expect(h.assign).toHaveBeenCalledWith(
-      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en',
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en&next=%2Ffamily%2Fsessions',
     );
     // The router must not be asked to push an absolute URL.
     expect(h.navigate).not.toHaveBeenCalled();
@@ -124,23 +160,56 @@ describe('AccountHubPage (sit)', () => {
     h.mint.mockRejectedValue(new Error('offline'));
     renderHub(PARENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    fireEvent.click(within(study).getByText('Open sync-study'));
+    fireEvent.click(within(study).getByText('Sessions'));
     // Await the error FIRST. Asserting `assign` synchronously here only says
     // the rejected mint has not been processed yet, which is trivially true
     // one tick after the click -- it would pass a regression that both set
-    // the error AND navigated (#416 review round 4).
-    expect(await screen.findByText('Could not switch apps. Please try again.')).toBeInTheDocument();
+    // the error AND navigated (#416 review round 4). The hint now renders on
+    // EVERY study row (three of them), not just one -- assert at least one.
+    const hints = await screen.findAllByText('Could not switch apps. Please try again.');
+    expect(hints.length).toBeGreaterThan(0);
     expect(h.assign).not.toHaveBeenCalled();
   });
 
-  it('offers no study DEEP links — study drops the destination on arrival', () => {
-    // Absent beats broken: study's HandoffPage reads only code+lang and always
-    // routes via postLoginRouter, and its /family/* routes are parent-guarded.
+  it('gives a PARENT the family-shaped study deep rows — Sessions, Search, and NO study "My account"', () => {
+    // The hub's own My account holds the account and every app's
+    // notification settings; a study copy would be a stale second one.
+    renderHub(PARENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    for (const present of ['Sessions', 'Search']) {
+      expect(within(study).getByText(present)).toBeInTheDocument();
+    }
+    expect(within(study).queryByText('My account')).toBeNull();
+    // The old single generic row is gone once a shaped row set is offered.
+    expect(within(study).queryByText('Open sync-study')).toBeNull();
+  });
+
+  it('gives a STUDENT the tutor-shaped study deep rows, never the parent-shaped paths (issue #426)', async () => {
+    // study guards /family/* on role="parent" — a sit student (babysitter)
+    // must get study's tutor-shaped equivalents, not the parent rows.
     renderHub(STUDENT);
     const study = screen.getByText('sync/study').closest('section')!;
-    for (const gone of ['Sessions', 'Search']) {
-      expect(within(study).queryByText(gone)).toBeNull();
+    for (const present of ['Sessions', 'Search']) {
+      expect(within(study).getByText(present)).toBeInTheDocument();
     }
+    expect(within(study).queryByText('My account')).toBeNull();
+    expect(within(study).queryByText('Open sync-study')).toBeNull();
+
+    fireEvent.click(within(study).getByText('Sessions'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(
+      'https://sync-study-app.web.app/handoff#code=abc%2B%2F%3D&lang=en&next=%2Ftutor%2Fsessions',
+    );
+  });
+
+  it('a STUDENT study "Search" row points at the tutor published-searches path', async () => {
+    renderHub(STUDENT);
+    const study = screen.getByText('sync/study').closest('section')!;
+    fireEvent.click(within(study).getByText('Search'));
+    await waitFor(() => expect(h.assign).toHaveBeenCalled());
+    expect(h.assign).toHaveBeenCalledWith(
+      expect.stringContaining('next=%2Ftutor%2Fpublished-searches'),
+    );
   });
 
   it('gives a STUDENT their own account row and no family rows', () => {
@@ -177,11 +246,10 @@ describe('AccountHubPage (sit)', () => {
     renderHub(doc);
     expect(screen.queryByText('sync/sit')).toBeNull();
     // The neutral block goes too: its only row is the same per-role account
-    // page. `AccountHome` also renders the hub TITLE as 'My account', so this
-    // asserts the single remaining occurrence is the <h1> and not a row.
-    const myAccount = screen.getAllByText('My account');
-    expect(myAccount).toHaveLength(1);
-    expect(myAccount[0].tagName).toBe('H1');
+    // page, and its section heading ('Account') never renders without a sit
+    // role.
+    expect(screen.queryByText('Account')).toBeNull();
+    expect(screen.queryByText('My account')).toBeNull();
     for (const bounces of ['Endorsements', 'Favorites', 'Search']) {
       expect(screen.queryByText(bounces)).toBeNull();
     }
@@ -194,5 +262,114 @@ describe('AccountHubPage (sit)', () => {
     renderHub(doc);
     const study = screen.getByText('sync/study').closest('section')!;
     expect(within(study).getByText('Open sync-study')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The footer slot (#491): `AccountHome`'s docstring reserves it for "sign
+ * out, delete account", and this is the first thing to fill it. The dialog
+ * gate, the error mapping and the sign-out-then-navigate ordering are all
+ * `DeleteAccountSection`'s own behaviour (unit-tested in
+ * `packages/shared-ui/src/pages/__tests__/DeleteAccountSection.test.tsx`) --
+ * these tests are about the WIRING: the real callable name, the confirmation
+ * payload, and that this app's `logout`/`navigate` are the ones actually
+ * passed through.
+ */
+describe('AccountHubPage — delete account footer (#491)', () => {
+  beforeEach(() => {
+    h.userDoc = PARENT;
+    h.navigate.mockReset();
+    h.assign.mockReset();
+    h.callable.mockReset();
+    h.mint.mockReset();
+    h.logout.mockReset().mockResolvedValue(undefined);
+    vi.stubGlobal('location', { assign: h.assign });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function openDeleteDialog() {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Delete my account'));
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+  }
+
+  it('renders sign out and delete rows in the footer', () => {
+    renderHub(PARENT);
+    expect(screen.getByText('Sign out')).toBeInTheDocument();
+    expect(screen.getByText('Delete my account')).toBeInTheDocument();
+  });
+
+  it('sign out calls the auth store directly, with no confirmation and no callable', () => {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Sign out'));
+    expect(h.logout).toHaveBeenCalledTimes(1);
+    expect(h.callable).not.toHaveBeenCalledWith('deleteMyAccount');
+  });
+
+  it('the delete confirm button stays disabled until the typed word matches', () => {
+    renderHub(PARENT);
+    fireEvent.click(screen.getByText('Delete my account'));
+    const confirmButton = screen.getByRole('button', { name: 'Yes, delete my account' });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'delete' },
+    });
+    expect(confirmButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Type DELETE to confirm'), {
+      target: { value: 'DELETE' },
+    });
+    expect(confirmButton).not.toBeDisabled();
+  });
+
+  it('calls deleteMyAccount with the fixed confirmation token, then signs out, then lands on /account-deleted', async () => {
+    h.mint.mockResolvedValue(undefined);
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    await waitFor(() => expect(h.navigate).toHaveBeenCalledWith('/account-deleted'));
+    expect(h.callable).toHaveBeenCalledWith('deleteMyAccount');
+    expect(h.callable).toHaveBeenCalledTimes(1);
+    expect(h.mint).toHaveBeenCalledWith({ confirm: 'DELETE' });
+    expect(h.mint).toHaveBeenCalledTimes(1);
+    expect(h.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps admin/last-admin to its own copy, keeps the dialog open and never signs out or navigates', async () => {
+    h.mint.mockRejectedValue(
+      Object.assign(new Error('last admin'), {
+        code: 'functions/failed-precondition',
+        details: { code: 'admin/last-admin' },
+      }),
+    );
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    expect(
+      await screen.findByText(
+        "You're the last admin. Appoint another admin before deleting your account.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
+    expect(h.logout).not.toHaveBeenCalled();
+    expect(h.navigate).not.toHaveBeenCalledWith('/account-deleted');
+  });
+
+  it('falls back to the generic failure copy for an unmapped rejection, and keeps the dialog open', async () => {
+    h.mint.mockRejectedValue(
+      Object.assign(new Error('boom'), { code: 'functions/internal' }),
+    );
+    openDeleteDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete my account' }));
+
+    expect(
+      await screen.findByText('Something went wrong. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Delete my account?')).toBeInTheDocument();
+    expect(h.logout).not.toHaveBeenCalled();
   });
 });

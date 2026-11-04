@@ -10,12 +10,34 @@ export const MIN_BABYSITTER_AGE = 15;
 export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 
 /**
+ * Max family-photo upload size in bytes (10 MB) — issue #471. Shared
+ * between the server (createFamilyPhotoUploadUrl, which binds it into the
+ * V4 signed URL as the x-goog-content-length-range extension header — the
+ * REAL enforcement, at the bucket) and the client (FamilySettingsPage,
+ * which must send that SAME header value on the PUT, or GCS's
+ * SignatureDoesNotMatch rejects the request outright), so the two can never
+ * drift out of sync.
+ */
+export const MAX_FAMILY_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/**
+ * Max verification-document upload size in bytes (10 MB) — issue #447,
+ * the same shape as MAX_FAMILY_PHOTO_BYTES above. Shared between the server
+ * (createVerificationDocumentUploadUrl, which binds it into the V4 signed
+ * URL as the x-goog-content-length-range extension header) and the client
+ * (both apps' VerificationPage, which must send that SAME header value on
+ * the PUT, or GCS's SignatureDoesNotMatch rejects the request outright).
+ */
+export const MAX_VERIFICATION_DOCUMENT_BYTES = 10 * 1024 * 1024;
+
+/**
  * Current consent-document versions. The guardian callables require callers
  * to send versions EQUAL to these (stale consent → invalid-argument), so a
  * bump here forces clients to re-present the documents.
- * NOTE: the enrollment flows historically hardcode their consentVersion in
- * the web apps ('1.0' in sit, '2025-12-01' in study); these constants are the
- * server-side source of truth for the guardian consent record.
+ * NOTE: until issue #415 decision 2, the enrollment flows hardcoded their own
+ * consentVersion per app ('1.0' in sit, '2025-12-01' in study, '2026-08-28'
+ * in do) instead of reading it from here — see CONSENT_VERSION below, which
+ * every enrollment flow now sends instead of a local literal.
  *
  * DELIBERATELY NOT BUMPED BY PR #412, which rewrote the substance of both
  * documents and moved only their "Last updated" date. These constants are the
@@ -36,6 +58,71 @@ export const MAX_PHOTO_SIZE = 5 * 1024 * 1024;
 export const TOS_VERSION = '1.0';
 export const PRIVACY_POLICY_VERSION = '1.0';
 export const SUPERVISION_AGREEMENT_VERSION = '1.0';
+
+/**
+ * All three consent-document versions in one object, for call sites (e.g.
+ * the kid-invite consent payload) that need to send or compare the full set
+ * together rather than one document at a time.
+ */
+export const CONSENT_VERSIONS = {
+  tos: TOS_VERSION,
+  privacy: PRIVACY_POLICY_VERSION,
+  supervision: SUPERVISION_AGREEMENT_VERSION,
+} as const;
+
+/**
+ * The ONE `consentVersion` string every enrollment flow (sit, study, do,
+ * cross-app, `enrollStudentIdentity`, `enrollFamily`'s legacy default) sends
+ * on the enrollment payload — issue #415 decision 2. Before this constant
+ * existed, four flows hardcoded four different literals ('1.0' in sit,
+ * '2025-12-01' in study, '2026-08-28' in do) even though all four were
+ * presenting the SAME legal text: those dates were app-local labels picked
+ * when each app's wizard shipped, not evidence of distinct documents. This
+ * constant reconciles them onto TOS_VERSION so there is exactly one value in
+ * play going forward.
+ *
+ * Two things this constant deliberately does NOT do:
+ *  - It does not rewrite already-stored `consentVersion` values. A user who
+ *    enrolled under study's old '2025-12-01' label (or do's '2026-08-28')
+ *    keeps that value in their stored record — the audit trail names the
+ *    label that was actually in front of them when they consented, and
+ *    rewriting history to make old and new records match would be the fake
+ *    re-consent this scheme unification is explicitly not attempting.
+ *  - It is not a bump. Bumping TOS_VERSION / PRIVACY_POLICY_VERSION /
+ *    SUPERVISION_AGREEMENT_VERSION (and therefore this constant, since it is
+ *    derived from them) is a deliberate act coupled to a counsel sign-off on
+ *    revised document text — see the block comment above. A version bump
+ *    with no re-consent gate reading it is silent: nothing currently
+ *    compared a stored `consentVersion` against the live constant outside
+ *    `requireCurrentConsent` (guardian/kid-invite only) until issue #488
+ *    decision 1 shipped the gate: `isCurrentConsentVersion` (utils/consent)
+ *    is what every app's AuthGuard now reads, and `acknowledgeConsent` is
+ *    what re-stamps the doc. A bump here is therefore no longer silent.
+ */
+export const CONSENT_VERSION = TOS_VERSION;
+
+/**
+ * The version an account is taken to have accepted when its `users` doc has
+ * no `consentVersion` at all: every account created before the field existed
+ * enrolled under the original documents, which are '1.0'. Read by
+ * `isCurrentConsentVersion` (issue #488 decision 1) so the re-consent gate
+ * does not fire for those accounts until a real bump happens.
+ */
+export const INITIAL_CONSENT_VERSION = '1.0';
+
+/**
+ * Stored labels that denote the SAME document text as the keyed version.
+ * Before #415 decision 2 unified the scheme, study stamped '2025-12-01' and
+ * do stamped '2026-08-28' for the identical '1.0' text (see CONSENT_VERSION
+ * above) -- those records were deliberately left as written, so the
+ * re-consent gate (#488) has to know they are not stale. WHEN YOU BUMP: add a
+ * new key only if the new version also has alias labels; the old key's
+ * aliases stop being current automatically, because the lookup is by the
+ * CURRENT version.
+ */
+export const CONSENT_VERSION_ALIASES: Readonly<Record<string, readonly string[]>> = {
+  '1.0': ['2025-12-01', '2026-08-28'],
+};
 
 /** Kid-invite validity window in days (resend resets the clock) */
 export const KID_INVITE_VALIDITY_DAYS = ADMIN_CONFIG_DEFS.kidInviteValidityDays.default;

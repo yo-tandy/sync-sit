@@ -19,8 +19,10 @@ export const WelcomePage = lazy(() =>
 export const LoginPage = lazy(() =>
   import('@/pages/public/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
-export const SignUpRolePage = lazy(() =>
-  import('@/pages/public/SignUpRolePage').then((m) => ({ default: m.SignUpRolePage })),
+// issue #435 milestone, PR5: the role-question entry point is retired in
+// favor of a cross-origin redirect to sit's unified /enroll landing page.
+export const SignUpRedirectPage = lazy(() =>
+  import('@/pages/public/SignUpRedirectPage').then((m) => ({ default: m.SignUpRedirectPage })),
 );
 export const AboutPage = lazy(() =>
   import('@/pages/public/AboutPage').then((m) => ({ default: m.AboutPage })),
@@ -133,6 +135,12 @@ export const HandoffPage = lazy(() =>
 );
 export const CrossAppWelcomePage = lazy(() =>
   import('@/pages/public/CrossAppWelcomePage').then((m) => ({ default: m.CrossAppWelcomePage })),
+);
+// issue #435 milestone, PR4: the unified flow's study-side landing page.
+export const StudentCrossAppWelcomePage = lazy(() =>
+  import('@/pages/public/StudentCrossAppWelcomePage').then((m) => ({
+    default: m.StudentCrossAppWelcomePage,
+  })),
 );
 export const SupervisionAgreementPage = lazy(() =>
   import('@/pages/public/SupervisionAgreementPage').then((m) => ({

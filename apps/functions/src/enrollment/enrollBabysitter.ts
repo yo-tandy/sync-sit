@@ -62,16 +62,40 @@ export const enrollBabysitter = onCall(
     // Empty on the classic (non-crossApp) path: a brand-new babysitter has
     // no prior doc to resolve these from.
     let rootStudentFields: Record<string, unknown> = {};
+    // The unified flow's contact-visibility consent (issue #435 milestone,
+    // PR3 `StepContactInfo` / PR4), READ off the caller's own root doc
+    // rather than re-sent by the client: `enrollStudentIdentity` records the
+    // consent the user gave BEFORE the sit/study choice, and this is the
+    // caller's OWN doc either way (crossApp derives everything from it) —
+    // exactly the same "canonical root, resolved server-side" pattern as
+    // classLevel/gender/contact above. This also sidesteps the cross-origin
+    // problem the study side would otherwise have (the handoff transfers a
+    // session, not a client payload). False for every caller who never went
+    // through the unified flow (the field is simply absent on their doc).
+    let consentedToVisibility = false;
     if (isCrossApp) {
       const callerSnap = await db.collection('users').doc(request.auth!.uid).get();
       const callerData = (callerSnap.data() ?? {}) as unknown as User;
-      const tutorProfile = (callerSnap.data()?.profiles?.tutor ?? null) as Record<string, unknown> | null;
+      consentedToVisibility = (callerSnap.data() as { contactVisibilityConsent?: boolean } | undefined)
+        ?.contactVisibilityConsent === true;
       // The EJM identity is canonical at the ROOT with a nested fallback
-      // (issue #203 shared identity) — but crossApp still requires the OTHER
-      // provider profile to exist: that profile is what proves the identity
-      // was verified by a real enrollment.
+      // (issue #203 shared identity). Proof of verification used to require
+      // the OTHER provider profile to exist (a tutor profile only gets
+      // written after a code-verified enrollment) — but issue #435
+      // milestone PR4 added a second, profile-less way to reach a verified
+      // root identity: `enrollStudentIdentity` (the unified flow's account
+      // creation step, run BEFORE the sit/study choice) also consumes an
+      // EJM-class verification code and writes root `ejemEmail`, with no
+      // role profile at all. Every writer of the root field is
+      // code-verified (enrollBabysitter/enrollTutor/enrollDoer's classic
+      // paths, and now enrollStudentIdentity) — so a present root
+      // `ejemEmail` is sufficient proof on its own; requiring a specific
+      // OTHER profile in addition would just reject the unified flow's
+      // root-only callers with no protective effect (profile-exists and
+      // role-exclusivity are still enforced separately by
+      // assertCanAddProfile/addProfileToUser below).
       const derivedEjemEmail = getEjemEmail(callerData);
-      if (!tutorProfile || !derivedEjemEmail) {
+      if (!derivedEjemEmail) {
         throw new HttpsError('failed-precondition', 'No verified EJM identity on this account');
       }
       ejemEmailLower = derivedEjemEmail.toLowerCase();
@@ -161,7 +185,14 @@ export const enrollBabysitter = onCall(
         profileData: {
           enrollmentComplete: false,
           ejemEmail: ejemEmailLower,
-          searchable: false,
+          // Defaults to false (every existing caller — the classic wizard
+          // was never wired to ask this). TRUE only when the unified flow's
+          // contact-visibility consent checkbox was checked (issue #435
+          // milestone, PR3 StepContactInfo / PR4): the one enrollment path
+          // that collects this consent BEFORE the profile exists, so it must
+          // be applied at creation rather than left for the user to flip on
+          // later from account settings.
+          searchable: consentedToVisibility,
           // Cross-app: seed the contact channels the tutor profile already
           // answered so the wizard only asks for what is sit-specific
           // (availability). classLevel/gender are NOT seeded here anymore

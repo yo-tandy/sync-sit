@@ -92,11 +92,22 @@ describe('users collection — Plan D reads', () => {
     await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'someParent')));
   });
 
-  it('active babysitter is readable by any authed user', async () => {
+  it('an active babysitter doc is NOT readable by another user — callables project and gate instead (issue #529)', async () => {
+    // Rules are all-or-nothing per document: a direct read would return
+    // dateOfBirth, address, contact, ejemEmail, approvedFamilies and
+    // fcmTokens. Parents reach babysitters through searchBabysitters /
+    // lookupBabysitter / findBabysittersForEndorsement / getBabysitterSummaries.
     await seed('bsN', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', searchable: true } } });
     await seed('caller', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famC' } } });
     const authed = testEnv.authenticatedContext('caller');
-    await assertSucceeds(getDoc(doc(authed.firestore(), 'users', 'bsN')));
+    await assertFails(getDoc(doc(authed.firestore(), 'users', 'bsN')));
+    // Another babysitter cannot read a peer either.
+    await seed('bsPeer', { status: 'active', email: 'p@ejm.org', profiles: { babysitter: { ejemEmail: 'p@ejm.org' } } });
+    const peer = testEnv.authenticatedContext('bsPeer');
+    await assertFails(getDoc(doc(peer.firestore(), 'users', 'bsN')));
+    // The babysitter still reads their own doc.
+    const self = testEnv.authenticatedContext('bsN');
+    await assertSucceeds(getDoc(doc(self.firestore(), 'users', 'bsN')));
   });
 
   it('inactive new-shape babysitter is NOT readable by others', async () => {
@@ -120,11 +131,12 @@ describe('users collection — Plan D reads', () => {
     await assertFails(getDoc(doc(authed.firestore(), 'users', 'otherFamN')));
   });
 
-  // The babysitter-read gate backs the client babysitter-search query
-  // (SubmittedEndorsementsPage). Under Plan D the client filters the new
-  // profiles.babysitter shape; the rule must keep that list query provably
-  // allowed. Regression guard for the rule's query-provability.
-  it('allows the Plan D babysitter list query (status + profiles.babysitter)', async () => {
+  // The babysitter roster query that SubmittedEndorsementsPage used to run
+  // client-side (every active babysitter's FULL doc, per keystroke) moved
+  // behind findBabysittersForEndorsement (#531). With the any-authed-user
+  // read clause gone (issue #529) the query is DENIED — no client may list
+  // babysitter documents; this pins that the door stays shut.
+  it('denies the babysitter roster list query (status + profiles.babysitter) to a parent', async () => {
     await seed('bsQ', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: true } } });
     await seed('callerQ', { status: 'active', email: 'c@x.com', profiles: { parent: { familyId: 'famQ' } } });
     const authed = testEnv.authenticatedContext('callerQ');
@@ -133,7 +145,7 @@ describe('users collection — Plan D reads', () => {
       where('status', '==', 'active'),
       where('profiles.babysitter.enrollmentComplete', 'in', [true, false]),
     );
-    await assertSucceeds(getDocs(q));
+    await assertFails(getDocs(q));
   });
 });
 
@@ -150,8 +162,78 @@ describe('users collection — Plan D owner-update guards', () => {
     await seed('bs1', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false } } });
     const authed = testEnv.authenticatedContext('bs1');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'bs1'), { 'profiles.babysitter.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'bs1'), { 'profiles.babysitter.searchable': true, contactVisibilityConsent: true })
     );
+  });
+
+  // Contact-visibility consent gate (contactVisibilityConsentValid): turning
+  // a babysitter/tutor profile searchable hands families the contact trio,
+  // so the doc must carry root contactVisibilityConsent == true after the
+  // write — recorded at enrollment, or in the same update (the dashboards'
+  // activation dialog). Without this the dialog checkbox is advisory.
+  describe('activation requires contactVisibilityConsent', () => {
+    const bs = (searchable: boolean, root: Record<string, unknown> = {}) => ({
+      status: 'active', email: 'b@ejm.org', ...root,
+      profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable } },
+    });
+    const tu = (searchable: boolean, root: Record<string, unknown> = {}) => ({
+      status: 'active', email: 't@ejm.org', ...root,
+      profiles: { tutor: { ejemEmail: 't@ejm.org', enrollmentComplete: true, searchable, subjects: ['math'] } },
+    });
+
+    it('babysitter activation is DENIED with no consent on the doc (classic enrollee)', async () => {
+      await seed('cvc1', bs(false));
+      const authed = testEnv.authenticatedContext('cvc1');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc1'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('babysitter activation is DENIED when enrollment recorded consent=false', async () => {
+      await seed('cvc2', bs(false, { contactVisibilityConsent: false }));
+      const authed = testEnv.authenticatedContext('cvc2');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc2'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('babysitter activation is DENIED when the same write sets consent=false', async () => {
+      await seed('cvc3', bs(false));
+      const authed = testEnv.authenticatedContext('cvc3');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc3'), {
+        'profiles.babysitter.searchable': true, contactVisibilityConsent: false,
+      }));
+    });
+
+    it('babysitter activation is ALLOWED when consent was given at enrollment', async () => {
+      await seed('cvc4', bs(false, { contactVisibilityConsent: true }));
+      const authed = testEnv.authenticatedContext('cvc4');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc4'), { 'profiles.babysitter.searchable': true }));
+    });
+
+    it('tutor activation is DENIED with no consent, ALLOWED when written in the same update', async () => {
+      await seed('cvc5', tu(false));
+      const authed = testEnv.authenticatedContext('cvc5');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc5'), { 'profiles.tutor.searchable': true }));
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc5'), {
+        'profiles.tutor.searchable': true, contactVisibilityConsent: true,
+      }));
+    });
+
+    it('deactivation is never gated on consent', async () => {
+      await seed('cvc6', bs(true));
+      const authed = testEnv.authenticatedContext('cvc6');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc6'), { 'profiles.babysitter.searchable': false }));
+    });
+
+    it('an already-searchable legacy profile without consent can still edit other fields', async () => {
+      await seed('cvc7', bs(true));
+      const authed = testEnv.authenticatedContext('cvc7');
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc7'), { 'profiles.babysitter.hourlyRate': 18 }));
+    });
+
+    it('contactVisibilityConsent must be a boolean', async () => {
+      await seed('cvc8', bs(false));
+      const authed = testEnv.authenticatedContext('cvc8');
+      await assertFails(updateDoc(doc(authed.firestore(), 'users', 'cvc8'), { contactVisibilityConsent: 'yes' }));
+      await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'cvc8'), { contactVisibilityConsent: true }));
+    });
   });
 
   it('babysitter may edit mutable profile fields (hourlyRate, contactEmail)', async () => {
@@ -287,7 +369,7 @@ describe('users collection — Plan D owner-update guards', () => {
     await seed('bsES3', { status: 'active', email: 'b@ejm.org', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true, searchable: false, effectiveSearchable: false } } });
     const authed = testEnv.authenticatedContext('bsES3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'bsES3'), { 'profiles.babysitter.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'bsES3'), { 'profiles.babysitter.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -362,6 +444,40 @@ describe('users collection — Plan D owner-update guards', () => {
     );
   });
 
+  // consentVersion / consentAt are the consent record (issue #488): the
+  // re-consent gate trusts consentVersion, and only acknowledgeConsent (with
+  // its version check and audit row) and the enrollment callables may move
+  // it. A client write here would clear the gate with no acceptance at all.
+  it('owner may NOT write consentVersion (lone field) -- the re-consent gate cannot be cleared client-side', async () => {
+    await seed('cv1', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv1');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv1'), { consentVersion: '1.0' })
+    );
+  });
+
+  it('owner may NOT write consentAt, nor smuggle either consent field into an allowed profile update', async () => {
+    await seed('cv2', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv2');
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv2'), { consentAt: new Date() })
+    );
+    await assertFails(
+      updateDoc(doc(authed.firestore(), 'users', 'cv2'), {
+        'profiles.babysitter.hourlyRate': 20,
+        consentVersion: '1.0',
+      })
+    );
+  });
+
+  it('normal profile update still passes with a stale consentVersion present on the doc', async () => {
+    await seed('cv3', { status: 'active', email: 'b@ejm.org', consentVersion: '0.9', profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
+    const authed = testEnv.authenticatedContext('cv3');
+    await assertSucceeds(
+      updateDoc(doc(authed.firestore(), 'users', 'cv3'), { 'profiles.babysitter.hourlyRate': 20 })
+    );
+  });
+
   it('normal profile update still passes with sessionEpoch present on the doc', async () => {
     await seed('se3', { status: 'active', email: 'b@ejm.org', sessionEpoch: new Date(), profiles: { babysitter: { ejemEmail: 'b@ejm.org', enrollmentComplete: true } } });
     const authed = testEnv.authenticatedContext('se3');
@@ -410,7 +526,7 @@ describe('users collection — Plan D owner-update guards', () => {
     await seedTutor('tu3');
     const authed = testEnv.authenticatedContext('tu3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'tu3'), { 'profiles.tutor.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'tu3'), { 'profiles.tutor.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -516,7 +632,7 @@ describe('users collection — Plan D owner-update guards', () => {
     });
     const authed = testEnv.authenticatedContext('tuES3');
     await assertSucceeds(
-      updateDoc(doc(authed.firestore(), 'users', 'tuES3'), { 'profiles.tutor.searchable': true })
+      updateDoc(doc(authed.firestore(), 'users', 'tuES3'), { 'profiles.tutor.searchable': true, contactVisibilityConsent: true })
     );
   });
 
@@ -2103,6 +2219,7 @@ describe('guardian collections', () => {
       await assertSucceeds(updateDoc(doc(authed.firestore(), 'users', 'kidU8'), {
         photoUrl: 'https://firebasestorage.googleapis.com/v0/b/x/o/p.png',
         'profiles.babysitter.searchable': true,
+        contactVisibilityConsent: true,
       }));
     });
 

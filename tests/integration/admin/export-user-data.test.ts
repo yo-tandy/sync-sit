@@ -3,8 +3,11 @@ import { clearAll, callFunction, getIdToken, getDb } from '../../setup/emulator.
 import {
   seedTestData,
   seedAppointment,
+  seedSearch,
   seedStudySession,
   seedStudyInstance,
+  seedContactSharingRequest,
+  seedStudyContactRequest,
   type SeedData,
 } from '../../setup/seed.js';
 
@@ -15,6 +18,7 @@ interface ExportResponse {
   notifications: Array<{ id: string }>;
   auditLogs: Array<{ id: string; action: string }>;
   references: Array<{ id: string; referenceText?: string }>;
+  searches: Array<{ id: string; address?: string; createdByUserId?: string; familyId?: string }>;
   studySessions: Array<{
     id: string;
     tutorName?: string;
@@ -22,6 +26,8 @@ interface ExportResponse {
     instances: Array<{ id: string; preSessionNote?: string }>;
   }>;
   schedule: { id: string; overrides: Array<{ id: string }> } | null;
+  contactSharingRequests: Array<{ id: string; parentName?: string; babysitterUserId?: string }>;
+  studyContactRequests: Array<{ id: string; tutorName?: string; parentUserId?: string }>;
 }
 
 describe('exportUserData', () => {
@@ -34,6 +40,15 @@ describe('exportUserData', () => {
   let tutorSessionId: string;
   let recurringSessionId: string;
   let unrelatedSessionId: string;
+  let ownSearchId: string;
+  let familySearchId: string;
+  let unrelatedSearchId: string;
+  let sharingOwnId: string;
+  let sharingFamilyId: string;
+  let sharingOtherFamilyId: string;
+  let studyOwnId: string;
+  let studyTutorInitiatedId: string;
+  let studyOtherFamilyId: string;
 
   beforeAll(async () => {
     await clearAll();
@@ -135,6 +150,68 @@ describe('exportUserData', () => {
       tutorUserId: seed.tutor2.uid,
       status: 'confirmed',
       date: '2026-09-10',
+    });
+
+    // `searches/{searchId}` (issue #408 item 2): one created by parent1
+    // personally, one created by parent2 (family1's co-parent — family-level
+    // data reachable via familyId, like the references' submittedByFamilyId
+    // case) and one unrelated (family2/parent3) — the isolation control.
+    ownSearchId = await seedSearch({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      address: '15 Rue de Passy, 75016 Paris',
+    });
+    familySearchId = await seedSearch({
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent2.uid,
+      address: '9 Avenue Foch, 75116 Paris',
+    });
+    unrelatedSearchId = await seedSearch({
+      familyId: seed.family2Id,
+      createdByUserId: seed.parent3.uid,
+      address: '1 Place Martin, 75011 Paris',
+    });
+
+    // Contact requests (issue #408 ledger): each collection gets one request
+    // the member made personally, one keyed to their family by a co-parent
+    // (or, for study, a tutor-initiated one with no parent yet -- family
+    // data reachable only via familyId), and one from another family that
+    // names the SAME babysitter/tutor -- the counterparty-side control.
+    sharingOwnId = await seedContactSharingRequest({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family1Id,
+      parentUserId: seed.parent1.uid,
+      parentName: 'Marie Dupont',
+    });
+    sharingFamilyId = await seedContactSharingRequest({
+      babysitterUserId: seed.babysitter2.uid,
+      familyId: seed.family1Id,
+      parentUserId: seed.parent2.uid,
+      parentName: 'Pierre Dupont',
+    });
+    sharingOtherFamilyId = await seedContactSharingRequest({
+      babysitterUserId: seed.babysitter1.uid,
+      familyId: seed.family2Id,
+      parentUserId: seed.parent3.uid,
+      parentName: 'Sophie Martin',
+    });
+    studyOwnId = await seedStudyContactRequest({
+      tutorUserId: seed.tutor1.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.parent1.uid,
+      parentUserId: seed.parent1.uid,
+    });
+    studyTutorInitiatedId = await seedStudyContactRequest({
+      tutorUserId: seed.tutor2.uid,
+      familyId: seed.family1Id,
+      createdByUserId: seed.tutor2.uid,
+      initiatedBy: 'tutor',
+    });
+    studyOtherFamilyId = await seedStudyContactRequest({
+      tutorUserId: seed.tutor1.uid,
+      familyId: seed.family2Id,
+      createdByUserId: seed.parent3.uid,
+      parentUserId: seed.parent3.uid,
     });
 
     // A tutor override, so the schedule export has an overrides row to carry.
@@ -241,6 +318,32 @@ describe('exportUserData', () => {
     });
 
     /**
+     * Issue #408 item 2 — the export half of the same gap: `searches` was
+     * absent entirely, so a subject-access request under-reported the
+     * stored `address`.
+     */
+    it('includes searches where the user is the CREATOR, plus family-owned searches, deduplicated, with the address', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+
+      const ids = result.searches.map((s) => s.id);
+      // Created personally.
+      expect(ids).toContain(ownSearchId);
+      // Created by the co-parent from the same family — family-level data
+      // reachable via familyId, like family appointments/references.
+      expect(ids).toContain(familySearchId);
+      // Another family's search stays out.
+      expect(ids).not.toContain(unrelatedSearchId);
+      expect(new Set(ids).size).toBe(ids.length);
+
+      const own = result.searches.find((s) => s.id === ownSearchId)!;
+      expect(own.address).toBe('15 Rue de Passy, 75016 Paris');
+    });
+
+    /**
      * Issue #408 item 1 — the export half of the same gap: `study-sessions`
      * and `schedules/{uid}` were absent from every subject-access request,
      * even though `deleteUser` has always erased the schedule document.
@@ -308,6 +411,69 @@ describe('exportUserData', () => {
 
       expect(result.schedule).toBeNull();
       expect(result.studySessions).toEqual([]);
+    });
+  });
+
+  /**
+   * Issue #408 ledger -- `contactSharingRequests` and `studyContactRequests`
+   * were in neither callable, even though `nameFanOut` already sweeps both
+   * for identity corrections (the platform knew they carry personal data).
+   */
+  describe('contact requests (issue #408 ledger)', () => {
+    it("a PARENT export carries the sharing requests they made and their family made, with the names, not another family's", async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+      const ids = result.contactSharingRequests.map((r) => r.id);
+      expect(ids).toContain(sharingOwnId);
+      expect(ids).toContain(sharingFamilyId);
+      expect(ids).not.toContain(sharingOtherFamilyId);
+      expect(new Set(ids).size).toBe(ids.length);
+      expect(result.contactSharingRequests.find((r) => r.id === sharingOwnId)!.parentName).toBe(
+        'Marie Dupont',
+      );
+    });
+
+    it('a BABYSITTER export carries every sharing request addressed to them, across families', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.babysitter1.uid },
+        adminToken,
+      );
+      const ids = result.contactSharingRequests.map((r) => r.id);
+      expect(ids).toContain(sharingOwnId);
+      expect(ids).toContain(sharingOtherFamilyId);
+      // Addressed to babysitter2 -- not this member's data on either side.
+      expect(ids).not.toContain(sharingFamilyId);
+    });
+
+    it('a PARENT export carries their own study requests AND a tutor-initiated one keyed to the family alone', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.parent1.uid },
+        adminToken,
+      );
+      const ids = result.studyContactRequests.map((r) => r.id);
+      expect(ids).toContain(studyOwnId);
+      // No parentUserId on this one (nobody has answered) -- reachable only
+      // through familyId, which is exactly the shape a uid-only query misses.
+      expect(ids).toContain(studyTutorInitiatedId);
+      expect(ids).not.toContain(studyOtherFamilyId);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('a TUTOR export carries every study request addressed to them, and none addressed to another tutor', async () => {
+      const result = await callFunction<ExportResponse>(
+        'exportUserData',
+        { targetUserId: seed.tutor1.uid },
+        adminToken,
+      );
+      const ids = result.studyContactRequests.map((r) => r.id);
+      expect(ids).toContain(studyOwnId);
+      expect(ids).toContain(studyOtherFamilyId);
+      expect(ids).not.toContain(studyTutorInitiatedId);
     });
   });
 

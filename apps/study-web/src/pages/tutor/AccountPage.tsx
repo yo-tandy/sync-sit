@@ -15,6 +15,8 @@ import {
   notifPrefPath,
   notifPrefRowsForUser,
   resolveNotifPrefsFor,
+  isAcceptablePhotoType,
+  resolvePhotoContentType,
 } from '@ejm/shared-core';
 import type { NotifCategory, NotifChannels, NotifScope } from '@ejm/shared-core';
 import {
@@ -51,7 +53,6 @@ import { isPushSupported } from '@/lib/pushNotifications';
 
 // Photo constraints — identical to the sit babysitter AccountPage.
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
-const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
 
 /**
  * Which app's preference block this page edits (issue #369). Rows come from
@@ -199,7 +200,7 @@ export function AccountPage() {
   // --- Photo handlers (auto-save, mirroring sit's babysitter AccountPage) ---
   const handlePhotoSelect = (file: File) => {
     setPhotoError(null);
-    if (!ACCEPTED_TYPES.includes(file.type)) {
+    if (!isAcceptablePhotoType(file.type)) {
       setPhotoError(t('account.photoInvalidType'));
       return;
     }
@@ -256,7 +257,8 @@ export function AccountPage() {
       setPhotoPreview(null);
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] remove photo failed', err);
       setPhotoError(t('account.photoRemoveFailed'));
     }
   };
@@ -273,7 +275,13 @@ export function AccountPage() {
       const oldPath = storedPhotoPath();
       const path = `profile-photos/${uid}.${ext}`;
       const storageRef = ref(storage, path);
-      await uploadBytes(storageRef, photoFile);
+      // Explicit contentType: uploadBytes otherwise trusts photoFile.type
+      // verbatim, which is exactly the value HEIC/generic uploads don't
+      // reliably have (issue #452) — without this the object gets served as
+      // application/octet-stream and an <img> may not render it at all.
+      await uploadBytes(storageRef, photoFile, {
+        contentType: resolvePhotoContentType(photoFile.name, photoFile.type),
+      });
       const photoUrl = await getDownloadURL(storageRef);
       await updateDoc(doc(db, 'users', uid), {
         photoUrl,
@@ -285,7 +293,8 @@ export function AccountPage() {
       }
       setPhotoFile(null);
       await refreshUserDoc().catch(() => {});
-    } catch {
+    } catch (err) {
+      console.error('[account] save photo failed', err);
       // Inline error where the user is looking, and an honest preview: the
       // picked image did NOT save, so fall back to what is actually stored.
       // Bump the token so a still-pending reader can't repaint the failure.
@@ -323,8 +332,9 @@ export function AccountPage() {
       await refreshUserDoc();
       toast(t('account.contactSaved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : t('account.contactSaveFailed');
-      setError(message);
+      // Never err.message: Firestore SDK text is English-only (and an Error always wins an instanceof check).
+      console.error('[account] contact save failed', err);
+      setError(t('account.contactSaveFailed'));
     } finally {
       setContactSaving(false);
     }
@@ -345,7 +355,8 @@ export function AccountPage() {
       });
       await refreshUserDoc();
       toast(t('tutor.account.aboutMe.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[account] save about-me failed', err);
       setAboutMeError(t('common.error'));
     } finally {
       setAboutMeSaving(false);
@@ -360,7 +371,8 @@ export function AccountPage() {
       await resetPassword(userDoc.email);
       setPasswordResetSent(true);
       flashAfter(() => setPasswordResetSent(false), 5000);
-    } catch {
+    } catch (err) {
+      console.error('[account] password reset failed', err);
       setError(t('account.passwordResetFailed'));
     } finally {
       setPasswordResetting(false);
@@ -407,7 +419,8 @@ export function AccountPage() {
     setPrefs({ ...prefs, [category]: { ...current, [channel]: next } });
     try {
       await savePrefs(category, channel, next);
-    } catch {
+    } catch (err) {
+      console.error('[account] save notification prefs failed', err);
       // Revert the optimistic toggle and surface the failure.
       setPrefs(previous);
       setError(t('account.notifSaveFailed'));
@@ -488,6 +501,7 @@ export function AccountPage() {
         <input
           ref={fileInputRef}
           type="file"
+          accept="image/*"
           className="hidden"
           onChange={handleFileChange}
           data-testid="photo-input"

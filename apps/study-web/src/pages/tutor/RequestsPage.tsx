@@ -117,7 +117,8 @@ export function RequestsPage() {
         (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: next } : r)),
       );
       toast(t(`tutor.requests.status.${next}`));
-    } catch {
+    } catch (err) {
+      console.error('[requests] respond to request failed', err);
       setError(t('tutor.requests.actionError'));
     } finally {
       setActingId(null);
@@ -139,7 +140,8 @@ export function RequestsPage() {
         (rs ?? []).map((r) => (r.requestId === req.requestId ? { ...r, status: 'cancelled' } : r)),
       );
       toast(t('tutor.requests.status.cancelled'));
-    } catch {
+    } catch (err) {
+      console.error('[requests] withdraw request failed', err);
       setError(t('tutor.requests.actionError'));
     } finally {
       setActingId(null);

@@ -13,7 +13,8 @@ const h = vi.hoisted(() => ({
   refreshUserDoc: () => Promise.resolve(),
   // Controllable verifyEjmEmail rejection so tests can drive the send-cap
   // (issue #155 bypass allowance) branch. Default null = send succeeds.
-  verifyError: null as { code: string; details: { reason: string } } | null,
+  verifyError: null as unknown,
+  enrollError: null as unknown,
   // Admin-config values the reader stub serves (issue #250) -- empty means
   // every key resolves to its caller-supplied fallback (code default).
   configValues: {} as Record<string, number>,
@@ -28,6 +29,9 @@ vi.mock('firebase/functions', () => ({
     // FunctionsError with details.reason.
     if (name === 'verifyEjmEmail' && h.verifyError) {
       return Promise.reject(h.verifyError);
+    }
+    if (name === 'enrollBabysitter' && h.enrollError) {
+      return Promise.reject(h.enrollError);
     }
     return Promise.resolve({ data: { uid: 'u1' } });
   },
@@ -69,7 +73,11 @@ vi.mock('@ejm/sit-core', () => ({
 }));
 
 // Lightweight stand-ins for the child step components.
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
   // (issue #250) -- stub returns the caller's fallback (code default).
   createAdminConfigReader: () => ({
@@ -98,14 +106,17 @@ vi.mock('@ejm/shared-ui', () => ({
       <button onClick={() => onVerify('123456')}>verify-submit</button>
     </div>
   ),
-  StepPassword: (props: { onSubmit: (pw: string, c: string) => void; collectPassword?: boolean }) => (
-    <button
-      data-testid="step-password"
-      data-collect={String(props.collectPassword)}
-      onClick={() => props.onSubmit('Pw123456!', '1.0')}
-    >
-      password-submit
-    </button>
+  StepPassword: (props: { onSubmit: (pw: string, c: string) => void; collectPassword?: boolean; error?: string | null }) => (
+    <div>
+      {props.error && <p>{props.error}</p>}
+      <button
+        data-testid="step-password"
+        data-collect={String(props.collectPassword)}
+        onClick={() => props.onSubmit('Pw123456!', '1.0')}
+      >
+        password-submit
+      </button>
+    </div>
   ),
 }));
 vi.mock('@/components/ui', () => ({
@@ -154,6 +165,7 @@ beforeEach(() => {
   h.auth = { firebaseUser: null, userDoc: null, loading: false };
   h.refreshUserDoc = vi.fn().mockResolvedValue(undefined);
   h.verifyError = null;
+  h.enrollError = null;
   h.configValues = {};
   i18n.changeLanguage('en');
 });
@@ -171,6 +183,20 @@ describe('BabysitterEnrollment send-cap surfacing (issue #155)', () => {
     expect(
       screen.queryByText(/Too many verification emails requested for this account/),
     ).toBeNull();
+  });
+});
+
+describe('BabysitterEnrollment unexpected send-code failure', () => {
+  it("an 'internal' rejection renders the translated server-error copy, never the bare token", async () => {
+    // What the client SDK hands back for an uncaught server throw: a
+    // FunctionsError whose message is literally 'internal'.
+    h.verifyError = Object.assign(new Error('internal'), { code: 'functions/internal' });
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('internal')).toBeNull();
+    expect(screen.queryByText('verify-submit')).toBeNull();
   });
 });
 
@@ -233,6 +259,27 @@ describe('BabysitterEnrollment add-profile routing (issue #144)', () => {
       userDoc: {
         firstName: 'Iris',
         profiles: { babysitter: { enrollmentComplete: false, classLevel: 'Terminale' } },
+      },
+      loading: false,
+    };
+    renderFlow();
+
+    expect(await screen.findByText('preferences-complete')).toBeInTheDocument();
+    expect(screen.queryByText('profile-next')).toBeNull();
+  });
+
+  // issue #435 milestone, PR4: the unified flow's crossApp arrival carries
+  // classLevel ONLY at root (enrollBabysitter's crossApp mode no longer
+  // seeds the nested babysitter.classLevel at all, per PR1) — the resume
+  // routing must resolve root, not the raw nested field, or every unified-
+  // flow sit continuation would be stuck re-asking StepProfile.
+  it('resume with ROOT-ONLY classLevel (unified-flow crossApp shape) goes straight to preferences', async () => {
+    h.auth = {
+      firebaseUser: { uid: 't5' },
+      userDoc: {
+        firstName: 'Iris',
+        classLevel: 'Terminale',
+        profiles: { babysitter: { enrollmentComplete: false } },
       },
       loading: false,
     };
@@ -307,5 +354,24 @@ describe('BabysitterEnrollment resend cooldown wiring (issue #250)', () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId('resend-cooldown-s')).toHaveTextContent(/^60$/);
     });
+  });
+});
+
+// The final-step catch used to render err.message: an unexpected fault showed
+// the bare token 'internal', and deliberate server messages were English-only.
+describe('BabysitterEnrollment account-creation error copy', () => {
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.enrollError = Object.assign(new Error(message), { code: `functions/${code}` });
+    renderFlow();
+    await driveThroughAccountStep();
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
   });
 });

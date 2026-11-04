@@ -175,7 +175,8 @@ export function SearchPage() {
       await deleteDoc(doc(db, 'publishedSearches', withdrawTarget.id));
       setWithdrawTarget(null);
       toast(t('family.publish.withdrawn'));
-    } catch {
+    } catch (err) {
+      console.error('[publish] withdraw search failed', err);
       // Keep the dialog open and say so — a swallowed rules denial or offline
       // failure left the row visibly present but the dialog claimed success
       // (PR #210 review).

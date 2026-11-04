@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
+import { AuthColumn } from '../components/AuthColumn.js';
 import { ArrowLeftIcon } from '../components/Icons.js';
 
 interface LoginPageProps {
@@ -11,13 +12,39 @@ interface LoginPageProps {
   loading: boolean;
   error: string | null;
   clearError: () => void;
+  /**
+   * Where the "create an account" link goes. Defaults to `/signup` — every
+   * app still mounts that route (issue #435 milestone, PR5 keeps it
+   * resolving as a redirect for bookmarks/stale links), so callers that
+   * don't pass this keep working unchanged.
+   *
+   * A same-origin path renders as a client-side `<Link>` (apps/web passes
+   * `/enroll` directly: its own entry point now IS the unified landing
+   * page, so sending a fresh click there through the `/signup` redirect
+   * would be a needless extra hop). A full `http(s)://` URL renders as a
+   * plain `<a>` instead — `<Link>` only knows how to resolve in-app paths,
+   * and study/do pass sit's absolute cross-origin `/enroll` URL here so
+   * their own "create an account" click skips their local `/signup`
+   * redirect hop too.
+   */
+  signUpTo?: string;
 }
 
-export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading, error, clearError }: LoginPageProps) {
+export function LoginPage({
+  logoSrc,
+  logoAlt,
+  onLogin,
+  postLoginRouter,
+  loading,
+  error,
+  clearError,
+  signUpTo = '/signup',
+}: LoginPageProps) {
   const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
+  const signUpIsExternal = /^https?:\/\//.test(signUpTo);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,7 +57,7 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
   };
 
   return (
-    <div>
+    <AuthColumn>
       <div className="flex h-[52px] items-center justify-between px-5">
         <Link to="/" className="flex h-9 w-9 items-center justify-center rounded-full bg-gray-100 transition-colors hover:bg-gray-200">
           <ArrowLeftIcon className="h-[18px] w-[18px]" />
@@ -90,9 +117,13 @@ export function LoginPage({ logoSrc, logoAlt, onLogin, postLoginRouter, loading,
 
         <div className="mt-6 text-center">
           <span className="text-sm text-gray-500">{t('auth.noAccount')}{' '}</span>
-          <Link to="/signup" className="text-sm font-semibold text-brand-600 hover:underline">{t('auth.signUp')}</Link>
+          {signUpIsExternal ? (
+            <a href={signUpTo} className="text-sm font-semibold text-brand-600 hover:underline">{t('auth.signUp')}</a>
+          ) : (
+            <Link to={signUpTo} className="text-sm font-semibold text-brand-600 hover:underline">{t('auth.signUp')}</Link>
+          )}
         </div>
       </div>
-    </div>
+    </AuthColumn>
   );
 }

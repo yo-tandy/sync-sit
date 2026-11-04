@@ -18,6 +18,7 @@ import { extractTimingFields, type StoredTimingFields } from './taskInput.js';
 import { OFFER_LIVE_STATUSES } from './offerAccess.js';
 import { notifyDoSafely, sendDoNotificationToEach } from './notify.js';
 import { buildTaskUpdated } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 const TIMING_KEYS = [
   'timing',
@@ -45,7 +46,7 @@ const TIMING_KEYS = [
  * a co-parent's photos (§8).
  */
 export const doUpdateTask = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

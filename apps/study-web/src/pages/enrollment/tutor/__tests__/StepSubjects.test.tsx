@@ -42,6 +42,47 @@ describe('StepSubjects (tutor enrollment)', () => {
     expect(screen.getByRole('button', { name: /Complete sign-up/i })).toBeDisabled();
   });
 
+  it('skip on an untouched step completes signup with no subjects, no confirm', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} />);
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(onNext).toHaveBeenCalledWith([]);
+  });
+
+  it('skip with a filled-in draft asks first; keep editing preserves the rows', () => {
+    const onNext = vi.fn();
+    renderWithProviders(<StepSubjects onNext={onNext} />);
+    fillRow(0, 'math', 'Terminale', '25');
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+
+    expect(onNext).not.toHaveBeenCalled();
+    expect(screen.getByText(i18n.t('enrollment.subjectsSkipConfirm'))).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Keep editing/i }));
+    expect(onNext).not.toHaveBeenCalled();
+    expect(within(row()).getByRole('combobox')).toHaveValue('math');
+
+    // Confirming discards the draft and completes with no subjects.
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Skip anyway/i }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+    expect(onNext).toHaveBeenCalledWith([]);
+  });
+
+  it('skip stays available after removing every row, and is disabled while submitting', () => {
+    const onNext = vi.fn();
+    const { unmount } = renderWithProviders(<StepSubjects onNext={onNext} />);
+    fireEvent.click(within(row()).getByRole('button', { name: /Remove/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }));
+    expect(onNext).toHaveBeenCalledWith([]);
+    unmount();
+
+    renderWithProviders(<StepSubjects onNext={onNext} loading />);
+    expect(screen.getByRole('button', { name: /Skip for now/i })).toBeDisabled();
+  });
+
   it('submits the offerings payload when the row is valid', () => {
     const onNext = vi.fn();
     renderWithProviders(<StepSubjects onNext={onNext} />);

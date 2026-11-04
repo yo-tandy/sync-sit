@@ -1,6 +1,8 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { getDoRole, type DoRole } from '@/utils/doRole';
+import { needsReconsent } from '@ejm/shared-core';
+import { ConsentGateHost } from '@/components/ConsentGateHost';
 
 interface AuthGuardProps {
   /** Portal role this route belongs to. Since PR8 every authenticated
@@ -38,6 +40,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
 
   // Not signed in at all -> the login page.
   if (!firebaseUser) return <Navigate to="/login" replace />;
+
+  // Re-consent gate (issue #488 decision 1): the consent documents were
+  // bumped after this member last accepted them. Nothing of the app renders
+  // until they accept the current ones or sign out -- before role routing on
+  // purpose, since a stale record is stale in every portal. A doc that has
+  // not loaded yet is not gated (needsReconsent(null) is false).
+  if (needsReconsent(userDoc)) return <ConsentGateHost />;
 
   const doRole = getDoRole(userDoc);
   if (doRole !== role && !(role === 'doer' && doRole === 'admin')) {

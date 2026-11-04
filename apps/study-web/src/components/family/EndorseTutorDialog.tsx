@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '@/config/firebase';
 import { SUBJECTS } from '@ejm/study-core';
-import { Dialog, Button, Input, Textarea, Select } from '@ejm/shared-ui';
+import { Dialog, Button, Input, Textarea, Select, endorsementCooldownDetails } from '@ejm/shared-ui';
 
 /** Client mirror of the zod min-length gate (referenceText.trim().min(10)). */
 const MIN_TEXT_LENGTH = 10;
@@ -37,7 +37,7 @@ export function EndorseTutorDialog({
   onClose: () => void;
   onEndorsed: () => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [text, setText] = useState('');
   const [refName, setRefName] = useState(defaultRefName);
   const [subject, setSubject] = useState(initialSubject ?? '');
@@ -71,6 +71,17 @@ export function EndorseTutorDialog({
       onEndorsed();
     } catch (err: unknown) {
       const code = (err as { code?: string })?.code;
+      // The cool-down (issue #356) is neither success nor a settled
+      // already-endorsed state — the family has not endorsed yet, they just
+      // have to wait, so this does NOT call onEndorsed.
+      const cooldown = endorsementCooldownDetails(err);
+      if (cooldown) {
+        setError(
+          t('family.endorse.errorCooldown', { date: formatRetryDate(cooldown.retryAt, i18n.language) }),
+        );
+        setSubmitting(false);
+        return;
+      }
       // already-exists means this family has already endorsed the tutor — surface
       // it as a friendly state AND settle the row (onEndorsed), since re-trying
       // would only hit the same error.
@@ -133,6 +144,19 @@ export function EndorseTutorDialog({
       )}
     </Dialog>
   );
+}
+
+/**
+ * Formats a cool-down `retryAt` for the "you can ask again on …" copy — the
+ * house `toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', ...)` pattern
+ * (RequestsPage.tsx, GovernancePage.tsx) rather than a new date utility.
+ */
+function formatRetryDate(date: Date, lang: string): string {
+  return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 /** Maps a submitTutorEndorsement error code to its i18n key. */

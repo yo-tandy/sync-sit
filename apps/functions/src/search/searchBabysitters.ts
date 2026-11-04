@@ -1,9 +1,9 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
-import { haversineDistance, getParentProfile, getBabysitterView } from '@ejm/sit-core';
+import { haversineDistance, compareByDistanceLast, getParentProfile, getBabysitterView } from '@ejm/sit-core';
 import type { LatLng, User } from '@ejm/sit-core';
-import { getEjemEmail, getContact } from '@ejm/shared-core';
+import { getEjemEmail, getContact, timeRangeSlotIndices } from '@ejm/shared-core';
 import { calculateAge, passesAgeBackstop } from './ageBackstop.js';
 import { writeUserActivity } from '../admin/writeAuditLog.js';
 
@@ -41,16 +41,16 @@ interface BabysitterResult {
   hourlyRate: number;
   // Notice-window disclosure on the card (issue #237); 0 = no policy.
   cancellationNoticeHours: number;
-  distance: number; // km
+  distance: number; // km — area/radius-based (areaLatLng), unchanged by #439
+  // Haversine distance in km from the babysitter's root `address` (#442/#474)
+  // to the family's search location, or null when either side lacks
+  // coordinates. Ranking-only (issue #439) — a LAST tie-break, never a
+  // filter; never derived from/leaking the address itself.
+  addressDistance: number | null;
   referenceCount: number;
   contactEmail?: string;
   contactPhone?: string;
   isPreferred?: boolean;
-}
-
-function timeToSlotIndex(time: string): number {
-  const [h, m] = time.split(':').map(Number);
-  return Math.floor((h * 60 + m) / 15);
 }
 
 export const searchBabysitters = onCall(
@@ -145,6 +145,18 @@ export const searchBabysitters = onCall(
         }
       }
 
+      // Distance from the babysitter's own home address (#442/#474 root
+      // `address`) to the family's search location — computed regardless of
+      // areaMode (issue #439), independent of the area/radius `distance`
+      // above. Ranking-only: never gates a result, only feeds the LAST sort
+      // tie-break below.
+      const addressDistance: number | null =
+        raw.address && params.latLng
+          ? Math.round(
+              haversineDistance({ lat: raw.address.lat, lng: raw.address.lng }, params.latLng) * 10,
+            ) / 10
+          : null;
+
       // Schedule availability check
       if (params.type === 'one_time' && params.date && params.startTime && params.endTime) {
         const scheduleSnap = await db.collection('schedules').doc(uid).get();
@@ -155,13 +167,15 @@ export const searchBabysitters = onCall(
           const dayKey = dayNames[dateObj.getDay()];
           const daySlots: boolean[] = schedule.weekly?.[dayKey];
 
+          // Wrap-aware (issue #510): an overnight sitting (22:00 → 02:00, a
+          // first-class option in the parent's picker) checks 88..95 AND
+          // 0..7 of the SAME day's array — the DayEditor storage convention.
+          // The former `for (i = start; i < end)` loop ran zero times for a
+          // wrapped range and let every babysitter through.
           if (daySlots) {
-            const startIdx = timeToSlotIndex(params.startTime);
-            const endIdx = timeToSlotIndex(params.endTime);
-            let available = true;
-            for (let i = startIdx; i < endIdx && i < 96; i++) {
-              if (!daySlots[i]) { available = false; break; }
-            }
+            const available = timeRangeSlotIndices(params.startTime, params.endTime).every(
+              (i) => !!daySlots[i],
+            );
             if (!available) continue;
           }
 
@@ -172,12 +186,10 @@ export const searchBabysitters = onCall(
             const override = overrideSnap.data()!;
             if (override.type === 'unavailable') continue;
             if (override.type === 'custom' && override.slots) {
-              const startIdx = timeToSlotIndex(params.startTime);
-              const endIdx = timeToSlotIndex(params.endTime);
-              let available = true;
-              for (let i = startIdx; i < endIdx && i < 96; i++) {
-                if (!override.slots[i]) { available = false; break; }
-              }
+              const overrideSlots = override.slots as boolean[];
+              const available = timeRangeSlotIndices(params.startTime, params.endTime).every(
+                (i) => !!overrideSlots[i],
+              );
               if (!available) continue;
             }
           }
@@ -234,6 +246,7 @@ export const searchBabysitters = onCall(
         // notice-window line is the sole disclosure surface pre-request.
         cancellationNoticeHours: b.cancellationNoticeHours ?? 0,
         distance: Math.round(distance * 10) / 10,
+        addressDistance,
         referenceCount: refCount,
         // Contact projects from the canonical root ?? nested resolution so a
         // root-only Account edit (issue #203) reaches families immediately.
@@ -243,10 +256,14 @@ export const searchBabysitters = onCall(
       });
     }
 
-    // Sort by distance (closest first), then by reference count (most first)
+    // Sort by distance (closest first), then by reference count (most
+    // first) — both UNCHANGED (issue #439 appends only, never reorders
+    // above its tie-break) — then, on an exact tie, by the babysitter's home
+    // address distance (nearer first, no-address last, never excluded).
     results.sort((a, b) => {
       if (a.distance !== b.distance) return a.distance - b.distance;
-      return b.referenceCount - a.referenceCount;
+      if (a.referenceCount !== b.referenceCount) return b.referenceCount - a.referenceCount;
+      return compareByDistanceLast(a.addressDistance, b.addressDistance);
     });
 
     console.log(`Returning ${results.length} matching babysitters`);

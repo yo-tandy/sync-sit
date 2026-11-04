@@ -118,7 +118,8 @@ export function SubjectsPage() {
       });
       await refreshUserDoc();
       toast(t('tutor.subjects.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[subjects] save subjects failed', err);
       setError(t('tutor.subjects.saveError'));
     } finally {
       setSaving(false);

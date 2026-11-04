@@ -15,6 +15,7 @@ import {
   getSchoolYearsInRange,
   dayOfWeek,
   resolveEffectiveLocations,
+  sessionCrossesMidnight,
   type DayOverride,
 } from '@ejm/study-core';
 import { computeSingleDateAvailability } from '../availability/singleDateAvailability.js';
@@ -32,6 +33,7 @@ import {
   buildRestoredOverride,
   type RestoreResult,
 } from './sessionOverride.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 
 /** Apply a restoration result to an override ref inside the transaction (cancelSession idiom). */
@@ -73,7 +75,7 @@ function applyRestore(tx: Transaction, ref: DocumentReference, result: RestoreRe
  * only ANDs slots false, which is always safe.
  */
 export const modifySession = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');
@@ -198,7 +200,7 @@ export const modifySession = onCall(
     if (whenChanged) {
       const startIdxPeek = timeToSlotIndex(newStartPeek);
       const endIdxPeek = startIdxPeek + newLengthPeek / 15;
-      if (endIdxPeek > 96) {
+      if (sessionCrossesMidnight(startIdxPeek, newLengthPeek)) {
         // bookSession's guard verbatim: without it a 23:45 + 75min modify
         // writes endTime '25:00' and the session becomes permanently
         // unconfirmable (the confirm grid check reads grid[96..] === undefined).

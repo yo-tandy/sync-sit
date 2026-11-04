@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref, uploadBytes } from 'firebase/storage';
-import { storage } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
-import { Badge, Button, Card, Checkbox, Input, Spinner, TopNav } from '@ejm/shared-ui';
-import { getParentProfile } from '@ejm/shared-core';
+import { Badge, Button, Card, Checkbox, Input, Spinner, TopNav, callableErrorCode, putToSignedUrl, type SignedUploadResponse } from '@ejm/shared-ui';
+import { getParentProfile, uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
 
 /**
  * Family verification, ported from sync-sit's VerificationPage
@@ -15,12 +15,21 @@ import { getParentProfile } from '@ejm/shared-core';
  * document upload (identity + EJM enrollment tabs), per-type status, and the
  * community-verification path (ask for a code / approve a friend).
  *
- * Uploads write to verification-documents/{familyId}/ in the shared bucket —
- * storage.rules allows writes there only for members of the owning family
- * (profiles.parent.familyId match) or admins, capped at 10MB (issue #153).
+ * Uploads go through createVerificationDocumentUploadUrl, a membership-
+ * checked signed-URL callable (issue #447) — storage.rules denies every
+ * direct client write to verification-documents/** now, so this is the
+ * only writer, same shape as sit's.
  */
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+interface CreateVerificationDocumentUploadUrlRequest {
+  familyId: string;
+  kind: 'identity' | 'enrollment';
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+const MAX_FILE_SIZE = MAX_VERIFICATION_DOCUMENT_BYTES;
 
 function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' {
   switch (status) {
@@ -76,11 +85,23 @@ export function VerificationPage() {
     void fetchStatus();
   }, [fetchStatus]);
 
+  // Uploads (issue #447): verification-documents writes now go through this
+  // membership-checked signed-URL callable exclusively — storage.rules denies
+  // every direct client write to verification-documents/**. See
+  // packages/shared-functions/src/verification/createVerificationDocumentUploadUrl.ts.
   const handleUpload = async (file: File, type: 'identity' | 'ejm_enrollment', metadata?: Record<string, string>) => {
     if (!familyId) return;
-    const path = `verification-documents/${familyId}/${Date.now()}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
+    const kind = type === 'identity' ? 'identity' : 'enrollment';
+    const contentType = file.type || 'application/octet-stream';
+    const fn = httpsCallable<CreateVerificationDocumentUploadUrlRequest, SignedUploadResponse>(
+      functions,
+      'createVerificationDocumentUploadUrl',
+    );
+    const { data } = await fn({ familyId, kind, contentType, fileName: file.name, sizeBytes: file.size });
+    // The callable binds BOTH headers into the V4 signature — see
+    // putToSignedUrl's doc comment (@ejm/shared-ui) for why both must ride
+    // on the PUT.
+    const path = await putToSignedUrl(data, file, contentType, MAX_VERIFICATION_DOCUMENT_BYTES);
     // Do NOT getDownloadURL here: storage.rules deny reads on
     // verification-documents (reads go through the getVerificationDocument
     // callable), so the metadata read behind getDownloadURL is rejected and
@@ -104,8 +125,9 @@ export function VerificationPage() {
       await handleUpload(identityFile, 'identity');
       setIdentityFile(null);
       if (identityInputRef.current) identityInputRef.current.value = '';
-    } catch {
-      setIdentityError(t('family.verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setIdentityError(t(`family.verification.${uploadErrorKey(err)}`));
     }
   };
 
@@ -120,17 +142,29 @@ export function VerificationPage() {
       await handleUpload(enrollmentFile, 'ejm_enrollment');
       setEnrollmentFile(null);
       if (enrollmentInputRef.current) enrollmentInputRef.current.value = '';
-    } catch {
-      setEnrollmentError(t('family.verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setEnrollmentError(t(`family.verification.${uploadErrorKey(err)}`));
     }
   };
 
   // The server discriminates actionable failures with details.reason; a stale
   // request gets its own copy rather than the raw server message (#218).
-  const approveErrorMessage = (err: unknown, fallback: string) => {
+  // Everything else maps by callable CODE to our own copy, never err.message
+  // (English-only server text / bare `internal`). failed-precondition and
+  // permission-denied are reused by the server for several distinct causes
+  // (used code vs own family vs no family), so they get the generic copy.
+  const approveErrorMessage = (err: unknown) => {
     const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
     if (reason === 'already_verified') return t('family.verification.communityAlreadyVerified');
-    return err instanceof Error ? err.message : fallback;
+    switch (callableErrorCode(err)) {
+      case 'not-found':
+        return t('family.verification.communityCodeInvalid');
+      case 'deadline-exceeded':
+        return t('family.verification.communityCodeExpired');
+      default:
+        return t('family.verification.communityApproveFailed');
+    }
   };
 
   const handleLookup = async () => {
@@ -138,7 +172,8 @@ export function VerificationPage() {
     try {
       await lookupCommunityCode(approveCode.trim());
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Invalid code'));
+      console.error('[verification] community code lookup failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 
@@ -151,7 +186,8 @@ export function VerificationPage() {
       setKnowPerson(false);
       setConfirmEjm(false);
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Approval failed'));
+      console.error('[verification] community code approval failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 

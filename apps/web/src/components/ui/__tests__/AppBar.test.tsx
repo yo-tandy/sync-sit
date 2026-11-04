@@ -30,16 +30,25 @@ function openMenu(role: UserRole) {
       </MemoryRouter>
     </I18nextProvider>,
   );
-  // The burger is the only button in the closed bar.
-  fireEvent.click(screen.getAllByRole('button')[0]);
+  // NOT `getAllByRole('button')[0]` any more (#417): the desktop app switch
+  // now also renders buttons in this same closed bar (jsdom applies no CSS,
+  // so its `hidden md:flex` doesn't remove them from this query). Name the
+  // burger explicitly instead of relying on it being first.
+  fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
 }
 
-describe('AppBar switch entry', () => {
-  it.each(['babysitter', 'parent', 'admin'] as const)(
-    'shows the sync-study switch entry in the %s menu',
+describe('AppBar switch entry (#417 -- superseded everywhere except admin’s burger, see AppSwitchMenuVisibility.test.tsx)', () => {
+  it('admin: the burger still carries the single-target switch row (its only sub-md entry point)', () => {
+    openMenu('admin');
+    expect(screen.getByRole('button', { name: /open sync-study/i })).toBeInTheDocument();
+    cleanup();
+  });
+
+  it.each(['babysitter', 'parent'] as const)(
+    'non-admin (%s): the burger no longer carries it -- the bar (sub-md) and the inline switcher (md+) cover both widths',
     (role) => {
       openMenu(role);
-      expect(screen.getByRole('button', { name: /open sync-study/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /open sync-study/i })).toBeNull();
       cleanup();
     },
   );

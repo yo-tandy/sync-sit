@@ -8,6 +8,7 @@ import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
 import type { SessionBlockEntry } from '@ejm/shared-functions/schedule/sessionOverride.js';
 import { createClaimReleaser, SIT_PROVENANCE } from '../scheduled/retentionClaims.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 interface DeleteAppointmentInput {
   appointmentId: string;
@@ -22,7 +23,7 @@ interface DeleteAppointmentInput {
  * hid.)
  */
 export const deleteAppointment = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

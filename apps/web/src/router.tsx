@@ -12,12 +12,13 @@ import { WelcomePage } from '@/pages/public/WelcomePage';
 import { LoginPage } from '@/pages/public/LoginPage';
 import { ForgotPasswordPage } from '@/pages/public/ForgotPasswordPage';
 import { AboutPage } from '@/pages/public/AboutPage';
-import { PrivacyPage, TermsPage } from '@ejm/shared-ui';
+import { PrivacyPage, TermsPage, AccountDeletedPage } from '@ejm/shared-ui';
 import { BRAND, SUPPORT_EMAIL } from '@/constants/brand';
 import { SyncSitReportProblemPage } from '@/pages/public/SyncSitReportProblemPage';
 
 import { SharePage } from '@/pages/public/SharePage';
-import { SignUpRolePage } from '@/pages/public/SignUpRolePage';
+import { SignUpRedirectPage } from '@/pages/public/SignUpRedirectPage';
+import { EnrollLandingPage } from '@/pages/public/EnrollLandingPage';
 import { ParentGuidePage } from '@/pages/public/ParentGuidePage';
 import { BabysitterGuidePage } from '@/pages/public/BabysitterGuidePage';
 import { AddToHomescreenPage } from '@/pages/public/AddToHomescreenPage';
@@ -31,6 +32,8 @@ import { SupervisionAgreementPage } from '@/pages/public/SupervisionAgreementPag
 import { BabysitterEnrollment } from '@/pages/enrollment/BabysitterEnrollment';
 import { ParentEnrollment } from '@/pages/enrollment/ParentEnrollment';
 import { JoinFamilyPage } from '@/pages/enrollment/JoinFamilyPage';
+import { StudentEnrollment } from '@/pages/enrollment/StudentEnrollment';
+import { ChooseAppPage } from '@/pages/enrollment/ChooseAppPage';
 
 // Portal dashboards
 import { BabysitterDashboard } from '@/pages/babysitter/DashboardPage';
@@ -59,6 +62,9 @@ import { AdminDashboard } from '@/pages/admin/DashboardPage';
 import { AdminUsersPage } from '@/pages/admin/UsersPage';
 import { AdminEnrollmentAccessPage } from '@/pages/admin/EnrollmentAccessPage';
 import { AccountHubPage } from '@/pages/AccountHubPage';
+import { HubProfilePage } from '@/pages/HubProfilePage';
+import { HUB_PATHS } from '@/lib/hubRoutes';
+import { AuthGuard } from '@/layouts/AuthGuard';
 import { AdminFamiliesPage } from '@/pages/admin/FamiliesPage';
 import { AdminAppointmentsPage } from '@/pages/admin/AppointmentsPage';
 import { AdminDoTasksPage } from '@/pages/admin/DoTasksPage';
@@ -76,7 +82,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
-      { path: '/signup', element: <SignUpRolePage /> },
+      // issue #435 milestone, PR5: /signup is retired — it now just forwards
+      // to /enroll (query string preserved) for old bookmarks/stale links.
+      { path: '/signup', element: <SignUpRedirectPage /> },
       { path: '/forgot-password', element: <ForgotPasswordPage /> },
       { path: '/about', element: <AboutPage /> },
       { path: '/privacy', element: <PrivacyPage brand={BRAND} supportEmail={SUPPORT_EMAIL} /> },
@@ -86,8 +94,14 @@ export const router = createBrowserRouter([
       { path: '/guide/parents', element: <ParentGuidePage /> },
       { path: '/guide/babysitters', element: <BabysitterGuidePage /> },
       { path: '/install', element: <AddToHomescreenPage /> },
+      // issue #435 milestone, PR4: the new unified cross-app entry point.
+      // PR5 retired /signup (above) in its favor — /enroll is now the
+      // primary sign-up entry point site-wide.
+      { path: '/enroll', element: <EnrollLandingPage /> },
       { path: '/enroll/babysitter', element: <BabysitterEnrollment /> },
       { path: '/enroll/parent', element: <ParentEnrollment /> },
+      { path: '/enroll/student', element: <StudentEnrollment /> },
+      { path: '/enroll/choose-app', element: <ChooseAppPage /> },
       { path: '/invite/:token', element: <JoinFamilyPage /> },
       // PUBLIC by design: the kid redeems with the emailed token, no account yet.
       { path: '/kid-invite', element: <KidInvitePage /> },
@@ -97,6 +111,11 @@ export const router = createBrowserRouter([
       { path: '/welcome-sit', element: <CrossAppWelcomePage /> },
       { path: '/supervision-info', element: <SupervisionInfoPage /> },
       { path: '/supervision-agreement', element: <SupervisionAgreementPage /> },
+      // PUBLIC by design (#491): `DeleteAccountSection` signs the member out
+      // before it ever navigates here, so this must never sit behind
+      // `AccountLayout`'s `AuthGuard` -- a signed-out visitor would just be
+      // bounced straight back off it.
+      { path: '/account-deleted', element: <AccountDeletedPage /> },
     ],
   },
 
@@ -148,7 +167,18 @@ export const router = createBrowserRouter([
   // AppBar, no back button — it is not a subsection of either portal.
   {
     element: <AccountLayout />,
-    children: [{ path: '/account', element: <AccountHubPage /> }],
+    children: [
+      { path: '/account', element: <AccountHubPage /> },
+      // The hub's own copies of the account pages (lib/hubRoutes): the same
+      // components the portals mount, kept in the hub's neutral chrome and
+      // going back to the hub. Family-side pages keep the portal's role gate.
+      { path: HUB_PATHS.profile, element: <HubProfilePage /> },
+      { path: HUB_PATHS.family, element: <AuthGuard role="parent"><FamilySettingsPage /></AuthGuard> },
+      { path: HUB_PATHS.kids, element: <AuthGuard role="parent"><GovernancePage /></AuthGuard> },
+      { path: `${HUB_PATHS.kids}/new`, element: <AuthGuard role="parent"><CreateKidInvitePage /></AuthGuard> },
+      { path: `${HUB_PATHS.kids}/:childUid`, element: <AuthGuard role="parent"><GovernedChildPage /></AuthGuard> },
+      { path: HUB_PATHS.verification, element: <AuthGuard role="parent"><VerificationPage /></AuthGuard> },
+    ],
   },
   {
     element: <AdminLayout />,

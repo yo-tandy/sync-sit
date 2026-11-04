@@ -8,8 +8,17 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 // Direct import: the ui barrel transitively pulls the auth store's
 // module-scope onAuthStateChanged — admin pages don't need that.
-import { useToast } from '@ejm/shared-ui';
+import { useToast, callableErrorCode } from '@ejm/shared-ui';
 import { useAdminStore } from '@/stores/adminStore';
+
+// invalid-argument = a bad/missing email (or an over-long note): actionable.
+// Everything else (internal, unauthenticated, permission-denied, ...) gets
+// the generic translated copy -- never the English server string.
+function accessErrorMessage(err: unknown, t: (key: string) => string): string {
+  return callableErrorCode(err) === 'invalid-argument'
+    ? t('admin.enrollmentAccess.invalidInput')
+    : t('common.error');
+}
 
 export function AdminEnrollmentAccessPage() {
   const { t } = useTranslation();
@@ -49,8 +58,8 @@ export function AdminEnrollmentAccessPage() {
       await fetchPreapprovedEmails();
       toast(t('admin.emailAdded'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add email';
-      alert(message);
+      console.error('[admin] add pre-approved email failed', err);
+      alert(accessErrorMessage(err, t));
     }
   };
 
@@ -60,8 +69,8 @@ export function AdminEnrollmentAccessPage() {
       await fetchPreapprovedEmails();
       toast(t('admin.emailRemoved'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove email';
-      alert(message);
+      console.error('[admin] remove pre-approved email failed', err);
+      alert(accessErrorMessage(err, t));
     }
   };
 
@@ -74,8 +83,8 @@ export function AdminEnrollmentAccessPage() {
       await fetchExemptions();
       toast(t('admin.exemptions.added'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to add exemption';
-      alert(message);
+      console.error('[admin] add enrollment exemption failed', err);
+      alert(accessErrorMessage(err, t));
     }
   };
 
@@ -85,8 +94,8 @@ export function AdminEnrollmentAccessPage() {
       await fetchExemptions();
       toast(t('admin.exemptions.removed'));
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to remove exemption';
-      alert(message);
+      console.error('[admin] remove enrollment exemption failed', err);
+      alert(accessErrorMessage(err, t));
     }
   };
 

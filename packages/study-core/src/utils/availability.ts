@@ -88,6 +88,42 @@ function ordinalDay(date: string): number {
   return era * 146097 + doe - 719468;
 }
 
+/**
+ * Study sessions NEVER cross midnight — the one invariant that makes every
+ * `for (let i = startIdx; i < endIdx; i++)` in the booking path safe.
+ *
+ * WHY THIS IS A PREDICATE AND NOT A WRAP (issue #515). Sit's ranges come from
+ * `timeToSlotIndex(endTime)`, so an overnight range WRAPS to a small endIdx and
+ * the naive loop runs zero times — which is why sit needed `rangeSlotIndices`
+ * (#510). Study's ranges are `startIdx + duration`, so they OVERFLOW instead:
+ * a 23:00 start with a 2h session is `endIdx = 100`, and the loop reads
+ * `grid[96..99] === undefined` and rejects. Study fails CLOSED where sit failed
+ * open.
+ *
+ * That difference means the sit fix must NOT be copied here. `rangeSlotIndices`
+ * clamps its bounds to `[0, 96]`, so `rangeSlotIndices(92, 100)` is `[92..95]`:
+ * adopting it at these sites would silently DROP the overflow slots and turn
+ * today's correct rejection into a false "available". The uniformity #515 asks
+ * for would be a regression.
+ *
+ * So the loops stay as they are, and this makes the invariant they rely on
+ * explicit and enforced at every door instead of true by accident at some of
+ * them. `bookSession`'s recurring path and `modifySession` already threw here;
+ * `bookSession`'s one_time path and `proposeSession` only rejected as a side
+ * effect of reading past the end of a 96-slot array.
+ */
+export function sessionEndSlot(startIdx: number, sessionLengthMinutes: number): number {
+  return startIdx + sessionLengthMinutes / SCHEDULE_SLOT_MINUTES;
+}
+
+/** Whether a session starting at `startIdx` would run past 24:00. */
+export function sessionCrossesMidnight(
+  startIdx: number,
+  sessionLengthMinutes: number,
+): boolean {
+  return sessionEndSlot(startIdx, sessionLengthMinutes) > SLOTS_PER_DAY;
+}
+
 /** A confirmed-session block projected onto the day's slot grid. */
 export interface ConfirmedBlock {
   startIdx: number; // inclusive slot index

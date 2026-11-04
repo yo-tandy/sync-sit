@@ -7,6 +7,7 @@ import { loadActiveCaller } from './offerAccess.js';
 import { REFERENCES, validEndorsementId } from './endorsementAccess.js';
 import { notifyDoSafely, notifyDoFamilyParents } from './notify.js';
 import { buildEndorsementOutcome } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doRespondToEndorsement` (plan decision 12, §9.2, §13 PR11): the endorsed
@@ -39,7 +40,7 @@ import { buildEndorsementOutcome } from './notifyContent.js';
  * payload fails loudly rather than taking an undocumented path.
  */
 export const doRespondToEndorsement = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

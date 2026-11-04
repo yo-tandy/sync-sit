@@ -1,8 +1,9 @@
 import { Navigate } from 'react-router';
 import { useAuthStore } from '@/stores/authStore';
 import { getStudyRole } from '@ejm/study-core';
-import { isBabysitter } from '@ejm/shared-core';
+import { isBabysitter, needsReconsent } from '@ejm/shared-core';
 import { canCrossAppEnrollTutor } from '@/utils/postLoginRouter';
+import { ConsentGateHost } from '@/components/ConsentGateHost';
 
 type StudyRole = 'tutor' | 'parent' | 'admin';
 
@@ -26,6 +27,13 @@ export function AuthGuard({ role, children }: AuthGuardProps) {
 
   // Not signed in at all -> the login page.
   if (!firebaseUser) return <Navigate to="/login" replace />;
+
+  // Re-consent gate (issue #488 decision 1): the consent documents were
+  // bumped after this member last accepted them. Nothing of the app renders
+  // until they accept the current ones or sign out -- before role routing on
+  // purpose, since a stale record is stale in every portal. A doc that has
+  // not loaded yet is not gated (needsReconsent(null) is false).
+  if (needsReconsent(userDoc)) return <ConsentGateHost />;
 
   const studyRole = getStudyRole(userDoc);
 

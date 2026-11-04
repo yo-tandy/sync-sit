@@ -9,6 +9,7 @@ import {
   parisWallTimeToUtc,
 } from '@ejm/shared-functions/scheduled/parisTime.js';
 import { resolveNotifPref } from '@ejm/shared-core';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 export interface StudyReminderStats {
   remindersSent: number;
@@ -208,8 +209,7 @@ export const sendStudySessionReminders = onSchedule(
   {
     schedule: 'every 1 hours',
     region: 'europe-west1',
-    timeZone: 'Europe/Paris',
-  },
+    timeZone: 'Europe/Paris', secrets: [RESEND_API_KEY] },
   async () => {
     const stats = await runSendStudySessionReminders(db, new Date());
     console.log(`sendStudySessionReminders: ${stats.remindersSent} reminders sent`);

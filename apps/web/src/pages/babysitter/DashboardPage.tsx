@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useFlashTimer, DashboardGreeting, DashboardSection } from '@ejm/shared-ui';
+import { useFlashTimer, DashboardGreeting, DashboardSection, callableErrorCode } from '@ejm/shared-ui';
 import { Link, useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { doc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
@@ -13,7 +13,7 @@ import { useAppointments } from '@/hooks/useAppointments';
 import { useSchedule } from '@/hooks/useSchedule';
 import { AppointmentCard } from '@/components/appointments/AppointmentCard';
 import { SupervisionRequestCard } from '@/components/babysitter/SupervisionRequestCard';
-import { Card, Dialog, Button, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
+import { Card, Dialog, Button, Checkbox, SkeletonCard, Textarea, InstallAppBanner } from '@/components/ui';
 import {
   CalendarIcon,
   ChevronRightIcon,
@@ -29,6 +29,7 @@ function getOnboardingDismissed(): Set<string> {
   try {
     const raw = localStorage.getItem(ONBOARDING_KEY);
     return raw ? new Set(JSON.parse(raw)) : new Set();
+  // eslint-disable-next-line no-restricted-syntax -- best-effort: onboarding-dismissed flag read from localStorage
   } catch { return new Set(); }
 }
 function dismissOnboarding(key: string) {
@@ -60,8 +61,14 @@ export function BabysitterDashboard() {
       setCancelTarget(null);
       setCancelReason('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to cancel';
-      alert(message);
+      console.error('[request] cancel appointment failed', err);
+      // failed-precondition = the appointment is no longer confirmed/pending
+      // (already cancelled, declined, ...). Everything else is generic.
+      alert(
+        callableErrorCode(err) === 'failed-precondition'
+          ? t('request.cancelUnavailable')
+          : t('common.error'),
+      );
     } finally {
       setCancelling(false);
     }
@@ -69,6 +76,16 @@ export function BabysitterDashboard() {
 
   const [toggleDialog, setToggleDialog] = useState(false);
   const [toggling, setToggling] = useState(false);
+  // Contact-visibility consent: activation hands families the contact trio,
+  // so a student who did not tick the enrollment checkbox (or a classic
+  // enrollee who was never asked) must accept it here first. Recorded on the
+  // root doc in the same write as `searchable` — firestore.rules
+  // (contactVisibilityConsentValid) rejects an activation without it.
+  const needsContactConsent = userDoc?.contactVisibilityConsent !== true;
+  const [contactConsent, setContactConsent] = useState(false);
+  useEffect(() => {
+    if (!toggleDialog) setContactConsent(false);
+  }, [toggleDialog]);
 
   // Onboarding state
   const [showWelcome, setShowWelcome] = useState(false);
@@ -124,10 +141,13 @@ export function BabysitterDashboard() {
       return;
     }
 
+    if (!isSearchable && needsContactConsent && !contactConsent) return;
+
     setToggling(true);
     try {
       await updateDoc(doc(db, 'users', uid), {
         'profiles.babysitter.searchable': !isSearchable,
+        ...(!isSearchable && needsContactConsent ? { contactVisibilityConsent: true } : {}),
         updatedAt: serverTimestamp(),
       });
       await refreshUserDoc();
@@ -264,8 +284,20 @@ export function BabysitterDashboard() {
             : t('babysitterDashboard.activateDesc')
           }
         </p>
+        {!isSearchable && needsContactConsent && (
+          <Checkbox
+            label={t('babysitterDashboard.activateConsent')}
+            checked={contactConsent}
+            onChange={(e) => setContactConsent(e.target.checked)}
+            className="mb-5"
+          />
+        )}
         <div className="flex gap-2">
-          <Button onClick={handleToggleSearchable} disabled={toggling} className="flex-1">
+          <Button
+            onClick={handleToggleSearchable}
+            disabled={toggling || (!isSearchable && needsContactConsent && !contactConsent)}
+            className="flex-1"
+          >
             {toggling ? t('babysitterDashboard.updating') : isSearchable ? t('babysitterDashboard.deactivate') : t('babysitterDashboard.activate')}
           </Button>
           <Button variant="ghost" onClick={() => setToggleDialog(false)} className="flex-1">

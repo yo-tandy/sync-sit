@@ -36,6 +36,7 @@ import {
 import { paddedBlock, overlaps, buildMergedOverride } from './sessionOverride.js';
 import { generateInstances, type PerDateClaimInputs } from './generateInstances.js';
 import { dropWithinNotice } from './recurringWindow.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * respondToSession — the tutor confirms or declines a pending session request.
@@ -50,7 +51,7 @@ import { dropWithinNotice } from './recurringWindow.js';
  * slot it did not itself block (contrast sit's lossy whole-day override).
  */
 export const respondToSession = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

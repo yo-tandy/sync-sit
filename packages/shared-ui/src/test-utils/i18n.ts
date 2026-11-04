@@ -24,10 +24,63 @@ export function createTestI18n(): i18n {
         translation: {
           common: {
             continue: 'Continue',
+            addressPlaceholder: 'Start typing an address...',
+            addressPoweredBy: 'Powered by adresse.data.gouv.fr',
+            cancel: 'Cancel',
+            signOut: 'Sign out',
+            error: 'Something went wrong. Please try again.',
           },
+          // AccountHome (#445): the intro copy under the sections. Identical
+          // to what all three apps' en.ts carry -- a rename here that isn't
+          // mirrored there (or vice versa) fails this file's own tests
+          // loudly instead of silently falling back to the raw key. (The
+          // "Sync/Account" brand string moved to AccountLayout, apps/web,
+          // on #445 review -- it is no longer this component's key.)
           welcome: {
             alreadyHaveAccount: 'Already have an account?',
             logIn: 'Log in',
+          },
+          // Identical in all three apps' en.ts (`appSwitch.account` /
+          // `.barLabel` / `.error`) -- AppSwitchBar and AppSwitchInline
+          // (#417) both read only these three keys, never the per-app
+          // `toSit`/`toStudy` ones AppSwitchMenuItem uses.
+          appSwitch: {
+            account: 'Settings',
+            barLabel: 'Switch app',
+            error: 'Could not switch apps. Please try again.',
+          },
+          // #491 -- the exact English copy this PR adds identically to all
+          // three apps' `en.ts` (today just apps/web; study/do get it when
+          // they route `AccountHome`).
+          accountHub: {
+            subtitle: 'Shared across sync/sit, sync/study and sync/do.',
+            deleteMyAccount: 'Delete my account',
+            deleteDialogTitle: 'Delete my account?',
+            deleteDialogBody:
+              'This permanently deletes your account. Your profile, appointments, tutoring sessions, tasks, and references are removed from sync/sit, sync/study and sync/do. This cannot be undone.',
+            deleteConfirmLabel: 'Type {{word}} to confirm',
+            deleteConfirmButton: 'Yes, delete my account',
+            deleteErrorLastAdmin:
+              "You're the last admin. Appoint another admin before deleting your account.",
+            deleteErrorReauth:
+              'For your security, please sign in again before deleting your account.',
+          },
+          accountDeleted: {
+            title: 'Your account has been deleted',
+            body: 'Your data has been removed from sync/sit, sync/study and sync/do. Thank you for being part of the community.',
+            backHome: 'Go to the homepage',
+          },
+          // #488 -- the re-consent gate's copy, identical in all three apps' en.ts.
+          consentGate: {
+            title: "We've updated our terms",
+            body: 'Before you continue, please review and accept the current Terms of Service and Privacy Policy.',
+            agreePrefix: 'I have read and accept the',
+            terms: 'Terms of Service',
+            and: 'and the',
+            privacy: 'Privacy Policy',
+            accept: 'Accept and continue',
+            staleClient: 'This app is out of date. Reload the page and try again.',
+            signOut: 'Sign out instead',
           },
           // GENDER_OPTIONS (from @ejm/shared-core, added on PR1) hardcodes
           // its labelKeys as `enrollment.genderFemale` etc. -- the SAME keys
@@ -39,6 +92,29 @@ export function createTestI18n(): i18n {
             genderMale: 'Male',
             genderOther: 'Other',
             genderPreferNot: 'Prefer not to say',
+            // Shared parent wizard steps (issue #440, PR1). Same copy as the
+            // apps' `enrollment.*` blocks; the four keys marked NEW land in
+            // each app's en.ts when its orchestrator is rewired (PR2/PR3).
+            yourAccount: 'Your account',
+            yourAccountDesc: "Enter your email address. We'll send a code to verify it.",
+            emailLabel: 'Email address *',
+            yourFamily: 'Your family',
+            yourFamilyDesc: 'Tell us about your family.',
+            familyName: 'Family name *',
+            parentLastName: 'Last name', // NEW in sit
+            firstName: 'First name *',
+            familyAddressLabel: 'Address *', // NEW in both
+            pets: 'Pets',
+            petsHint: 'e.g. Cat, small dog', // NEW in sit
+            completeSignup: 'Complete sign-up', // NEW in sit
+          },
+          auth: {
+            sending: 'Sending...',
+            sendCode: 'Send verification code',
+            creatingAccount: 'Creating account...',
+          },
+          validation: {
+            validEmail: 'Enter a valid email address',
           },
           unifiedEnrollment: {
             landingTitle: 'Join the Sync community',
@@ -58,6 +134,8 @@ export function createTestI18n(): i18n {
             classLabel: 'Class *',
             selectClass: 'Select class',
             gender: 'Gender *',
+            languages: 'Languages spoken *',
+            languagesHint: 'Mark every language you can speak with families.',
             genderFemale: 'Female',
             genderMale: 'Male',
             genderOther: 'Other',
@@ -74,7 +152,7 @@ export function createTestI18n(): i18n {
             contactVisibilityConsent:
               "I'm aware that families who want to reach me will get access to this contact information once I'm visible in search.",
             contactVisibilityWarning:
-              "Without this, you won't show up in search until contact visibility is turned on later, from your account settings.",
+              "Without this, you won't show up in search until you accept contact sharing when you activate your profile from your dashboard.",
             additionalInfoTitle: 'A few optional extras',
             additionalInfoSubtitle:
               'All of this is optional — you can fill it in, or skip it and add it later.',

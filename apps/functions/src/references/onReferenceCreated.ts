@@ -4,13 +4,14 @@ import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { resolveNotifPref } from '@ejm/shared-core';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * Firestore trigger: when a new family-submitted reference is created,
  * notify the babysitter via email and push (if preferences allow).
  */
 export const notifyOnNewReference = onDocumentCreated(
-  { document: 'references/{referenceId}', region: 'europe-west1' },
+  { document: 'references/{referenceId}', region: 'europe-west1', secrets: [RESEND_API_KEY] },
   async (event) => {
     const data = event.data?.data();
     if (!data) return;

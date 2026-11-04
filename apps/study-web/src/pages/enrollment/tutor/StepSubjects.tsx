@@ -22,19 +22,23 @@ export interface Row {
 }
 
 /**
- * First post-auth signup step (issue #143): subjects, levels and rate — the
- * information families search by. Same row idiom and validation as the portal
- * SubjectsPage (subject set, no duplicates, at least one level, rate > 0),
- * plus at least one row: enrolling with zero subjects would produce a tutor
- * invisible to search.
+ * Final signup step (issue #143): subjects, levels and rate — the information
+ * families search by. Same row idiom and validation as the portal SubjectsPage
+ * (subject set, no duplicates, at least one level, rate > 0). The step is
+ * skippable: "Skip for now" completes signup with zero subjects, which leaves
+ * the tutor out of search until they add some at /tutor/subjects (the
+ * dashboard's activation gate says so).
  */
 export function StepSubjects({ onNext, loading = false, error: submitError = null, initialRows, onBack }: StepSubjectsProps) {
   const { t } = useTranslation();
-  // Start with one empty row — the step exists to collect at least one.
+  // Start with one empty row — the common case is adding a subject.
   const [rows, setRows] = useState<Row[]>(
     initialRows && initialRows.length > 0 ? initialRows : [{ subject: '', levels: [], rate: '' }],
   );
   const [error, setError] = useState<string | null>(null);
+  // Skipping drops the draft rows; with anything entered, ask first.
+  const [confirmingSkip, setConfirmingSkip] = useState(false);
+  const hasDraft = rows.some((r) => r.subject || r.levels.length > 0 || r.rate !== '');
 
   const addRow = () => {
     setRows((prev) => [...prev, { subject: '', levels: [], rate: '' }]);
@@ -188,6 +192,41 @@ export function StepSubjects({ onNext, loading = false, error: submitError = nul
       <Button type="submit" disabled={rows.length === 0 || loading} className="mt-4">
         {loading ? t('common.loading') : t('enrollment.completeSignup')}
       </Button>
+
+      {/* Skipping discards the draft rows (the tutor adds subjects later
+          from the portal), so a draft with content gets an inline confirm. */}
+      {confirmingSkip ? (
+        <div className="mt-3 text-center">
+          <p className="mb-2 text-sm text-gray-700">{t('enrollment.subjectsSkipConfirm')}</p>
+          <div className="flex justify-center gap-4">
+            <button
+              type="button"
+              onClick={() => onNext([])}
+              disabled={loading}
+              className="text-sm font-medium text-brand-600 disabled:opacity-50"
+            >
+              {t('enrollment.subjectsSkipConfirmYes')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingSkip(false)}
+              className="text-sm font-medium text-gray-500 hover:text-gray-700"
+            >
+              {t('enrollment.subjectsSkipConfirmNo')}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => (hasDraft ? setConfirmingSkip(true) : onNext([]))}
+          disabled={loading}
+          className="mt-3 block w-full text-center text-sm font-medium text-gray-500 hover:text-brand-600 disabled:opacity-50"
+        >
+          {t('enrollment.subjectsSkip')}
+        </button>
+      )}
+      <p className="mt-1 text-center text-xs text-gray-400">{t('enrollment.subjectsSkipHint')}</p>
     </form>
   );
 }

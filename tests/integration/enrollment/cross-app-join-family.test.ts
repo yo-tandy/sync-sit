@@ -7,6 +7,8 @@ const SITTER_UID = 'standalone-sitter-3';
 const SITTER_EMAIL = 'sitteronly3@test.com';
 const PLAIN_UID = 'standalone-plain-3';
 const PLAIN_EMAIL = 'plainonly3@test.com';
+const PLAIN2_UID = 'standalone-plain-4';
+const PLAIN2_EMAIL = 'plainonly4@test.com';
 const FAMILY_ID = 'fam-join-1';
 const EXISTING_PARENT = 'some-other-parent';
 
@@ -67,6 +69,20 @@ describe('joinFamily cross-app add-profile', () => {
       uid: PLAIN_UID,
       email: PLAIN_EMAIL,
       firstName: 'Pat',
+      lastName: 'Plain',
+      status: 'active',
+      language: 'en',
+      profiles: {},
+    });
+
+    // A second profile-less account, so the concurrency pin has two DISTINCT
+    // legal callers racing one link (same-caller races would be rejected by
+    // the parent-profile guard rather than by the claim).
+    await getAdminAuth().createUser({ uid: PLAIN2_UID, email: PLAIN2_EMAIL });
+    await db.collection('users').doc(PLAIN2_UID).set({
+      uid: PLAIN2_UID,
+      email: PLAIN2_EMAIL,
+      firstName: 'Ping',
       lastName: 'Plain',
       status: 'active',
       language: 'en',
@@ -206,5 +222,134 @@ describe('joinFamily cross-app add-profile', () => {
 
     const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
     expect(invite.used).toBe(false);
+  });
+
+  // ── Single-use enforcement under concurrency (the invite-claim lease) ──
+  //
+  // `used` was read at step 1 and written at step 7, with Auth creation, the
+  // user-doc write and the parentIds arrayUnion in between and no transaction
+  // anywhere: two overlapping redemptions of one link both passed the check
+  // and both joined the family. The consume could not simply move to the
+  // front — step 5's ordering exists so a FAILED attempt leaves the link
+  // usable — so redemption now takes a short lease instead.
+
+  it('rejects a redemption while another holds a LIVE claim on the link', async () => {
+    const token = 'token-join-claimed-live';
+    await seedInvite(token, { claimedAt: new Date(), claimId: 'someone-elses-claim' });
+
+    const idToken = await getIdToken(PLAIN_UID);
+    await expect(
+      callFunction('joinFamily', { token }, idToken),
+    ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
+
+    // The caller is otherwise legal, so the claim is the only rejection cause.
+    const after = (await getDb().collection('users').doc(PLAIN_UID).get()).data()!;
+    expect(after.profiles.parent).toBeUndefined();
+    // And the holder's claim is untouched — a rejected redemption must never
+    // release a lease it does not own.
+    const invite = (await getDb().collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.claimId).toBe('someone-elses-claim');
+  });
+
+  it('a STALE claim is takeable — a crashed redemption cannot burn the link', async () => {
+    const db = getDb();
+    const token = 'token-join-claimed-stale';
+    // Older than INVITE_CLAIM_TTL_MS (2 min): the holder died mid-redemption.
+    await seedInvite(token, {
+      claimedAt: new Date(Date.now() - 5 * 60 * 1000),
+      claimId: 'dead-invocation',
+    });
+
+    const idToken = await getIdToken(PLAIN_UID);
+    const result = await callFunction<{ familyId: string }>('joinFamily', { token }, idToken);
+    expect(result.familyId).toBe(FAMILY_ID);
+
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(true);
+    // The lease fields are cleared on consume, not left behind as litter.
+    expect(invite.claimedAt).toBeUndefined();
+    expect(invite.claimId).toBeUndefined();
+
+    // Restore the shared fixtures (order-independent, like the positive pin).
+    await db.collection('users').doc(PLAIN_UID).set({ profiles: {} }, { mergeFields: ['profiles'] });
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    await db.collection('families').doc(FAMILY_ID).update({
+      parentIds: family.parentIds.filter((id: string) => id !== PLAIN_UID),
+    });
+  });
+
+  it('a FAILED redemption releases its claim, leaving the link fully usable', async () => {
+    // The property step 5's ordering was protecting, now stated directly:
+    // after a rejection the link must carry no lease, not merely used:false.
+    const db = getDb();
+    const token = 'token-join-release-on-failure';
+    await seedInvite(token);
+
+    // 'already-parent-2' is rejected by the parent-profile guard, which fires
+    // AFTER the claim is taken — exactly the window that must self-clean.
+    const uid = 'already-parent-release';
+    await getAdminAuth().createUser({ uid, email: 'alreadyparentrel@test.com' });
+    await db.collection('users').doc(uid).set({
+      uid,
+      email: 'alreadyparentrel@test.com',
+      status: 'active',
+      profiles: { parent: { enrollmentComplete: true, familyId: 'f-existing' } },
+    });
+
+    await expect(
+      callFunction('joinFamily', { token }, await getIdToken(uid)),
+    ).rejects.toMatchObject({ code: 'ALREADY_EXISTS' });
+
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(false);
+    expect(invite.claimedAt).toBeUndefined();
+    expect(invite.claimId).toBeUndefined();
+
+    // Proof the release is real and not just field-shaped: a legal caller can
+    // immediately redeem the same link.
+    const result = await callFunction<{ familyId: string }>(
+      'joinFamily', { token }, await getIdToken(PLAIN_UID),
+    );
+    expect(result.familyId).toBe(FAMILY_ID);
+
+    await db.collection('users').doc(PLAIN_UID).set({ profiles: {} }, { mergeFields: ['profiles'] });
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    await db.collection('families').doc(FAMILY_ID).update({
+      parentIds: family.parentIds.filter((id: string) => id !== PLAIN_UID),
+    });
+  });
+
+  it('two simultaneous redemptions of ONE link add exactly one parent', async () => {
+    // The end-to-end shape of the defect. NOTE this is a smoke test, not a
+    // proof: it depends on the two calls actually overlapping in the emulator,
+    // so it can pass for the wrong reason. The deterministic guarantees are
+    // the live-claim and stale-claim pins above, which do not rely on timing.
+    const db = getDb();
+    const token = 'token-join-concurrent';
+    await seedInvite(token);
+
+    const [tokenA, tokenB] = await Promise.all([getIdToken(PLAIN_UID), getIdToken(PLAIN2_UID)]);
+    const results = await Promise.allSettled([
+      callFunction<{ familyId: string }>('joinFamily', { token }, tokenA),
+      callFunction<{ familyId: string }>('joinFamily', { token }, tokenB),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((r) => r.status === 'rejected')).toHaveLength(1);
+
+    const family = (await db.collection('families').doc(FAMILY_ID).get()).data()!;
+    const joined = [PLAIN_UID, PLAIN2_UID].filter((id) => family.parentIds.includes(id));
+    expect(joined).toHaveLength(1);
+
+    const invite = (await db.collection('inviteLinks').doc(token).get()).data()!;
+    expect(invite.used).toBe(true);
+    expect(invite.usedByUserId).toBe(joined[0]);
+
+    for (const id of [PLAIN_UID, PLAIN2_UID]) {
+      await db.collection('users').doc(id).set({ profiles: {} }, { mergeFields: ['profiles'] });
+    }
+    await db.collection('families').doc(FAMILY_ID).update({
+      parentIds: family.parentIds.filter((id: string) => !joined.includes(id)),
+    });
   });
 });

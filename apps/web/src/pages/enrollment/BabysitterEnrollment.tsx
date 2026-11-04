@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION, getClassLevel } from '@ejm/shared-core';
 import { useNavigate, useSearchParams } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
@@ -9,7 +9,7 @@ import { auth, functions } from '@/config/firebase';
 import { markNextSignInFresh, useAuthStore } from '@/stores/authStore';
 import { TopNav, StepIndicator } from '@/components/ui';
 import { EnrollmentAppBar } from '@/components/ui/EnrollmentAppBar';
-import { StepEmail, StepVerify, StepPassword, enrollmentErrorReason } from '@ejm/shared-ui';
+import { AuthColumn, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, enrollmentSubmitErrorKey } from '@ejm/shared-ui';
 import { StepProfile } from './babysitter/StepProfile';
 import { StepPreferences } from './babysitter/StepPreferences';
 import { getBabysitterProfile } from '@ejm/sit-core';
@@ -50,12 +50,18 @@ export function BabysitterEnrollment() {
     const babysitter = getBabysitterProfile(userDoc);
     if (firebaseUser && babysitter) {
       if (babysitter.enrollmentComplete === false) {
-        // Route on the PROFILE-scoped step marker, not root identity:
-        // classLevel is collected by StepProfile, and a cross-app enrollee
-        // (identity on file, no babysitter classLevel yet) still needs that
-        // step — it renders the identity summary instead of identity inputs
-        // (issue #144), so nothing is re-asked.
-        if (!babysitter.classLevel) {
+        // Route on the RESOLVED classLevel (root ?? babysitter ?? tutor),
+        // not the raw nested profile field: classLevel/gender are root-only
+        // now (issue #435 milestone, PR1) — enrollBabysitter's crossApp mode
+        // no longer copies them onto profiles.babysitter at all, and the
+        // unified flow's account-creation step (PR4) writes them straight to
+        // root before the sit/study choice even happens. A crossApp enrollee
+        // whose classLevel already resolves (from root, or a legacy nested
+        // copy) has nothing left for StepProfile to collect — go straight to
+        // the mutable-fields step; one that still has neither goes through
+        // StepProfile, which renders the identity summary instead of
+        // identity inputs when name/DOB are already on file (issue #144).
+        if (!getClassLevel(userDoc)) {
           setStep(3); // Need classLevel/gender (+ identity when absent)
         } else {
           setStep(4); // Need mutable fields
@@ -97,7 +103,10 @@ export function BabysitterEnrollment() {
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+        // Never echo err.message: an unexpected fault arrives as the bare token
+        // 'internal', and deliberate server messages are English-only.
+        console.error('[enrollment] send verification code failed', err);
+        setError(t('enrollment.serverError'));
       }
     } finally {
       setLoading(false);
@@ -154,8 +163,10 @@ export function BabysitterEnrollment() {
 
       setStep(3);
     } catch (err: unknown) {
+      console.error('[enrollment] babysitter account creation failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to create account');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);
@@ -216,7 +227,7 @@ export function BabysitterEnrollment() {
             onSubmit={async (password, consentVersion) => {
               await handleCreateAccount(password, consentVersion);
             }}
-            consentVersion="1.0"
+            consentVersion={CONSENT_VERSION}
             loading={loading}
             error={error}
           />
@@ -249,7 +260,7 @@ export function BabysitterEnrollment() {
   const isPostAccountStep = step >= 3;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAccountStep ? (
         <EnrollmentAppBar />
       ) : (
@@ -263,6 +274,6 @@ export function BabysitterEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

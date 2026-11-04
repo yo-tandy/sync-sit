@@ -2,23 +2,41 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import type { TutorSearchResult } from '@ejm/study-core';
+import { ENDORSEMENT_SUBJECT_FIELD } from '@ejm/shared-core';
 
-// Hoisted, test-controllable state. TutorCard lazily reads approved endorsements
-// from the shared `references` collection (getDocs) and sends contact requests
-// through the sendTutorContactRequest callable (httpsCallable).
+// Hoisted, test-controllable state. TutorCard lazily reads study's OWN
+// approved endorsements from the shared `references` collection (getDocs);
+// every SIBLING source (sit, do) instead calls the getCrossAppReferences
+// callable (issue #346, PII minimisation) — as does sendTutorContactRequest —
+// so both share `h.callable`, routed by name/payload below.
 const h = vi.hoisted(() => ({
   where: vi.fn((field: string, op: string, val: unknown) => ({ field, op, val })),
   limit: vi.fn((n: number) => ({ limit: n })),
   getDocs: vi.fn(),
   queries: [] as unknown[][],
-  /** Rows per `references` subject field — the card issues one query per app. */
+  /** Rows per `references` subject field — one source per app. */
   results: new Map<string, Record<string, unknown>[]>(),
-  /** Subject fields whose query should reject — models a partial outage. */
+  /** Subject fields whose source should reject — models a partial outage. */
   failFields: new Set<string>(),
-  /** Subject fields whose query hangs until released — models slow sources. */
+  /** Subject fields whose source hangs until released — models slow sources. */
   hold: new Map<string, () => void>(),
   callable: vi.fn(),
 }));
+
+/** Mirrors the getCrossAppReferences callable's own mapping. The callable's
+ * own key-set discipline is pinned server-side
+ * (tests/integration/references/get-cross-app-references.test.ts). */
+function project(sourceApp: string, field: string, r: Record<string, unknown>, i: number) {
+  const refName =
+    (typeof r.submittedByName === 'string' && r.submittedByName) ||
+    (typeof r.refName === 'string' && r.refName) ||
+    '';
+  const text =
+    (typeof r.referenceText === 'string' && r.referenceText) ||
+    (typeof r.note === 'string' && r.note) ||
+    '';
+  return { sourceApp, id: `${field}-${i}`, refName, text, isEjmFamily: r.isEjmFamily === true, ...r };
+}
 
 vi.mock('@/config/firebase', () => ({ db: {}, functions: {} }));
 
@@ -81,7 +99,28 @@ function reset() {
     return Promise.resolve(result);
   });
   h.callable.mockReset();
-  h.callable.mockResolvedValue({ data: { requestId: 'r1' } });
+  h.callable.mockImplementation(
+    (name: string, payload?: { providerUserId?: string; sourceApp?: 'sit' | 'do' }) => {
+      if (name !== 'getCrossAppReferences') {
+        return Promise.resolve({ data: { requestId: 'r1' } });
+      }
+      const field = ENDORSEMENT_SUBJECT_FIELD[payload!.sourceApp!];
+      if (h.failFields.has(field)) return Promise.reject(new Error('internal'));
+      const rows = h.results.get(field) ?? [];
+      const result = { data: { items: rows.map((r, i) => project(payload!.sourceApp!, field, r, i)) } };
+      if (h.hold.has(field)) {
+        return new Promise((resolve) => {
+          h.hold.set(field, () => resolve(result));
+        });
+      }
+      return Promise.resolve(result);
+    },
+  );
+}
+
+/** getCrossAppReferences calls issued so far, in order. */
+function crossAppCalls() {
+  return h.callable.mock.calls.filter(([name]) => name === 'getCrossAppReferences');
 }
 
 describe('TutorCard', () => {
@@ -279,20 +318,30 @@ describe('TutorCard', () => {
     expect(screen.getByText(/Great tutor/)).toBeInTheDocument();
   });
 
-  // ── Cross-app endorsements (issue #280) ──
-  it('issues one status-constrained query per product, study first', async () => {
+  // ── Cross-app endorsements (issue #280), projected per #346 ──
+  it("issues one status-constrained Firestore query for study's OWN source", async () => {
     renderWithProviders(<TutorCard result={tutor()} />);
     expand();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
-    // Order is the contract: study's own field leads, siblings follow.
-    const fields = ['tutorUserId', 'babysitterUserId', 'doerUserId'];
-    h.queries.forEach((q, i) => {
-      expect(q[1]).toEqual({ field: fields[i], op: '==', val: 't1' });
-      // NOT optional: the H2-hardened references rule grants an unrelated
-      // family only the public-status disjunct, provable only from the query.
-      expect(q[2]).toEqual({ field: 'status', op: 'in', val: ['approved', 'published'] });
-      expect(q[3]).toEqual({ limit: 10 });
-    });
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    const q = h.queries[0];
+    expect(q[1]).toEqual({ field: 'tutorUserId', op: '==', val: 't1' });
+    // NOT optional: the H2-hardened references rule grants an unrelated
+    // family only the public-status disjunct, provable only from the query.
+    expect(q[2]).toEqual({ field: 'status', op: 'in', val: ['approved', 'published'] });
+    expect(q[3]).toEqual({ limit: 10 });
+  });
+
+  it('calls getCrossAppReferences for each SIBLING source, study excluded, and never issues a raw Firestore query for them', async () => {
+    renderWithProviders(<TutorCard result={tutor()} />);
+    expand();
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(2));
+    expect(crossAppCalls().map(([, payload]) => payload)).toEqual([
+      { providerUserId: 't1', sourceApp: 'sit' },
+      { providerUserId: 't1', sourceApp: 'do' },
+    ]);
+    // The ONLY Firestore query issued is study's own.
+    expect(h.queries).toHaveLength(1);
+    expect(h.queries[0][1]).toEqual({ field: 'tutorUserId', op: '==', val: 't1' });
   });
 
   it('renders study endorsements first, then sit ones labeled with their origin', async () => {
@@ -366,13 +415,13 @@ describe('TutorCard', () => {
     h.failFields = new Set(['babysitterUserId']);
     renderWithProviders(<TutorCard result={tutor()} />);
     expand();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(2));
     expect(screen.queryByText(/Great with our kids/)).not.toBeInTheDocument();
 
     h.failFields = new Set();
     expand(); // collapse
     expand(); // re-expand must refetch, not serve the partial cache
-    await waitFor(() => expect(h.queries).toHaveLength(6));
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(4));
     expect(await screen.findByText(/Great with our kids/)).toBeInTheDocument();
   });
 
@@ -382,11 +431,13 @@ describe('TutorCard', () => {
     ]);
     renderWithProviders(<TutorCard result={tutor()} />);
     expand();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(h.queries).toHaveLength(1));
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(2));
     expand();
     expand();
     await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
-    expect(h.queries).toHaveLength(3);
+    expect(h.queries).toHaveLength(1);
+    expect(crossAppCalls()).toHaveLength(2);
   });
 
   it('does not start a second load while one is in flight (no stale overwrite, no double reads)', async () => {
@@ -396,22 +447,24 @@ describe('TutorCard', () => {
     h.hold.set('babysitterUserId', () => {}); // this source hangs
     renderWithProviders(<TutorCard result={tutor()} />);
     expand();
-    await waitFor(() => expect(h.queries).toHaveLength(3));
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(2));
 
     expand(); // collapse
     expand(); // re-expand while load A is unresolved
-    expect(h.queries).toHaveLength(3); // not 6
+    expect(crossAppCalls()).toHaveLength(2); // not 4
 
     h.hold.get('babysitterUserId')!();
     await waitFor(() => expect(screen.getByText(/Patient maths tutor/)).toBeInTheDocument());
   });
 
-  it('keeps the card intact when the endorsement queries are denied', async () => {
+  it('keeps the card intact when the endorsement sources are denied', async () => {
     h.getDocs.mockRejectedValue(new Error('permission-denied'));
+    h.failFields = new Set(['babysitterUserId', 'doerUserId']);
     renderWithProviders(<TutorCard result={tutor()} />);
     expand();
 
     await waitFor(() => expect(h.getDocs).toHaveBeenCalled());
+    await waitFor(() => expect(crossAppCalls()).toHaveLength(2));
     expect(screen.getByRole('button', { name: /request contact/i })).toBeInTheDocument();
   });
 });

@@ -8,6 +8,7 @@ import { sendPushNotification } from '@ejm/shared-functions/config/push.js';
 import type { StudyUser } from '@ejm/study-core';
 import { respondFamilyContactRequestSchema } from '../validation/contact.js';
 import { resolveNotifPref, computeEffectiveSearchable } from '@ejm/shared-core';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * respondToFamilyContactRequest (issue #207 PR4): a PARENT answers a
@@ -23,7 +24,7 @@ import { resolveNotifPref, computeEffectiveSearchable } from '@ejm/shared-core';
  * branch: the responder here is a parent, not a kid.
  */
 export const respondToFamilyContactRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

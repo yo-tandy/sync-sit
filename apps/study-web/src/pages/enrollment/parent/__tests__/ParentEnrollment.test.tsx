@@ -29,7 +29,7 @@ const h = vi.hoisted(() => ({
   // Controllable raw rejection (no machine-readable reason) so tests can
   // drive the plain-error fallback, e.g. the createUser already-exists race
   // backstop.
-  rawError: null as { message: string } | null,
+  rawError: null as unknown,
   // The family data the stub StepFamilyInfo submits — tests override the
   // address to pin the conditional postcode/city spread.
   familyData: {} as Record<string, unknown>,
@@ -64,9 +64,9 @@ vi.mock('firebase/functions', () => ({
       return Promise.reject({ details: { reason: h.errorReason } });
     }
     // Model a reason-less rejection (e.g. the createUser race backstop):
-    // the SDK surfaces an Error whose message is the HttpsError message.
+    // the SDK surfaces a FunctionsError: an Error carrying the callable code.
     if (name === 'enrollFamily' && h.rawError) {
-      return Promise.reject(new Error(h.rawError.message));
+      return Promise.reject(h.rawError);
     }
     return Promise.resolve({ data: { uid: 'u1', familyId: 'f1' } });
   },
@@ -112,6 +112,9 @@ vi.mock('@ejm/shared-core', () => ({
   ADMIN_CONFIG_DEFS: {
     verificationCodeCooldownS: { default: 60, min: 60, max: 600, description: '' },
   },
+  // Every enrollment flow now imports the shared value (issue #415
+  // decision 2) instead of hardcoding its own — the mock must define it too.
+  CONSENT_VERSION: '1.0',
   getParentProfile: (userDoc: { profiles?: { parent?: unknown } } | null) =>
     userDoc?.profiles?.parent ?? null,
   // Mirrors the real helper (issue #279, round-7 shape): EITHER membership
@@ -129,7 +132,11 @@ vi.mock('@ejm/study-core', () => ({
 
 // Lightweight stand-ins for the shared step components: each exposes a button
 // that fires its callback so we can drive the orchestrator deterministically.
-vi.mock('@ejm/shared-ui', () => ({
+vi.mock('@ejm/shared-ui', async () => ({
+  // The real error-key mapping: the page's error copy is what these tests pin.
+  ...(await vi.importActual<typeof import('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')>('../../../../../../../packages/shared-ui/src/enrollment/errorKeys')),
+  // Layout-only column (issue #528): pass children through.
+  AuthColumn: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   // The app's adminConfigClient wrapper instantiates this at import time
   // (issue #250) -- stub returns the caller's fallback (code default).
   createAdminConfigReader: () => ({
@@ -149,7 +156,11 @@ vi.mock('@ejm/shared-ui', () => ({
       {onBack && <button onClick={onBack}>top-back</button>}
     </div>
   ),
-  StepIndicator: ({ currentStep }: { currentStep: number }) => <div>step-{currentStep}</div>,
+  // data-total exposes totalSteps for the 4-vs-3 dot pin without disturbing
+  // the plain "step-N" text the other cases already match on.
+  StepIndicator: ({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) => (
+    <div data-total={totalSteps}>step-{currentStep}</div>
+  ),
   // Renders its error prop like the real component (CodeInput surfaces it),
   // so tests can pin that a family-step rejection doesn't leak back here.
   StepVerify: ({ onVerify, onResend, error }: { onVerify: (c: string) => void; onResend: () => void; error?: string | null }) => (
@@ -163,16 +174,15 @@ vi.mock('@ejm/shared-ui', () => ({
     <button
       data-testid="step-password"
       data-collect={String(props.collectPassword)}
-      onClick={() => props.onSubmit('Pw123456!', '2025-12-01')}
+      onClick={() => props.onSubmit('Pw123456!', 'sentinel-consent-version')}
     >
       password-submit
     </button>
   ),
-}));
-vi.mock('@/components/ui/EnrollmentAppBar', () => ({
-  EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
-}));
-vi.mock('../StepParentEmail', () => ({
+  // Stand-ins for the shared steps the orchestrator now imports from
+  // '@ejm/shared-ui' (issue #440 PR3) — same test affordances the old local
+  // per-app mocks provided, so every existing case keeps passing unchanged
+  // in intent.
   StepParentEmail: ({ onChange, onSubmit }: { onChange: (e: string) => void; onSubmit: () => void }) => (
     <button
       onClick={() => {
@@ -183,25 +193,29 @@ vi.mock('../StepParentEmail', () => ({
       email-submit
     </button>
   ),
-}));
-vi.mock('../StepFamilyInfo', () => ({
   // Controlled stub mirroring the real component's API: `family-fill` pushes
   // the test's draft up through onChange (the orchestrator owns the draft),
   // `family-submit` fires the argless onNext. The rendered familyName pins
-  // draft preservation across a back-navigation.
-  StepFamilyInfo: ({ data, onChange, onNext, error }: {
+  // draft preservation across a back-navigation. `noteLabel` is rendered so
+  // tests can pin the host-supplied copy the orchestrator passes down.
+  StepFamilyInfo: ({ data, onChange, onNext, error, noteLabel }: {
     data: { familyName: string };
     onChange: (partial: unknown) => void;
     onNext: () => void;
     error?: string | null;
+    noteLabel: string;
   }) => (
     <div>
       {error && <p>{error}</p>}
       <span>family-name:{data.familyName}</span>
+      <span>note-label:{noteLabel}</span>
       <button onClick={() => onChange(h.familyData)}>family-fill</button>
       <button onClick={() => onNext()}>family-submit</button>
     </div>
   ),
+}));
+vi.mock('@/components/ui/EnrollmentAppBar', () => ({
+  EnrollmentAppBar: () => <div>enrollment-app-bar</div>,
 }));
 
 import { I18nextProvider } from 'react-i18next';
@@ -242,7 +256,11 @@ describe('ParentEnrollment orchestrator', () => {
   it('starts on the email step with the auth-phase chrome (TopNav + StepIndicator)', () => {
     renderFlow();
     expect(screen.getByText('email-submit')).toBeInTheDocument();
-    expect(screen.getByText('step-0')).toBeInTheDocument();
+    const indicator = screen.getByText('step-0');
+    expect(indicator).toBeInTheDocument();
+    // 4 steps total (issue #440 spec D1/§3) — was 3 (credential steps only)
+    // before the shared-step rewire.
+    expect(indicator).toHaveAttribute('data-total', '4');
     expect(screen.queryByText('enrollment-app-bar')).toBeNull();
   });
 
@@ -260,14 +278,17 @@ describe('ParentEnrollment orchestrator', () => {
     // Signed-out (default): password is collected.
     expect(screen.getByTestId('step-password')).toHaveAttribute('data-collect', 'true');
 
-    // Step 2 -> 3 crosses into the post-auth phase: the step indicator goes
-    // away, and a FRESH signup keeps TopNav with a back affordance (expired
-    // codes are rescued from the verify step) — not the add-profile app bar.
+    // Step 2 -> 3 crosses into the post-auth phase: a FRESH signup keeps
+    // TopNav with a back affordance (expired codes are rescued from the
+    // verify step) — not the add-profile app bar — AND keeps the step
+    // indicator, now showing the family step as step 3 of 4 (issue #440
+    // spec D1/§3; it used to disappear here when the indicator only covered
+    // the 3 credential steps).
     fireEvent.click(screen.getByText('password-submit'));
     expect(await screen.findByText('family-submit')).toBeInTheDocument();
     expect(screen.queryByText('enrollment-app-bar')).toBeNull();
     expect(screen.getByText('top-back')).toBeInTheDocument();
-    expect(screen.queryByText(/step-\d/)).toBeNull();
+    expect(screen.getByText('step-3')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('family-fill'));
     fireEvent.click(screen.getByText('family-submit'));
@@ -283,8 +304,9 @@ describe('ParentEnrollment orchestrator', () => {
       verificationCode: '123456',
       password: 'Pw123456!',
       // The consent version StepPassword presented is the one persisted
-      // (issue #178) — never sit's '1.0'.
-      consentVersion: '2025-12-01',
+      // (issue #178) — a sentinel here (not '1.0') proves it's forwarded
+      // verbatim rather than hardcoded on the orchestrator.
+      consentVersion: 'sentinel-consent-version',
       familyName: 'Durand',
       firstName: 'Claire',
       address: '10 Rue Cler, 75007 Paris',
@@ -305,6 +327,27 @@ describe('ParentEnrollment orchestrator', () => {
     // New-account path signs the parent in — the navigation must land in
     // the portal, not bounce to login.
     expect(h.signIn).toHaveBeenCalledWith(expect.anything(), 'claire@example.com', 'Pw123456!');
+  });
+
+  it('the family step renders the shared StepFamilyInfo with the study-specific noteLabel', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+
+    // Passed down as a prop (not a key the shared component looks up
+    // itself) so sit and study can each supply their own wording.
+    expect(await screen.findByText(`note-label:${i18n.t('enrollment.notesForTutors')}`)).toBeInTheDocument();
+  });
+
+  it('shows the 4-step indicator on the family step for a fresh signup (issue #440 spec D1/§3)', async () => {
+    renderFlow();
+    fireEvent.click(screen.getByText('email-submit'));
+    fireEvent.click(await screen.findByText('verify-submit'));
+    fireEvent.click(await screen.findByText('password-submit'));
+
+    const indicator = await screen.findByText('step-3');
+    expect(indicator).toHaveAttribute('data-total', '4');
   });
 
   it('verifyParentEmail carries the study app hint (silent account-exists copy, issue #154)', async () => {
@@ -332,6 +375,19 @@ describe('ParentEnrollment orchestrator', () => {
         expect(send.payload).toMatchObject({ app: 'study' });
       }
     });
+  });
+
+  it('sends the UI language the wizard ran in (issue #440 audit)', async () => {
+    await i18n.changeLanguage('fr');
+    try {
+      await driveToEnrollFamily();
+      const enroll = h.calls.find((c) => c.name === 'enrollFamily')!;
+      // Persisted on the new user doc so server email copy follows it —
+      // until this pin every parent doc was hardcoded 'en'.
+      expect(enroll.payload).toMatchObject({ language: 'fr' });
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 
   it('omits postcode/city from the payload when the address lacks them', async () => {
@@ -433,7 +489,10 @@ describe('ParentEnrollment orchestrator', () => {
     }
     // The consent-only step's acceptance still travels: the backend records
     // it in the audit trail (issue #178).
-    expect(enroll.payload).toMatchObject({ consentVersion: '2025-12-01' });
+    expect(enroll.payload).toMatchObject({ consentVersion: 'sentinel-consent-version' });
+    // The existing account keeps its own language — the add-profile payload
+    // never carries one (issue #440 audit).
+    expect(enroll.payload).not.toHaveProperty('language');
     // Already signed in — no re-authentication.
     expect(h.signIn).not.toHaveBeenCalled();
     // refreshUserDoc must be awaited before the success navigation.
@@ -473,23 +532,31 @@ describe('ParentEnrollment orchestrator', () => {
   it("enrollFamily 'role-exclusive' rejection renders the provider-account explanation", async () => {
     // Defense-in-depth: the signup role page withholds the parent option from
     // provider accounts (issue #116), but a direct /enroll/parent visit still
-    // gets the explanation instead of a raw server error.
+    // gets the explanation instead of a raw server error. Hardcoded (not
+    // i18n.t('signup.roleExclusiveParent')) so the pin actually proves the
+    // key resolves to real copy — the key was missing from both locales
+    // until the #440 audit caught it (ParentEnrollment.tsx was rendering
+    // the raw key), and a lookup-based assertion would pass vacuously
+    // against that same missing key.
     h.errorReason = 'role-exclusive';
     await driveToEnrollFamily();
 
-    const msg = i18n.t('signup.roleExclusiveParent');
+    const msg = "Family accounts are for parents — student accounts (tutor or babysitter) can't enroll as a parent.";
     expect(await screen.findByText(msg)).toBeInTheDocument();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });
 
-  it('a reason-less enrollFamily rejection (race backstop) shows the plain message', async () => {
+  it('a reason-less enrollFamily rejection (race backstop) shows the generic translated error', async () => {
     // Issue #148: an existing account produces no special client branch. The
     // only remaining already-exists surface is the createUser race backstop,
-    // which arrives reason-less and renders as a plain error string.
-    h.rawError = { message: 'An account with this email already exists' };
+    // which arrives reason-less and renders the generic translated error.
+    h.rawError = Object.assign(new Error('An account with this email already exists'), {
+      code: 'functions/already-exists',
+    });
     await driveToEnrollFamily();
 
-    expect(await screen.findByText('An account with this email already exists')).toBeInTheDocument();
+    expect(await screen.findByText(i18n.t('enrollment.serverError'))).toBeInTheDocument();
+    expect(screen.queryByText('An account with this email already exists')).toBeNull();
     expect(screen.queryByRole('link', { name: i18n.t('auth.login') })).toBeNull();
     expect(h.navigate).not.toHaveBeenCalledWith('/family');
     // A GENUINE enrollment failure keeps reading as one — never the
@@ -498,6 +565,23 @@ describe('ParentEnrollment orchestrator', () => {
     // the rejection).
     expect(screen.queryByText(i18n.t('enrollment.parent.readyLoginTitle'))).toBeNull();
     expect(h.signIn).not.toHaveBeenCalled();
+  });
+
+  // The final-step catch used to render err.message: an unexpected fault
+  // showed the bare token 'internal', and server messages were English-only.
+  it.each([
+    ['internal', 'internal', 'enrollment.serverError'],
+    // The createUser race backstop: stays generic, never account-exists copy (#148).
+    ['already-exists', 'An account with this email already exists', 'enrollment.serverError'],
+    ['invalid-argument', 'Invalid enrollment data', 'enrollment.submitInvalid'],
+    ['deadline-exceeded', 'Verification code has expired. Please request a new one.', 'auth.codeExpired'],
+  ])('a %s rejection renders translated copy, never the server text', async (code, message, key) => {
+    h.rawError = Object.assign(new Error(message), { code: `functions/${code}` });
+    await driveToEnrollFamily();
+
+    expect(await screen.findByText(i18n.t(key))).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+    expect(h.navigate).not.toHaveBeenCalledWith('/family');
   });
 });
 
@@ -650,3 +734,4 @@ describe('ParentEnrollment post-enrollment session gate (issue #264)', () => {
     expect(h.refreshUserDoc).not.toHaveBeenCalled();
   });
 });
+

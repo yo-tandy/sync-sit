@@ -248,7 +248,8 @@ export function SchedulePage() {
       });
       await refreshUserDoc();
       toast(t('tutor.account.cancellationPolicy.saved'));
-    } catch {
+    } catch (err) {
+      console.error('[schedule] save cancellation policy failed', err);
       setPolicyError(t('common.error'));
     } finally {
       setPolicySaving(false);
@@ -325,7 +326,8 @@ export function SchedulePage() {
       await refreshUserDoc();
       setPrefsSuccess(true);
       flashAfter(() => setPrefsSuccess(false), 3000);
-    } catch {
+    } catch (err) {
+      console.error('[schedule] save session prefs failed', err);
       setPrefsError(t('common.error'));
     } finally {
       setPrefsSaving(false);

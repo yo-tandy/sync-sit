@@ -15,7 +15,7 @@ import { FamilyLayout } from '@/layouts/FamilyLayout';
 import {
   WelcomePage,
   LoginPage,
-  SignUpRolePage,
+  SignUpRedirectPage,
   AboutPage,
   ForgotPasswordPage,
   ReportProblemPage,
@@ -53,6 +53,7 @@ import {
   SupervisionInfoPage,
   HandoffPage,
   CrossAppWelcomePage,
+  StudentCrossAppWelcomePage,
   NotificationsPage,
 } from '@/lazyPages';
 
@@ -63,7 +64,11 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <WelcomePage /> },
       { path: '/login', element: <LoginPage /> },
-      { path: '/signup', element: <SignUpRolePage /> },
+      // issue #435 milestone, PR5: /signup no longer asks the role question
+      // itself — it forwards cross-origin to sit's unified /enroll landing
+      // page. The direct continuation routes below (/enroll/tutor,
+      // /enroll/parent) are unchanged and still reachable on this origin.
+      { path: '/signup', element: <SignUpRedirectPage /> },
       { path: '/enroll/tutor', element: <TutorEnrollment /> },
       {
         path: '/enroll/tutor/success',
@@ -92,6 +97,9 @@ export const router = createBrowserRouter([
       // fragment code is the capability; the page signs the user in itself.
       { path: '/handoff', element: <HandoffPage /> },
       { path: '/welcome-study', element: <CrossAppWelcomePage /> },
+      // issue #435 milestone, PR4: unified-flow arrival via the cross-origin
+      // handoff from apps/web's /enroll/choose-app.
+      { path: '/tutor/welcome-crossapp', element: <StudentCrossAppWelcomePage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

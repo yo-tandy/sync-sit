@@ -6,6 +6,7 @@ import { getCorsOrigin } from '../config/cors.js';
 import { writeAuditLog } from '../admin/writeAuditLog.js';
 import { fanOutNameCorrections, type NameFanOutSummary } from '../identity/nameFanOut.js';
 import { GUARDIAN_SUCCESS, resolveGuardianCaller } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface CorrectData {
   childUid: string;
@@ -22,7 +23,7 @@ interface CorrectData {
  * when the lock persists but no family holds supervision).
  */
 export const correctChildIdentity = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

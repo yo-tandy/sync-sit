@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useClientConfigValue } from '@/lib/adminConfigClient';
-import { ADMIN_CONFIG_DEFS } from '@ejm/shared-core';
+import { ADMIN_CONFIG_DEFS, CONSENT_VERSION } from '@ejm/shared-core';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode } from '@ejm/shared-ui';
+import { AuthColumn, TopNav, StepIndicator, StepEmail, StepVerify, StepPassword, enrollmentErrorReason, ageGateErrorCode, enrollmentSubmitErrorKey } from '@ejm/shared-ui';
 import { getTutorProfile } from '@ejm/study-core';
 import type { StudyUser, SubjectOffering } from '@ejm/study-core';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -171,7 +171,10 @@ export function TutorEnrollment() {
       setStep(1);
     } catch (err: unknown) {
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Failed to send verification code');
+        // Never echo err.message: an unexpected fault arrives as the bare token
+        // 'internal', and deliberate server messages are English-only.
+        console.error('[enrollment] send verification code failed', err);
+        setError(t('enrollment.serverError'));
       }
     } finally {
       setLoading(false);
@@ -226,7 +229,7 @@ export function TutorEnrollment() {
         // the existing account — omit `password` entirely (not '') so the
         // backend takes the add-profile branch.
         ...(isAddProfile ? {} : { password }),
-        consentVersion: '2025-12-01',
+        consentVersion: CONSENT_VERSION,
         enrollment,
       });
       if (isAddProfile) {
@@ -275,6 +278,7 @@ export function TutorEnrollment() {
           const unsub = useAuthStore.subscribe(check);
           check(useAuthStore.getState());
         });
+      // eslint-disable-next-line no-restricted-syntax -- swallowed by design: the auth-store wait below already handles the timeout case
       } catch {
         // Swallowed by design — see above.
       }
@@ -297,8 +301,10 @@ export function TutorEnrollment() {
       }
 
     } catch (err: unknown) {
+      console.error('[enrollment] tutor enrollment failed', err);
       if (!applyEnrollmentError(err)) {
-        setError(err instanceof Error ? err.message : 'Enrollment failed. Please try again.');
+        // Never echo err.message: 'internal' on a fault, English-only otherwise.
+        setError(t(enrollmentSubmitErrorKey(err)));
       }
     } finally {
       setLoading(false);
@@ -351,7 +357,7 @@ export function TutorEnrollment() {
             onSubmit={async (password) => {
               handlePasswordNext(password);
             }}
-            consentVersion="2025-12-01"
+            consentVersion={CONSENT_VERSION}
             loading={loading}
             error={error}
           />
@@ -426,7 +432,7 @@ export function TutorEnrollment() {
   const isPostAuthStep = step >= AUTH_STEPS;
 
   return (
-    <div>
+    <AuthColumn>
       {isPostAuthStep ? (
         <EnrollmentAppBar />
       ) : (
@@ -440,6 +446,6 @@ export function TutorEnrollment() {
         </>
       )}
       {renderStep()}
-    </div>
+    </AuthColumn>
   );
 }

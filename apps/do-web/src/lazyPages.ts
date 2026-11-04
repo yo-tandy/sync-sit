@@ -15,8 +15,10 @@ export const WelcomePage = lazy(() =>
 export const LoginPage = lazy(() =>
   import('@/pages/public/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
-export const SignUpRolePage = lazy(() =>
-  import('@/pages/public/SignUpRolePage').then((m) => ({ default: m.SignUpRolePage })),
+// issue #435 milestone, PR5: the role-question entry point is retired in
+// favor of a cross-origin redirect to sit's unified /enroll landing page.
+export const SignUpRedirectPage = lazy(() =>
+  import('@/pages/public/SignUpRedirectPage').then((m) => ({ default: m.SignUpRedirectPage })),
 );
 export const ForgotPasswordPage = lazy(() =>
   import('@/pages/public/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),

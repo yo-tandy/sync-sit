@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Address } from '@ejm/shared-core';
 
 // Re-exported under its historical name: shared-core owns the canonical
@@ -33,6 +34,7 @@ export function AddressAutocomplete({
   label = 'Address *',
   error,
 }: AddressAutocompleteProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState(value?.fullAddress || '');
   const [suggestions, setSuggestions] = useState<GouvFeature[]>([]);
   // Sync a LATER-arriving value into the text field (pages that load the
@@ -132,7 +134,7 @@ export function AddressAutocomplete({
           value={query}
           onChange={(e) => handleInputChange(e.target.value)}
           onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-          placeholder="Start typing an address..."
+          placeholder={t('common.addressPlaceholder')}
           className={`h-12 w-full rounded-lg border-[1.5px] bg-white px-4 pr-10 text-base text-gray-950 outline-none transition-colors placeholder:text-gray-400 ${
             error ? 'border-brand-600' : 'border-gray-300 focus:border-brand-600'
           }`}
@@ -208,7 +210,7 @@ export function AddressAutocomplete({
       )}
 
       <p className="mt-1 text-xs text-gray-500">
-        📍 Powered by adresse.data.gouv.fr
+        📍 {t('common.addressPoweredBy')}
       </p>
     </div>
   );

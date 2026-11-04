@@ -5,6 +5,7 @@ import { db } from '../config/firebase.js';
 import { sendDoNotificationToUser } from './notify.js';
 import { buildNewTaskDigest, type DigestTaskLine } from './notifyContent.js';
 import { tsMillis } from './offerAccess.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doSendTaskDigest` — the §10 board digest, §8's row exactly: a scheduled
@@ -218,8 +219,7 @@ export const doSendTaskDigest = onSchedule(
   {
     schedule: 'every 1 hours',
     region: 'europe-west1',
-    timeZone: 'Europe/Paris',
-  },
+    timeZone: 'Europe/Paris', secrets: [RESEND_API_KEY] },
   async () => {
     await runDoSendTaskDigest(db, new Date());
   },

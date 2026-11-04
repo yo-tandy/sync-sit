@@ -3,6 +3,7 @@ import { db } from '../config/firebase.js';
 import { escapeHtml, sendNotificationEmail } from '../config/email.js';
 import { derivePushWorld, sendPushNotification } from '../config/push.js';
 import { resolveNotifPref, type AppNotifCategory } from '@ejm/shared-core';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * Guardian notification mirroring (governance design: "child notifications CC
@@ -130,7 +131,7 @@ export function deriveMirrorEmailApp(originalType: string): 'sit' | 'study' | 'd
 }
 
 export const mirrorNotificationToGuardians = onDocumentCreated(
-  { document: 'notifications/{notificationId}', region: 'europe-west1' },
+  { document: 'notifications/{notificationId}', region: 'europe-west1', secrets: [RESEND_API_KEY] },
   async (event) => {
     const original = event.data?.data();
     if (!original) return;

@@ -7,7 +7,8 @@ import { ToastProvider } from '@ejm/shared-ui';
 // Phase 0, reshaped by issue #369): toggles must write per-category/channel
 // dot-paths INTO THE RIGHT BLOCK, never the whole notifPrefs object (a
 // full-object write clobbers blocks study-web may have written after this
-// page mounted), and the page must never render another app's rows.
+// page mounted), and the page renders one block per app the member uses (the account
+// page is where all of them are tuned).
 const h = vi.hoisted(() => ({
   auth: {
     userDoc: null as Record<string, unknown> | null,
@@ -112,7 +113,7 @@ describe('babysitter AccountPage notification prefs', () => {
     // newRequest.email starts true; toggling writes only that one channel.
     fireEvent.click(
       screen.getByRole('button', {
-        name: `${i18n.t('notifications.newRequest')} — ${i18n.t('notifications.emailNotif')}`,
+        name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitProviderNewRequest')} — ${i18n.t('notifications.emailNotif')}`,
       }),
     );
 
@@ -135,7 +136,7 @@ describe('babysitter AccountPage notification prefs', () => {
   it('push toggles are DISABLED outside PWA mode (no write at all)', async () => {
     renderPage();
     const button = screen.getByRole('button', {
-      name: `${i18n.t('notifications.newRequest')} — ${i18n.t('notifications.push')}`,
+      name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitProviderNewRequest')} — ${i18n.t('notifications.push')}`,
     });
     // The disabled attribute is what actually prevents the write in web mode:
     // a disabled button never dispatches the click at all.
@@ -152,7 +153,7 @@ describe('babysitter AccountPage notification prefs', () => {
     h.pwaMode = true;
     renderPage();
     const button = screen.getByRole('button', {
-      name: `${i18n.t('notifications.newRequest')} — ${i18n.t('notifications.push')}`,
+      name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitProviderNewRequest')} — ${i18n.t('notifications.push')}`,
     });
     expect(button).not.toBeDisabled();
     fireEvent.click(button);
@@ -167,7 +168,7 @@ describe('babysitter AccountPage notification prefs', () => {
     renderPage();
     fireEvent.click(
       screen.getByRole('button', {
-        name: `${i18n.t('notifications.reminder')} — ${i18n.t('notifications.emailNotif')}`,
+        name: `${i18n.t('notifHub.blockShared')} · ${i18n.t('notifHub.reminders')} — ${i18n.t('notifications.emailNotif')}`,
       }),
     );
     await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
@@ -175,34 +176,43 @@ describe('babysitter AccountPage notification prefs', () => {
     expect(Object.keys(payload).sort()).toEqual(['notifPrefs.shared.reminders.email', 'updatedAt']);
   });
 
-  it('renders the shared block first, then this app\'s block', () => {
+  it('renders the shared block first, then the sit block -- a student with no other profile', () => {
     renderPage();
     const headings = screen
       .getAllByRole('heading', { level: 4 })
       .map((h4) => h4.textContent);
     expect(headings).toEqual([
-      i18n.t('notifications.blockShared'),
-      i18n.t('notifications.blockApp'),
+      i18n.t('notifHub.blockShared'),
+      i18n.t('notifHub.blockSit'),
     ]);
   });
 
-  it('NEVER renders sync/do rows — not even for a user who holds a doer profile', () => {
-    // The rendering rule of issue #369 at the surface: a per-app Account page
-    // shows the shared block plus ITS OWN app's block. Another app's rows are
-    // the shared account hub's business (#367), never this page's — and for a
-    // user with no doer profile they must not appear anywhere at all.
-    h.auth.userDoc = { ...makeUserDoc() };
+  it("adds a block for every other app the student uses -- study as a tutor, do as a doer", async () => {
+    // The account page is the ONE place notifications are tuned (#369 rule:
+    // one shared block plus a block per profile held).
+    const both = makeUserDoc();
+    Object.assign(both.profiles as Record<string, unknown>, {
+      tutor: { enrollmentComplete: true },
+      doer: { enrollmentComplete: true },
+    });
+    h.auth.userDoc = both;
     renderPage();
-    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(2);
-    cleanup();
-
-    const withDoer = makeUserDoc();
-    (withDoer.profiles as Record<string, unknown>).doer = { enrollmentComplete: true };
-    h.auth.userDoc = withDoer;
-    renderPage();
-    // Still exactly two blocks: shared + sit. The doer profile adds a block to
-    // `notifPrefRowsForUser`, and this page filters it out by scope.
-    expect(screen.getAllByRole('heading', { level: 4 })).toHaveLength(2);
+    expect(screen.getAllByRole('heading', { level: 4 }).map((el) => el.textContent)).toEqual([
+      i18n.t('notifHub.blockShared'),
+      i18n.t('notifHub.blockSit'),
+      i18n.t('notifHub.blockStudy'),
+      i18n.t('notifHub.blockDo'),
+    ]);
+    // Worded for the tutor side, and written into do's own block.
+    expect(screen.getByText(i18n.t('notifHub.studyProviderNewRequestDesc'))).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: `${i18n.t('notifHub.blockDo')} · ${i18n.t('notifHub.doNewRequest')} — ${i18n.t('notifications.emailNotif')}`,
+      }),
+    );
+    await waitFor(() => expect(h.updateDoc).toHaveBeenCalled());
+    const payload = h.updateDoc.mock.calls[0][1];
+    expect(Object.keys(payload).sort()).toEqual(['notifPrefs.do.newRequest.email', 'updatedAt']);
   });
 
   it('still reads a pre-#369 FLAT doc during the transitional window', async () => {
@@ -213,7 +223,7 @@ describe('babysitter AccountPage notification prefs', () => {
     };
     renderPage();
     const emailToggle = screen.getByRole('button', {
-      name: `${i18n.t('notifications.newRequest')} — ${i18n.t('notifications.emailNotif')}`,
+      name: `${i18n.t('notifHub.blockSit')} · ${i18n.t('notifHub.sitProviderNewRequest')} — ${i18n.t('notifications.emailNotif')}`,
     });
     // Rendered OFF (the stored flat value), so toggling turns it back ON.
     fireEvent.click(emailToggle);

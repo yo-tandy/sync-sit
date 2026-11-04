@@ -8,6 +8,7 @@ import { notifyAllParents } from '../config/notifyParents.js';
 import { escapeHtml } from '../config/email.js';
 import { sendPushNotification } from '../config/push.js';
 import { GUARDIAN_SUCCESS, resolveGuardianCaller } from './shared.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 interface RevokeData {
   childUid: string;
@@ -21,7 +22,7 @@ interface RevokeData {
  * so until then admin gets the same refusal.
  */
 export const revokeSupervision = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

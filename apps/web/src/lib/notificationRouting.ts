@@ -13,6 +13,9 @@
  *   (its push payload uses `appointment_modified`); both are listed.
  * - `family_submitted` is kept defensively with no route: today its only
  *   writer targets the `references` collection, not `notifications`.
+ * - `account_blocked_last_parent` is written by `notifyBlockedMinor`
+ *   (`packages/shared-functions/src/guardian/notifyBlockedMinor.ts`, issue
+ *   #421 option 1b) — to the blocked CHILD, not a guardian.
  * - `guardian_orphaned_minor`, `guardian_conflicting_claim` and
  *   `guardian_claim_identity_mismatch` are EXCLUDED: they are `adminAlerts`
  *   docs, never notifications.
@@ -66,6 +69,15 @@ const GUARDIAN_TYPES = [
   // are all gone by the time this arrives, so /family/governance/{uid} would
   // be a dead deep link and /family/governance shows nothing about them.
   'supervised_account_deleted',
+  // The CHILD's own copy of a last-parent erasure blocking them (issue
+  // #421, option 1b). Written to the blocked minor themselves, not to a
+  // guardian — the mirror image of `supervised_account_deleted` above.
+  // Unlike that type, this one's recipient and their account survive: the
+  // copy says "paused until a guardian re-links you", so the account page
+  // is where they'd confirm that happened once they regain access. Routed
+  // in the babysitter branch below; a recipient with no sit provider
+  // profile has no page to land on and stays mark-read-only.
+  'account_blocked_last_parent',
 ] as const;
 
 /** The types this app's bell counts and its /notifications pages list. */
@@ -109,6 +121,9 @@ export function notificationRoute(
     if (type === 'contact_sharing_request') return '/babysitter/families';
     // The dashboard hosts the SupervisionRequestCard (accept/decline).
     if (type === 'supervision_request') return '/babysitter';
+    // Issue #421: the child's own account page is where they'd see they've
+    // been re-linked and unblocked.
+    if (type === 'account_blocked_last_parent') return '/babysitter/account';
     return null;
   }
 

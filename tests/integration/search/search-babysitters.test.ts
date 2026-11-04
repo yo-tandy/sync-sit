@@ -292,6 +292,187 @@ describe('searchBabysitters age backstop', () => {
   });
 });
 
+// Issue #439: rank search results by the provider's root `address`
+// (#442/#474) as a LAST tie-break — after every existing sort key, never
+// gating. `type: 'recurring'` with no `recurringSlots` sidesteps the
+// schedule-availability check entirely (only exercised for `one_time`),
+// letting these fixtures skip seeding a `schedules/{uid}` doc.
+describe('searchBabysitters distance tie-break & projection (issue #439)', () => {
+  let seed: SeedData;
+  let parentToken: string;
+
+  const FAMILY_LATLNG = { lat: 48.8566, lng: 2.2769 };
+  const BABYSITTER_RESULT_KEYS = new Set([
+    'uid', 'firstName', 'lastName', 'age', 'classLevel', 'languages', 'photoUrl',
+    'aboutMe', 'kidAgeRange', 'maxKids', 'hourlyRate', 'cancellationNoticeHours',
+    'distance', 'addressDistance', 'referenceCount', 'contactEmail', 'contactPhone',
+    'isPreferred',
+  ]);
+
+  interface Address {
+    fullAddress: string; street: string; city: string; postcode: string; lat: number; lng: number;
+  }
+
+  function makeAddress(lat: number, lng: number): Address {
+    return { fullAddress: 'Test address', street: 'Test street', city: 'Paris', postcode: '75016', lat, lng };
+  }
+
+  function babysitterDoc(opts: {
+    uid: string;
+    areaLatLng: { lat: number; lng: number };
+    areaRadiusKm?: number;
+    address?: Address | null;
+  }): Record<string, unknown> {
+    return {
+      uid: opts.uid,
+      email: `${opts.uid}@ejm-test.org`,
+      status: 'active',
+      firstName: 'Temp', lastName: 'Sitter',
+      dateOfBirth: new Date('2008-01-01'),
+      ...(opts.address !== undefined ? { address: opts.address } : {}),
+      profiles: { babysitter: {
+        enrollmentComplete: true, ejemEmail: `${opts.uid}@ejm-test.org`, searchable: true,
+        effectiveSearchable: true,
+        gender: 'female', classLevel: '1ère', languages: ['French'],
+        kidAgeRange: { min: 0, max: 18 }, maxKids: 3, hourlyRate: 12,
+        contactEmail: `${opts.uid}@ejm-test.org`,
+        areaMode: 'distance', areaLatLng: opts.areaLatLng, areaRadiusKm: opts.areaRadiusKm ?? 20,
+      } },
+      fcmTokens: [], language: 'fr',
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+  }
+
+  async function withTempBabysitters(docs: Record<string, unknown>[], fn: () => Promise<void>) {
+    const uids = docs.map((d) => d.uid as string);
+    await Promise.all(docs.map((d) => getDb().collection('users').doc(d.uid as string).set(d)));
+    try {
+      await fn();
+    } finally {
+      await Promise.all(uids.map((uid) => getDb().collection('users').doc(uid).delete()));
+    }
+  }
+
+  interface Row {
+    uid: string;
+    distance: number;
+    addressDistance: number | null;
+  }
+
+  async function search(): Promise<Row[]> {
+    const result = await callFunction<{ results: Row[] }>(
+      'searchBabysitters',
+      {
+        type: 'recurring',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: FAMILY_LATLNG,
+        filters: {},
+      },
+      parentToken,
+    );
+    return result.results;
+  }
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('sorts by home-address distance ONLY as a tie-break when every existing key ties', async () => {
+    const NEAR = 'temp-bs-addr-near';
+    const FAR = 'temp-bs-addr-far';
+    await withTempBabysitters(
+      [
+        // Identical areaLatLng (=> identical area `distance`) and no
+        // references (=> identical referenceCount 0) — the only difference
+        // is the home address, ~5.5km apart.
+        babysitterDoc({ uid: FAR, areaLatLng: FAMILY_LATLNG, address: makeAddress(48.8566, 2.2000) }),
+        babysitterDoc({ uid: NEAR, areaLatLng: FAMILY_LATLNG, address: makeAddress(48.8566, 2.2769) }),
+      ],
+      async () => {
+        const results = await search();
+        const near = results.find((r) => r.uid === NEAR)!;
+        const far = results.find((r) => r.uid === FAR)!;
+        expect(near).toBeDefined();
+        expect(far).toBeDefined();
+        // Existing keys tied — confirms the tie-break, not the primary sort,
+        // decided the order.
+        expect(near.distance).toBe(far.distance);
+        expect(near.addressDistance).toBeLessThan(far.addressDistance!);
+        expect(results.indexOf(near)).toBeLessThan(results.indexOf(far));
+      },
+    );
+  });
+
+  it('sorts a provider with no address LAST among tied providers, never excluding it', async () => {
+    const WITH_ADDRESS = 'temp-bs-addr-present';
+    const NO_ADDRESS = 'temp-bs-addr-absent';
+    await withTempBabysitters(
+      [
+        babysitterDoc({ uid: WITH_ADDRESS, areaLatLng: FAMILY_LATLNG, address: makeAddress(48.8566, 2.2769) }),
+        babysitterDoc({ uid: NO_ADDRESS, areaLatLng: FAMILY_LATLNG, address: null }),
+      ],
+      async () => {
+        const results = await search();
+        const withAddr = results.find((r) => r.uid === WITH_ADDRESS)!;
+        const noAddr = results.find((r) => r.uid === NO_ADDRESS)!;
+        expect(withAddr).toBeDefined();
+        expect(noAddr).toBeDefined();
+        expect(noAddr.addressDistance).toBeNull();
+        expect(results.indexOf(withAddr)).toBeLessThan(results.indexOf(noAddr));
+      },
+    );
+  });
+
+  it('still EXCLUDES an out-of-radius areaMode:"distance" provider, even with a close home address (hard filter untouched)', async () => {
+    const OUT_OF_RADIUS = 'temp-bs-out-of-radius';
+    await withTempBabysitters(
+      [
+        babysitterDoc({
+          uid: OUT_OF_RADIUS,
+          // ~50km from the family search point, radius capped at 5km.
+          areaLatLng: { lat: 49.3, lng: 2.2769 },
+          areaRadiusKm: 5,
+          // A close home address must NOT rescue an out-of-radius provider —
+          // ranking-only, never gating.
+          address: makeAddress(48.8566, 2.2769),
+        }),
+      ],
+      async () => {
+        const results = await search();
+        expect(results.map((r) => r.uid)).not.toContain(OUT_OF_RADIUS);
+      },
+    );
+  });
+
+  it('projects addressDistance but NEVER address, lat, or lng', async () => {
+    const uid = 'temp-bs-projection';
+    await withTempBabysitters(
+      [babysitterDoc({ uid, areaLatLng: FAMILY_LATLNG, address: makeAddress(48.8566, 2.2769) })],
+      async () => {
+        const results = await search();
+        const row = results.find((r) => r.uid === uid) as unknown as Record<string, unknown>;
+        expect(row).toBeDefined();
+        expect(typeof row.distance).toBe('number');
+        expect(typeof row.addressDistance).toBe('number');
+        expect(row.address).toBeUndefined();
+        expect(row.lat).toBeUndefined();
+        expect(row.lng).toBeUndefined();
+        // Full key-set pin: a future field leak (e.g. `address`) fails here.
+        for (const key of Object.keys(row)) {
+          expect(BABYSITTER_RESULT_KEYS.has(key)).toBe(true);
+        }
+      },
+    );
+  });
+});
+
 function getNextSaturday(): string {
   const d = new Date();
   d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
@@ -301,3 +482,89 @@ function getNextSaturday(): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
+
+// ── Issue #510: overnight sittings must be filtered like any other range ──
+// The parent's picker offers end times up to 02:00 "(following day)". A
+// 22:00 → 02:00 search reads slots 88..95 AND 0..7 of the SAME weekday's
+// array (the DayEditor storage convention). Before the fix the naive loop
+// ran zero times for a wrapped range and every babysitter passed.
+describe('searchBabysitters overnight schedule filter (issue #510)', () => {
+  let seed: SeedData;
+  let parentToken: string;
+  const NIGHT = '2027-06-14'; // a far-future Monday → weekly key 'mon'
+  const wrapGrid = () => {
+    const g = new Array(96).fill(false);
+    for (let i = 68; i < 96; i++) g[i] = true; // 17:00 → 24:00
+    for (let i = 0; i < 8; i++) g[i] = true; // 00:00 → 02:00 (same day key)
+    return g;
+  };
+  const untilMidnightGrid = () => {
+    const g = new Array(96).fill(false);
+    for (let i = 68; i < 96; i++) g[i] = true; // 17:00 → 24:00 only
+    return g;
+  };
+
+  beforeAll(async () => {
+    await clearAll();
+    seed = await seedTestData();
+    parentToken = await getIdToken(seed.parent1.uid);
+    const db = getDb();
+    // babysitter1: open through the night → must match.
+    await db.collection('schedules').doc(seed.babysitter1.uid).update({ 'weekly.mon': wrapGrid() });
+    // babysitter2: open until midnight only → must NOT match a 22:00–02:00 sitting.
+    await db.collection('schedules').doc(seed.babysitter2.uid).update({ 'weekly.mon': untilMidnightGrid() });
+    // babysitter3: weekly open through the night, but a date override closes
+    // the small hours → the override path must exclude them too.
+    await db.collection('schedules').doc(seed.babysitter3.uid).update({ 'weekly.mon': wrapGrid() });
+    await db.collection('schedules').doc(seed.babysitter3.uid)
+      .collection('overrides').doc(NIGHT)
+      .set({ date: NIGHT, type: 'custom', slots: untilMidnightGrid(), createdAt: new Date() });
+  });
+
+  afterAll(async () => {
+    await clearAll();
+  });
+
+  it('a 22:00 → 02:00 search keeps the sitter open through the night and drops the ones who stop at midnight', async () => {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: NIGHT,
+        startTime: '22:00',
+        endTime: '02:00',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: { lat: 48.8566, lng: 2.2769 },
+        filters: {},
+      },
+      parentToken,
+    );
+    const uids = result.results.map((r) => r.uid);
+    expect(uids).toContain(seed.babysitter1.uid);
+    // Weekly grid ends at midnight → the 00:00–02:00 half is closed.
+    expect(uids).not.toContain(seed.babysitter2.uid);
+    // Date override ends at midnight → same, via the override path.
+    expect(uids).not.toContain(seed.babysitter3.uid);
+  });
+
+  it('the same sitter still matches a plain evening range that ends before midnight', async () => {
+    const result = await callFunction<{ results: Array<{ uid: string }> }>(
+      'searchBabysitters',
+      {
+        type: 'one_time',
+        date: NIGHT,
+        startTime: '20:00',
+        endTime: '23:00',
+        kidAges: [6],
+        numberOfKids: 1,
+        latLng: { lat: 48.8566, lng: 2.2769 },
+        filters: {},
+      },
+      parentToken,
+    );
+    const uids = result.results.map((r) => r.uid);
+    expect(uids).toContain(seed.babysitter1.uid);
+    expect(uids).toContain(seed.babysitter2.uid);
+  });
+});

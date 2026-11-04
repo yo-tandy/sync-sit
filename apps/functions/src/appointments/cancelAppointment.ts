@@ -17,6 +17,7 @@ import {
   type SessionBlockEntry,
 } from '@ejm/shared-functions/schedule/sessionOverride.js';
 import { SIT_APP_URL } from '@ejm/shared-functions';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /** sit's provenance stamp + ownership gate (see buildRestoredOverride). */
 const SIT_PROVENANCE = { appSource: 'sit', reason: 'appointment' } as const;
@@ -28,7 +29,7 @@ interface CancelInput {
 }
 
 export const cancelAppointment = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

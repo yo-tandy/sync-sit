@@ -86,6 +86,12 @@ describe('CrossAppWelcomePage (sit)', () => {
     expect(back).toHaveAttribute('href', expect.stringContaining('http'));
   });
 
+  // PublicLayout has no header — the page brings the enrollment app bar itself.
+  it('renders the enrollment app bar', () => {
+    renderPage();
+    expect(screen.getByRole('button', { name: i18n.t('menu.openMenu') })).toBeInTheDocument();
+  });
+
   it('greets by first name and states the cross-app offer with a consent line', () => {
     renderPage();
     expect(screen.getByText(i18n.t('welcomeCross.greeting', { name: 'Iris' }))).toBeInTheDocument();

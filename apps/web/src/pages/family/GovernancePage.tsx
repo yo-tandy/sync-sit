@@ -12,6 +12,7 @@ import type {
   GuardianProfileSummary,
   KidInviteRow,
 } from '@/types/guardian';
+import { useHubPaths } from '@/lib/hubRoutes';
 
 const LINK_STATUS_VARIANT: Record<GovernedChildSummary['link']['status'], 'amber' | 'green' | 'gray'> = {
   pending: 'amber',
@@ -28,6 +29,7 @@ const LINK_STATUS_VARIANT: Record<GovernedChildSummary['link']['status'], 'amber
  * backend truth. Copy-adapted from sync-study's GovernancePage.
  */
 export function GovernancePage() {
+  const hub = useHubPaths();
   const { t, i18n } = useTranslation();
 
   const [data, setData] = useState<GovernedChildrenResult | null>(null);
@@ -58,7 +60,8 @@ export function GovernancePage() {
       if (!mountedRef.current) return;
       setData(res.data);
       setLoadError(false);
-    } catch {
+    } catch (err) {
+      console.error('[governance] load governed children failed', err);
       // Last-known-good: a focus-refetch blip must not stamp an error banner
       // over data that is still rendered. Only a load with nothing to show
       // surfaces the error state.
@@ -92,7 +95,8 @@ export function GovernancePage() {
       const fn = httpsCallable<{ inviteId: string }, { success: boolean }>(functions, name);
       await fn({ inviteId });
       await load();
-    } catch {
+    } catch (err) {
+      console.error('[governance] invite action failed', err);
       if (mountedRef.current) setActionError(t('governance.actionError'));
     } finally {
       if (mountedRef.current) setActingId(null);
@@ -148,7 +152,7 @@ export function GovernancePage() {
 
   return (
     <div>
-      <TopNav title={t('governance.title')} backTo="/family" />
+      <TopNav title={t('governance.title')} backTo={hub.back('/family')} />
 
       <div className="px-5 pt-4 pb-8">
         {actionError && <p className="mb-4 text-sm text-brand-600">{actionError}</p>}
@@ -180,7 +184,7 @@ export function GovernancePage() {
                 child.link.status === 'active' ? (
                   <Link
                     key={child.childUid}
-                    to={`/family/governance/${child.childUid}`}
+                    to={`${hub.kidsBase}/${child.childUid}`}
                     className="block"
                   >
                     {kidCard(child)}
@@ -240,7 +244,7 @@ export function GovernancePage() {
 
         {/* ── Add a child (single always-present CTA once loaded) ── */}
         {data !== null && (
-          <Link to="/family/governance/new" className="block">
+          <Link to={`${hub.kidsBase}/new`} className="block">
             <Card interactive className="flex items-center gap-3 py-4">
               <div className="flex-1">
                 <p className="text-sm font-semibold text-gray-900">{t('governance.addChild')}</p>

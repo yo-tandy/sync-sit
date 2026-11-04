@@ -33,10 +33,41 @@ describe('SideNav (shared-ui)', () => {
   it('is hidden below md and sticky under the h-12 bar (class pins)', () => {
     renderWithProviders(<SideNav sections={sections} ariaLabel="Primary navigation" />);
     const nav = screen.getByRole('navigation', { name: 'Primary navigation' });
-    expect(nav.className).toMatch(/\bhidden\b/);
-    expect(nav.className).toMatch(/\bmd:block\b/);
-    expect(nav.className).toMatch(/\bsticky\b/);
-    expect(nav.className).toMatch(/\btop-12\b/);
+    // The sticky/scroll/visibility classes live on the WRAPPING div, not the
+    // <nav> itself (#492 review) — see the "head renders as a sibling" pin
+    // below for why the <nav> no longer carries them directly.
+    const wrapper = nav.parentElement!;
+    expect(wrapper.className).toMatch(/\bhidden\b/);
+    expect(wrapper.className).toMatch(/\bmd:block\b/);
+    expect(wrapper.className).toMatch(/\bsticky\b/);
+    expect(wrapper.className).toMatch(/\btop-12\b/);
+  });
+
+  /**
+   * #492 review: `head` used to render INSIDE this component's own `<nav
+   * aria-label={ariaLabel}>`, so a `head` that renders its own `<nav>`
+   * landmark (exactly what `AppSwitchInline`/`AppSwitchBar` do) ended up
+   * nested nav-inside-nav at md+ — the pattern this PR avoids everywhere
+   * else a hidden `<nav>` gets embedded into a host. `head` now renders as
+   * a SIBLING of the sections' `<nav>`, both children of the shared
+   * sticky/scroll wrapper.
+   */
+  it('renders `head` as a SIBLING of the sections’ nav, never nested inside it', () => {
+    renderWithProviders(
+      <SideNav
+        sections={sections}
+        ariaLabel="Primary navigation"
+        head={<nav aria-label="Switch app">head content</nav>}
+      />,
+    );
+    const primary = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const switcher = screen.getByRole('navigation', { name: 'Switch app' });
+    expect(primary.contains(switcher)).toBe(false);
+    // Both live under the same sticky/scroll wrapper, not unrelated trees --
+    // `head`'s own `mb-4 border-b` spacer div sits between the wrapper and
+    // the switcher, so this checks the shared ancestor rather than direct
+    // parentElement equality.
+    expect(primary.parentElement!.contains(switcher)).toBe(true);
   });
 
   it('marks the current route active with brand styling, honoring end-matching', () => {

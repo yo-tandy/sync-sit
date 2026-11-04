@@ -364,6 +364,28 @@ service cloud.firestore {
              && rootContactFieldValid('whatsapp', 40);
     }
 
+    // Contact-visibility consent (root `contactVisibilityConsent`, first
+    // asked by the unified flow's StepContactInfo). Turning a babysitter or
+    // tutor profile searchable hands its contact trio to families, so an
+    // owner write that flips `profiles.{babysitter,tutor}.searchable` from
+    // not-true to true must leave the doc carrying the consent — either
+    // already recorded at enrollment or written in the SAME update (the
+    // dashboards' activation dialog does exactly that). Without this pin the
+    // dashboard checkbox would be advisory: a bare `searchable: true` write
+    // would bypass it. Turning visibility OFF is never gated. The field
+    // itself, when changed, must be a boolean.
+    function activatingProfile(role) {
+      return request.resource.data.get('profiles', {}).get(role, {}).get('searchable', false) == true
+             && resource.data.get('profiles', {}).get(role, {}).get('searchable', false) != true;
+    }
+    function contactVisibilityConsentValid() {
+      return (!request.resource.data.diff(resource.data).affectedKeys()
+                  .hasAny(['contactVisibilityConsent'])
+              || request.resource.data.get('contactVisibilityConsent', null) is bool)
+             && (!(activatingProfile('babysitter') || activatingProfile('tutor'))
+                 || request.resource.data.get('contactVisibilityConsent', false) == true);
+    }
+
     function rootIdentitySetOnce() {
       return !request.resource.data.diff(resource.data).affectedKeys()
                  .hasAny(['firstName', 'lastName', 'dateOfBirth'])
@@ -372,11 +394,19 @@ service cloud.firestore {
                  && identityFieldSettable('dateOfBirth'));
     }
 
-    // Users: read own profile; parents can read active babysitters (for search results)
+    // Users: read own profile, admin, or a same-family member. There is NO
+    // client read of another person's doc beyond that: rules are all-or-
+    // nothing per document, so the former "any authed user may read any
+    // active babysitter" clause handed out dateOfBirth (minors), the root
+    // address with lat/lng, the contact trio, ejemEmail, approvedFamilies and
+    // fcmTokens to every signed-in account — strictly more than
+    // searchBabysitters / lookupBabysitter project (issue #529). Every
+    // cross-user babysitter read now goes through a callable that projects
+    // and gates: searchBabysitters, lookupBabysitter,
+    // findBabysittersForEndorsement (#531), getBabysitterSummaries (#534).
     match /users/{userId} {
       allow read: if isOwner(userId)
                   || isAdmin()
-                  || (isAuth() && isBabysitterData(resource.data) && resource.data.status == 'active')
                   || (isAuth() && parentFamilyId(resource.data) != null
                       && parentFamilyId(resource.data) == parentFamilyId(callerData()));
       allow create, delete: if false; // Only via Cloud Functions
@@ -398,7 +428,8 @@ service cloud.firestore {
       //   fields nested inside a profile the owner otherwise may edit.
       // NOTE: `profiles.babysitter.searchable` and `profiles.tutor.searchable`
       //   are intentionally editable — they are user-controlled by design
-      //   (soft hide from search).
+      //   (soft hide from search) — but turning one ON requires the root
+      //   contactVisibilityConsent (contactVisibilityConsentValid).
       // NOTE: `profiles.tutor.cancellationNoticeHours` and
       //   `profiles.babysitter.cancellationNoticeHours` are also intentionally
       //   editable — enforcement reads the per-booking SNAPSHOT taken at
@@ -420,10 +451,16 @@ service cloud.firestore {
       // - sessionEpoch: server-owned (signOutEverywhere callable) — a client
       //   bumping it could force-sign-out its own other-origin sessions
       //   without token revocation, or spoof the coherence signal.
+      // - consentVersion / consentAt: the consent record (issue #488). Only
+      //   the enrollment callables and acknowledgeConsent may move them --
+      //   the re-consent gate trusts consentVersion, so a client writing it
+      //   would clear the gate with no version check and no audit row,
+      //   i.e. no acceptance at all.
       allow update: if isOwner(userId)
                     && !request.resource.data.diff(resource.data).affectedKeys()
                         .hasAny(['uid', 'email', 'ejemEmail', 'status', 'createdAt', 'isAdmin',
                                  'governedBy', 'identityLocked', 'sessionEpoch',
+                                 'consentVersion', 'consentAt',
                                  // Root familyId: legacy Plan C membership. Client-
                                  // deleting it turned a hybrid doc into an "orphan"
                                  // by addProfileToUser's carve-out predicate and
@@ -438,6 +475,7 @@ service cloud.firestore {
                     && identityUnlockedOrUnchanged()
                     && rootIdentitySetOnce()
                     && rootContactShapeValid()
+                    && contactVisibilityConsentValid()
                     && tutorNumericBoundsValid()
                     && noticeWindowBoundsValid()
                     && tutorAreaShapeValid()

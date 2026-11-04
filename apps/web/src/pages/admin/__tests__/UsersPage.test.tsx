@@ -7,12 +7,20 @@ import { MemoryRouter } from 'react-router';
 const h = vi.hoisted(() => ({
   calls: [] as { name: string; payload: unknown }[],
   users: [] as Record<string, unknown>[],
+  // Issue #421: the next call to this NAMED callable rejects with this
+  // shape, mirroring the real HttpsError envelope (`.details.code`).
+  rejectNext: null as null | { name: string; code: string; details?: unknown; message?: string },
 }));
 
 vi.mock('@/config/firebase', () => ({ functions: {} }));
 vi.mock('firebase/functions', () => ({
   httpsCallable: (_fns: unknown, name: string) => (payload: unknown) => {
     h.calls.push({ name, payload });
+    if (h.rejectNext && h.rejectNext.name === name) {
+      const { code, details, message } = h.rejectNext;
+      h.rejectNext = null;
+      return Promise.reject(Object.assign(new Error(message ?? 'rejected'), { code, details }));
+    }
     if (name === 'listUsers') {
       return Promise.resolve({ data: { users: [...h.users] } });
     }
@@ -56,6 +64,7 @@ function rowNames() {
 beforeEach(() => {
   i18n.changeLanguage('en');
   h.calls.length = 0;
+  h.rejectNext = null;
   h.users = [
     user({ uid: 'u-z', firstName: 'Zoe', lastName: 'Zebra', email: 'zoe@test.com' }),
     user({ uid: 'u-a', firstName: 'Anna', lastName: 'Albert', email: 'anna@test.com' }),
@@ -84,6 +93,53 @@ describe('AdminUsersPage — table idiom', () => {
       'aria-sort',
       'descending',
     );
+  });
+});
+
+describe('AdminUsersPage — delete confirmation (issue #421)', () => {
+  it('maps the admin/last-admin error to copy and keeps the dialog open', async () => {
+    h.rejectNext = {
+      name: 'deleteUser',
+      code: 'FAILED_PRECONDITION',
+      details: { code: 'admin/last-admin' },
+    };
+    renderPage();
+    await screen.findByText('zoe@test.com');
+
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('admin.delete') })[0]);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.confirm') }));
+
+    expect(
+      await screen.findByText(i18n.t('admin.lastAdminError')),
+    ).toBeInTheDocument();
+    // The dialog itself is still open — a rejected delete must not vanish
+    // silently (round-trip regression the #421 review caught: the old
+    // `finally` closed the dialog unconditionally).
+    expect(screen.getByRole('button', { name: i18n.t('common.confirm') })).toBeInTheDocument();
+  });
+
+  it('falls back to a generic message for an unmapped error code', async () => {
+    h.rejectNext = { name: 'deleteUser', code: 'INTERNAL' };
+    renderPage();
+    await screen.findByText('zoe@test.com');
+
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('admin.delete') })[0]);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.confirm') }));
+
+    expect(await screen.findByText(i18n.t('admin.actionFailed'))).toBeInTheDocument();
+  });
+
+  it('closes the dialog and shows no error on a successful delete', async () => {
+    renderPage();
+    await screen.findByText('zoe@test.com');
+
+    fireEvent.click(screen.getAllByRole('button', { name: i18n.t('admin.delete') })[0]);
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.confirm') }));
+
+    await vi.waitFor(() => {
+      expect(screen.queryByRole('button', { name: i18n.t('common.confirm') })).toBeNull();
+    });
+    expect(screen.queryByText(i18n.t('admin.lastAdminError'))).toBeNull();
   });
 });
 
@@ -163,5 +219,54 @@ describe('AdminUsersPage — identity-correction dialog (issue #158)', () => {
       expect(screen.queryByLabelText(i18n.t('admin.identityFirstName'))).toBeNull();
       expect(h.calls.filter((c) => c.name === 'listUsers').length).toBeGreaterThanOrEqual(2);
     });
+  });
+});
+
+describe('AdminUsersPage — callable failure copy', () => {
+  async function openIdentityDialogWithChange() {
+    h.users = [user({ uid: 'u-i', firstName: 'Typoed', lastName: 'Name' })];
+    renderPage();
+    await screen.findByText('Typoed Name');
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.correctIdentity') }));
+    fireEvent.change(screen.getByLabelText(i18n.t('admin.identityFirstName')), {
+      target: { value: 'Fixed' },
+    });
+  }
+
+  it('identity correction: an unexpected fault shows the generic localized copy only', async () => {
+    h.rejectNext = { name: 'correctUserIdentity', code: 'functions/internal', message: 'internal' };
+    await openIdentityDialogWithChange();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+    const err = await screen.findByText(i18n.t('admin.identityCorrectionFailed'));
+    // Exact text: no ": internal" detail suffix.
+    expect(err.textContent).toBe(i18n.t('admin.identityCorrectionFailed'));
+  });
+
+  it('identity correction: invalid-argument maps to the check-name-and-DOB copy', async () => {
+    h.rejectNext = {
+      name: 'correctUserIdentity',
+      code: 'functions/invalid-argument',
+      message: 'dateOfBirth must be a valid date',
+    };
+    await openIdentityDialogWithChange();
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('common.save') }));
+
+    expect(await screen.findByText(i18n.t('admin.identityCorrectionInvalid'))).toBeInTheDocument();
+    expect(screen.queryByText(/must be a valid date/i)).toBeNull();
+  });
+
+  it('export: a failure alerts translated copy, never the raw token', async () => {
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
+    h.rejectNext = { name: 'exportUserData', code: 'functions/internal', message: 'internal' };
+    h.users = [user({ uid: 'u-e' })];
+    renderPage();
+    await screen.findByText('Anna Albert');
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('admin.exportData') }));
+
+    await vi.waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy).toHaveBeenCalledWith(i18n.t('admin.exportFailed'));
+    expect(alertSpy).not.toHaveBeenCalledWith('internal');
+    alertSpy.mockRestore();
   });
 });

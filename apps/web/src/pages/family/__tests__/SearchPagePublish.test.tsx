@@ -99,6 +99,11 @@ async function searchToResults() {
   await waitFor(() => expect(screen.getByRole('button', { name: 'Search' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Search' }));
   await waitFor(() => expect(h.callable).toHaveBeenCalledWith('searchBabysitters', expect.anything()));
+  // The callable being invoked is not the results step being rendered: the mocked promise still
+  // has to resolve and React has to commit the (empty) results view. Querying the CTA synchronously
+  // right after the invocation raced that commit and failed under CI load ("Searching..." still on
+  // screen), so wait for the step itself.
+  await screen.findByRole('button', { name: 'Publish this search' });
 }
 
 beforeEach(() => {

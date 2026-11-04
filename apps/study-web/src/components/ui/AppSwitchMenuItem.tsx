@@ -1,28 +1,32 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { BRAND_MARKS, Spinner } from '@ejm/shared-ui';
+import { Spinner } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
 import { functions } from '@/config/firebase';
 import { SIT_APP_URL } from '@/utils/appSwitch';
 
 // Bar-weight mark, not the 256px original (#364): this slot is 20px, and the
-// full mark costs ~100 KB to draw it. Resolved through BRAND_MARKS so
-// replacing the art stays one file plus the assets (#386).
-const sitMark = BRAND_MARKS.sit;
+// full mark costs ~100 KB to draw it. Imported directly, not through a
+// shared-ui lookup (#422), so study's dist carries only this mark plus its
+// own.
+const sitMark = { sm: sitSm, md: sitMd };
 
 /**
  * Burger-menu entry that jumps to sync-sit without re-login: mints a
  * one-time handoff code, then navigates with the code in the URL FRAGMENT
  * (#code=… — fragments never reach servers or logs). Non-optimistic: the
  * entry disables with a spinner until the mint resolves; nothing navigates
- * on failure. Shared by the tutor AppBar and the FamilyAppBar.
+ * on failure.
  *
- * Hidden below `md` BY THE TWO APP BARS since #365, because there the
- * app-switch bar is the entry point and a second one would let a code be
- * minted around the bar's whole-bar lock. At `md+` the bar is `md:hidden`
- * and this is the only switcher there is, until Q9 is answered (#417).
- * AdminInfoPage is unwrapped on purpose: it is a public route with no shell
- * and therefore no bar at any width.
+ * ADMININFOPAGE ONLY now (#417, plan Q9 resolved): the tutor AppBar and
+ * FamilyAppBar both dropped this from their burgers entirely once
+ * `AppSwitchInline` covered `md+` in their own top strips -- the app-switch
+ * bar already covered below `md`, so there was no width left for this row
+ * to carry in either shell. AdminInfoPage is a public route with no shell
+ * and therefore no bar (or inline switcher) at any width, so it keeps this
+ * as its one-click way back to sync-sit.
  */
 export function AppSwitchMenuItem() {
   const { t, i18n } = useTranslation();
@@ -48,7 +52,8 @@ export function AppSwitchMenuItem() {
         `${SIT_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
       );
       // Stay busy: the browser is navigating away.
-    } catch {
+    } catch (err) {
+      console.error('[appSwitch] mint handoff code failed', err);
       setFailed(true);
       setBusy(false);
     }

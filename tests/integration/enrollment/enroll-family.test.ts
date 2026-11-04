@@ -116,6 +116,33 @@ describe('enrollFamily', () => {
     expect(userDoc.data()!.consentVersion).toBe('2025-12-01');
   });
 
+  it("persists the wizard's language on the new user doc; absent → 'en' (issue #440 audit)", async () => {
+    const db = getDb();
+    const enroll = async (email: string, language?: 'en' | 'fr') => {
+      await callFunction('verifyParentEmail', { email });
+      const code = (await db.collection('verificationCodes').doc(email).get()).data()!.code;
+      const result = await callFunction<{ success: boolean; uid: string }>('enrollFamily', {
+        email,
+        verificationCode: code,
+        password: 'Test1234',
+        familyName: 'Langue',
+        firstName: 'Léa',
+        address: '10 Rue Cler, 75007 Paris',
+        latLng: { lat: 48.857, lng: 2.305 },
+        kids: [],
+        ...(language ? { language } : {}),
+      });
+      expect(result.success).toBe(true);
+      return (await db.collection('users').doc(result.uid).get()).data()!.language;
+    };
+
+    // A French wizard run lands a French user doc — server email copy
+    // (verification decisions, guardian notices) reads this field.
+    expect(await enroll('parent-fr@test.com', 'fr')).toBe('fr');
+    // Legacy payload with no language keeps the former default.
+    expect(await enroll('parent-nolang@test.com')).toBe('en');
+  });
+
   it('rejects a consentVersion outside the shipped allowlist; nothing is written', async () => {
     const email4 = 'newparent4@test.com';
     await callFunction('verifyParentEmail', { email: email4 });

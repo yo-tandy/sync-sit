@@ -99,7 +99,8 @@ export function OfferPage() {
             : null,
         );
         setLoadState('ready');
-      } catch {
+      } catch (err) {
+        console.error('[offer] load task failed', err);
         if (!stale) setLoadState('error');
       }
     })();

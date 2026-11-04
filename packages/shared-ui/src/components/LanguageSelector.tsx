@@ -1,11 +1,26 @@
 import { useTranslation } from 'react-i18next';
+import type { Language } from '@ejm/shared-core';
+import { emitUserLanguageChange } from '../i18n/userLanguage.js';
 
 export function LanguageSelector({ className = '' }: { className?: string }) {
   const { i18n } = useTranslation();
 
-  const handleChange = (lang: string) => {
+  const handleChange = (lang: Language) => {
     i18n.changeLanguage(lang);
-    localStorage.setItem('ejm_language', lang);
+    // The one USER-initiated language signal: `useSyncUserLanguage` writes
+    // it to the signed-in user's doc (issue #512). Programmatic switches
+    // (bootstrap, HandoffPage) go through i18n only and never write.
+    emitUserLanguageChange(lang);
+    // Remembering the choice locally is best-effort (issue #522): a runtime
+    // without `localStorage` (Node 26 without --localstorage-file, a
+    // hardened browser profile) or one that throws on write (private mode,
+    // quota) must not take the switch and the signal above down with it —
+    // which is also why they run first.
+    try {
+      globalThis.localStorage?.setItem('ejm_language', lang);
+    } catch {
+      // Swallowed by design — see above.
+    }
   };
 
   return (

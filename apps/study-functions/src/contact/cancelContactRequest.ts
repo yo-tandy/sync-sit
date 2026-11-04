@@ -13,6 +13,7 @@ import { getParentProfile, resolveNotifPref } from '@ejm/shared-core';
 import type { User } from '@ejm/shared-core';
 import type { StudyUser } from '@ejm/study-core';
 import { cancelContactRequestSchema } from '../validation/contact.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * The INITIATOR withdraws their own pending contact request — a family the one
@@ -30,7 +31,7 @@ import { cancelContactRequestSchema } from '../validation/contact.js';
  * slip the family's real answer past the cooldown.
  */
 export const cancelContactRequest = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

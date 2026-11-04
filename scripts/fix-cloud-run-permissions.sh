@@ -49,27 +49,27 @@ for sa in $RUNTIME_SAS; do
     --quiet >/dev/null 2>&1 && echo "  ✔ $sa" || echo "  ✗ $sa (failed)"
 done
 
-# Re-set Resend API key on email functions
-# IMPORTANT: Use --update-env-vars with || delimiter to avoid wiping Firebase env vars.
-# The gcloud update creates a new revision that inherits from the current template,
-# so we must never use --set-env-vars (which replaces ALL vars).
-if [ -n "$RESEND_API_KEY" ]; then
-  echo ""
-  echo "Setting Resend API key on email functions..."
-  EMAIL_SVCS="verifyparentemail verifyejmemail sendcontactrequest respondtorequest resubmitappointment sendreminders submitverification modifyappointment cancelappointment deleteappointment deleteuser"
-  for svc in $EMAIL_SVCS; do
-    # Check if RESEND_API_KEY is already set correctly (avoid creating unnecessary revisions)
-    current=$(gcloud run services describe "$svc" --region=$REGION --project=$PROJECT --format="value(spec.template.spec.containers[0].env)" 2>/dev/null)
-    if echo "$current" | grep -q "RESEND_API_KEY.*$RESEND_API_KEY"; then
-      echo "  ✔ $svc (already set)"
-    else
-      gcloud run services update "$svc" \
-        --region=$REGION --project=$PROJECT \
-        --update-env-vars="RESEND_API_KEY=$RESEND_API_KEY" \
-        --quiet 2>/dev/null && echo "  ✔ $svc" || echo "  ✗ $svc (failed)"
-    fi
-  done
-fi
+# Resend API key: NOT set here any more (issue #497).
+#
+# This used to re-apply RESEND_API_KEY to a hard-coded list of 11 services.
+# Every email path added after that list was written never got the key, so
+# getResend() returned null and the mail was dropped behind a [NO-RESEND] log
+# line — 109 of 120 services were missing it when this was found. A list kept
+# in a shell script cannot track a call graph that keeps growing.
+#
+# The key is now a Firebase Functions secret param
+# (packages/shared-functions/src/config/secrets.ts), declared by every function
+# that can reach the mailer and bound automatically on every deploy. There is
+# nothing left to re-apply afterwards.
+#
+# That also sidesteps the second half of #497: the gcf-artifacts cleanup policy
+# deletes the tagged build image after 24h, so an out-of-band
+# `gcloud run services update` fails with `Image …:version_1 not found` outside
+# that window. Deploy-time binding has no such window.
+#
+# packages/shared-functions/src/config/__tests__/resendSecretBinding.test.ts
+# fails the build if a mailer-reaching function stops declaring the param, and
+# also asserts this block never comes back.
 
 echo ""
 echo "Done!"

@@ -19,6 +19,7 @@ import {
   buildTaskOfferAccepted,
   buildTaskOfferDeclined,
 } from './notifyContent.js';
+import { RESEND_API_KEY } from '@ejm/shared-functions/config/secrets.js';
 
 /**
  * `doAcceptOffer` — the §6.4 transaction, transcribed step by step. One
@@ -33,7 +34,7 @@ import {
  * rather than a "very likely fine".
  */
 export const doAcceptOffer = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

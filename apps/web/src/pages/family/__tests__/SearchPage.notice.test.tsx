@@ -137,3 +137,15 @@ describe('SearchPage result card — cancellation notice line (issue #237)', () 
     expect(screen.queryByText(/cancellation notice/)).not.toBeInTheDocument();
   });
 });
+
+describe('SearchPage result card — age suffix and preferred badge (issue #131 F17 pixel pass)', () => {
+  it('shows the English age suffix, not the French "ans" leaking into the English catalogue', async () => {
+    await searchToResults([sitter({ age: 18 })]);
+    await waitFor(() => expect(screen.getByText('18 yo')).toBeInTheDocument());
+  });
+
+  it('gives the preferred badge an accessible name instead of a hover-only title', async () => {
+    await searchToResults([sitter({ isPreferred: true })]);
+    await waitFor(() => expect(screen.getByRole('img', { name: 'Preferred' })).toBeInTheDocument());
+  });
+});

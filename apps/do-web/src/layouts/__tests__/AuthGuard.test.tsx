@@ -13,6 +13,10 @@ const h = vi.hoisted(() => ({
   },
 }));
 
+// The re-consent gate's host (#488) binds `acknowledgeConsent`; the guard
+// tests only need it to RENDER, never to call out.
+vi.mock('@/config/firebase', () => ({ functions: {} }));
+vi.mock('firebase/functions', () => ({ httpsCallable: () => () => new Promise(() => {}) }));
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: () => ({
     firebaseUser: h.auth.firebaseUser,
@@ -22,6 +26,7 @@ vi.mock('@/stores/authStore', () => ({
 }));
 
 import { AuthGuard } from '../AuthGuard';
+import { CONSENT_VERSION } from '@ejm/shared-core';
 
 /** Both portals plus every destination the guard's mismatch routing can
  * land on. */
@@ -146,5 +151,47 @@ describe('do-web AuthGuard role="parent" (family portal, plan §13 PR7)', () => 
     h.auth = { firebaseUser: { uid: 'x1' }, userDoc: { uid: 'x1' }, loading: false };
     renderGuarded('/family');
     expect(screen.getByText('signup-page')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The re-consent gate (issue #488 decision 1). Before role routing: a member
+ * whose stored consentVersion is stale sees the gate INSTEAD of any portal;
+ * the live version, one of its pre-unification alias labels (study's
+ * '2025-12-01', do's '2026-08-28' -- same text, #489), and no field at all
+ * (an account older than the field, read as the initial '1.0') all pass.
+ */
+describe('re-consent gate (#488)', () => {
+  // These files render no i18n provider, so the gate's heading carries the
+  // raw key; match either that or the English copy.
+  const GATE = /We've updated our terms|consentGate\.title/;
+  const gate = () => screen.queryByRole('heading', { level: 1, name: GATE });
+
+  it('a stale consentVersion renders the gate and nothing of the app', () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } }, consentVersion: '0.9' }, loading: false };
+    renderGuarded('/family');
+    expect(gate()).toBeInTheDocument();
+    expect(screen.queryByText('family-portal')).toBeNull();
+  });
+
+  it('the live version passes straight through', () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } }, consentVersion: CONSENT_VERSION }, loading: false };
+    renderGuarded('/family');
+    expect(gate()).toBeNull();
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
+  });
+
+  it("a pre-unification alias label passes -- it names the same text", () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } }, consentVersion: '2026-08-28' }, loading: false };
+    renderGuarded('/family');
+    expect(gate()).toBeNull();
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
+  });
+
+  it('no consentVersion at all passes -- the account predates the field', () => {
+    h.auth = { firebaseUser: { uid: 'p1' }, userDoc: { uid: 'p1', profiles: { parent: { familyId: 'fam1' } } }, loading: false };
+    renderGuarded('/family');
+    expect(gate()).toBeNull();
+    expect(screen.getByText('family-portal')).toBeInTheDocument();
   });
 });

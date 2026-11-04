@@ -1,4 +1,25 @@
 import { z } from 'zod';
+import { LYCEE_CLASS_LEVELS } from '../constants/classLevels.js';
+
+// ── Consent-version shape (issue #415 decision 2) ──
+//
+// A consent version is a LABEL for a legal document's text, not a value this
+// schema can validate against a live constant (that comparison belongs to
+// requireCurrentConsent, and only for the guardian/kid-invite flow — see
+// CONSENT_VERSION / CONSENT_VERSIONS in constants/config.ts). What this
+// validates is only the SHAPE: either the dotted scheme the constants use
+// today ('1.0') or a YYYY-MM-DD dated scheme a past or future version might
+// use. Deliberately not an allowlist/enum — that pinned '1.0' and
+// '2025-12-01' and rejected everything else, including do's already-shipped
+// '2026-08-28'. A shape check instead means:
+//  - already-stored values ('2025-12-01', '2026-08-28') stay valid forever,
+//    because the audit trail (stored consentVersion) is never rewritten, and
+//  - a future version bump (dated or dotted) never needs an enum edit here.
+const CONSENT_VERSION_SHAPE = /^(?:\d+\.\d+|\d{4}-\d{2}-\d{2})$/;
+
+export const consentVersionSchema = z
+  .string()
+  .regex(CONSENT_VERSION_SHAPE, 'Invalid consent version');
 
 // ── Password Validation ──
 
@@ -41,14 +62,18 @@ export const familyEnrollmentSchema = z.object({
   pets: z.string().optional(),
   note: z.string().optional(),
   kids: z.array(kidSchema).optional(),
-  // Consent-document version the enrolling client presented (issue #178:
-  // study's wizard shows '2025-12-01', sit's shows '1.0'). ALLOWLIST, not a
-  // free string — this lands verbatim in the canonical consent record, so
-  // only versions of terms that actually shipped are acceptable. When terms
-  // are re-versioned, add the new version here. Optional — legacy sit
-  // clients send nothing and the server defaults to '1.0', keeping their
-  // behavior byte-identical.
-  consentVersion: z.enum(['1.0', '2025-12-01']).optional(),
+  // Consent-document version the enrolling client presented (issue #178,
+  // reconciled onto one shared value by issue #415 decision 2 — every client
+  // now sends CONSENT_VERSION from `@ejm/shared-core`). Shape-validated, not
+  // an allowlist — see CONSENT_VERSION_SHAPE above. Optional — legacy sit
+  // clients send nothing and the server defaults to CONSENT_VERSION, keeping
+  // their behavior byte-identical.
+  consentVersion: consentVersionSchema.optional(),
+  // UI language the parent enrolled in (issue #440 audit): persisted on the
+  // new user doc so server-side email copy (verification decisions, guardian
+  // notices) follows it. Mirrors studentIdentitySchema. Optional — legacy
+  // clients send nothing and the server keeps its former 'en' default.
+  language: z.enum(['en', 'fr']).optional(),
 });
 
 // NOTE: field names (minBabysitterAge, maxRate) are babysitter-flavored but
@@ -73,3 +98,56 @@ export type KidInput = z.infer<typeof kidSchema>;
 export type FamilyEnrollmentInput = z.infer<typeof familyEnrollmentSchema>;
 export type SearchDefaultsInput = z.infer<typeof searchDefaultsSchema>;
 export type JoinFamilyInput = z.infer<typeof joinFamilySchema>;
+
+// ── Unified student-identity enrollment (issue #435 milestone, PR4) ──
+//
+// The common student flow (apps/web `/enroll/student`) collects a full
+// identity — name/DOB/classLevel/gender/contact/optional extras — BEFORE the
+// user picks sit or study, mirroring `enrollBabysitter`'s/`enrollTutor`'s
+// classic new-account payload shape but with no role-specific fields at all
+// (those come later, from whichever provider callable the "choose your app"
+// screen calls with `crossApp: true`). `enrollStudentIdentity`
+// (`@ejm/shared-functions`) validates against this schema.
+const addressShape = z.object({
+  fullAddress: z.string().min(1),
+  street: z.string(),
+  city: z.string(),
+  postcode: z.string(),
+  lat: z.number(),
+  lng: z.number(),
+});
+
+export const studentIdentityEnrollmentSchema = z.object({
+  ejemEmail: z.string().email('Please enter a valid email'),
+  verificationCode: z.string().min(1, 'Verification code is required'),
+  password: strongPasswordSchema,
+  consentVersion: consentVersionSchema,
+  firstName: z.string().min(1, 'First name is required'),
+  lastName: z.string().min(1, 'Last name is required'),
+  // "YYYY-MM-DD", matching the classic wizards' wire format.
+  dateOfBirth: z.string().min(1, 'Date of birth is required'),
+  classLevel: z.enum(LYCEE_CLASS_LEVELS),
+  gender: z.enum(['female', 'male', 'other', 'prefer_not_to_say']),
+  // At least one of email/phone is enforced in the callable (matches
+  // enrollTutor's "at least one contact field" rule) — both individually
+  // optional here so the zod error never fires before that clearer check.
+  contactEmail: z.string().email('Enter a full email address').optional().or(z.literal('')),
+  contactPhone: z.string().optional(),
+  whatsapp: z.string().nullable().optional(),
+  // Languages moved OUT of the per-app offering steps and into the shared
+  // identity screen (issue #537 D7): which languages a student speaks is a
+  // fact about the person, not about babysitting — every app wants it, and
+  // collecting it once stops sit and study disagreeing about the same
+  // student. Required at the UI; optional here so an older client that
+  // predates the move is not rejected outright.
+  languages: z.array(z.string().min(1)).max(20).optional(),
+  bio: z.string().max(1000).optional(),
+  address: addressShape.nullable().optional(),
+  language: z.enum(['en', 'fr']).optional(),
+  // StepContactInfo's contact-visibility consent checkbox — recorded on the
+  // root doc so the sit/study crossApp callables can read it later (see the
+  // `User.contactVisibilityConsent` doc comment).
+  contactVisibilityConsent: z.boolean().optional(),
+});
+
+export type StudentIdentityEnrollmentInput = z.infer<typeof studentIdentityEnrollmentSchema>;

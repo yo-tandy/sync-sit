@@ -419,4 +419,53 @@ describe('respondToRequest', () => {
       ).rejects.toMatchObject({ code: 'FAILED_PRECONDITION' });
     });
   });
+
+  // ── Issue #510: an overnight sitting claims BOTH runs of its range ──
+  // 22:00 → 02:00 is block { start: 88, end: 8 } on ONE day's array (88..95
+  // then 0..7). Before the fix the naive loop ran zero times, the claim wrote
+  // nothing and the sitter stayed bookable for the whole night.
+  describe('overnight schedule claim (issue #510)', () => {
+    const NIGHT = '2027-06-14'; // far-future Monday
+    const scheduleRef = () => getDb().collection('schedules').doc(seed.babysitter1.uid);
+    const overrideRef = () => scheduleRef().collection('overrides').doc(NIGHT);
+    let originalMon: boolean[];
+
+    beforeAll(async () => {
+      originalMon = (await scheduleRef().get()).data()!.weekly.mon;
+      // Open 17:00 → 02:00 on the same day key (68..95, 0..7).
+      const g = new Array(96).fill(false);
+      for (let i = 68; i < 96; i++) g[i] = true;
+      for (let i = 0; i < 8; i++) g[i] = true;
+      await scheduleRef().update({ 'weekly.mon': g });
+      await overrideRef().delete().catch(() => {});
+    });
+    afterAll(async () => {
+      await scheduleRef().update({ 'weekly.mon': originalMon });
+      await overrideRef().delete().catch(() => {});
+    });
+
+    it('accept with blockSchedule blocks 22:00–24:00 AND 00:00–02:00, ledger { 88, 8 }', async () => {
+      const apptId = await seedAppointment({
+        babysitterUserId: seed.babysitter1.uid,
+        familyId: seed.family1Id,
+        createdByUserId: seed.parent1.uid,
+        date: NIGHT, startTime: '22:00', endTime: '02:00',
+      });
+
+      await callFunction(
+        'respondToRequest',
+        { appointmentId: apptId, action: 'accept', blockSchedule: true },
+        babysitterToken
+      );
+
+      const doc = (await overrideRef().get()).data()!;
+      expect(doc.sessionBlocks).toEqual([{ appointmentId: apptId, startIdx: 88, endIdx: 8 }]);
+      const slots = doc.slots as boolean[];
+      for (let i = 88; i < 96; i++) expect(slots[i]).toBe(false);
+      for (let i = 0; i < 8; i++) expect(slots[i]).toBe(false);
+      // The evening before the sitting (17:00–22:00) stays open.
+      for (let i = 68; i < 88; i++) expect(slots[i]).toBe(true);
+    });
+  });
+
 });

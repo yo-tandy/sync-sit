@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ref, uploadBytes } from 'firebase/storage';
-import { storage } from '@/config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { storage, functions } from '@/config/firebase';
 import { useAuthStore } from '@/stores/authStore';
 import { useVerificationStore } from '@/stores/verificationStore';
 import { TopNav } from '@/components/ui/TopNav';
@@ -12,8 +12,19 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { getParentProfile } from '@ejm/sit-core';
+import { uploadErrorKey, MAX_VERIFICATION_DOCUMENT_BYTES } from '@ejm/shared-core';
+import { putToSignedUrl, callableErrorCode, type SignedUploadResponse } from '@ejm/shared-ui';
+import { useHubPaths } from '@/lib/hubRoutes';
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+interface CreateVerificationDocumentUploadUrlRequest {
+  familyId: string;
+  kind: 'identity' | 'enrollment';
+  contentType: string;
+  fileName: string;
+  sizeBytes: number;
+}
+
+const MAX_FILE_SIZE = MAX_VERIFICATION_DOCUMENT_BYTES;
 
 function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' {
   switch (status) {
@@ -25,6 +36,7 @@ function statusBadgeVariant(status: string): 'green' | 'amber' | 'red' | 'gray' 
 }
 
 export function VerificationPage() {
+  const hub = useHubPaths();
   const { t, i18n } = useTranslation();
   const { userDoc } = useAuthStore();
   const familyId = getParentProfile(userDoc)?.familyId;
@@ -69,11 +81,23 @@ export function VerificationPage() {
     fetchStatus();
   }, []);
 
+  // Uploads (issue #447): verification-documents writes now go through this
+  // membership-checked signed-URL callable exclusively — storage.rules denies
+  // every direct client write to verification-documents/**. See
+  // packages/shared-functions/src/verification/createVerificationDocumentUploadUrl.ts.
   const handleUpload = async (file: File, type: 'identity' | 'ejm_enrollment', metadata?: Record<string, string>) => {
     if (!familyId) return;
-    const path = `verification-documents/${familyId}/${Date.now()}-${file.name}`;
-    const storageRef = ref(storage, path);
-    await uploadBytes(storageRef, file);
+    const kind = type === 'identity' ? 'identity' : 'enrollment';
+    const contentType = file.type || 'application/octet-stream';
+    const fn = httpsCallable<CreateVerificationDocumentUploadUrlRequest, SignedUploadResponse>(
+      functions,
+      'createVerificationDocumentUploadUrl',
+    );
+    const { data } = await fn({ familyId, kind, contentType, fileName: file.name, sizeBytes: file.size });
+    // The callable binds BOTH headers into the V4 signature — see
+    // putToSignedUrl's doc comment (@ejm/shared-ui) for why both must ride
+    // on the PUT.
+    const path = await putToSignedUrl(data, file, contentType, MAX_VERIFICATION_DOCUMENT_BYTES);
     // Do NOT getDownloadURL here: storage.rules deny reads on
     // verification-documents (reads go through the getVerificationDocument
     // callable), so the metadata read behind getDownloadURL is rejected and
@@ -97,8 +121,9 @@ export function VerificationPage() {
       await handleUpload(identityFile, 'identity');
       setIdentityFile(null);
       if (identityInputRef.current) identityInputRef.current.value = '';
-    } catch {
-      setIdentityError(t('verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setIdentityError(t(`verification.${uploadErrorKey(err)}`));
     }
   };
 
@@ -113,17 +138,25 @@ export function VerificationPage() {
       await handleUpload(enrollmentFile, 'ejm_enrollment');
       setEnrollmentFile(null);
       if (enrollmentInputRef.current) enrollmentInputRef.current.value = '';
-    } catch {
-      setEnrollmentError(t('verification.uploadError'));
+    } catch (err) {
+      console.error('[verification] upload failed', err);
+      setEnrollmentError(t(`verification.${uploadErrorKey(err)}`));
     }
   };
 
   // The server discriminates actionable failures with details.reason; a stale
   // request gets its own copy rather than the raw server message (#218).
-  const approveErrorMessage = (err: unknown, fallback: string) => {
+  const approveErrorMessage = (err: unknown) => {
     const reason = (err as { details?: { reason?: string } } | null)?.details?.reason;
     if (reason === 'already_verified') return t('verification.communityAlreadyVerified');
-    return err instanceof Error ? err.message : fallback;
+    // Never echo err.message (English-only server text or a bare `internal`).
+    // Both callables use not-found for an unknown code and deadline-exceeded
+    // for an expired one; failed-precondition is shared by several different
+    // refusals (already used, own family, no family), so it stays generic.
+    const code = callableErrorCode(err);
+    if (code === 'not-found') return t('verification.communityCodeInvalid');
+    if (code === 'deadline-exceeded') return t('verification.communityCodeExpired');
+    return t('common.error');
   };
 
   const handleLookup = async () => {
@@ -131,7 +164,8 @@ export function VerificationPage() {
     try {
       await lookupCommunityCode(approveCode.trim());
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Invalid code'));
+      console.error('[verification] community code lookup failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 
@@ -144,7 +178,8 @@ export function VerificationPage() {
       setKnowPerson(false);
       setConfirmEjm(false);
     } catch (err: unknown) {
-      setApproveError(approveErrorMessage(err, 'Approval failed'));
+      console.error('[verification] community code approval failed', err);
+      setApproveError(approveErrorMessage(err));
     }
   };
 
@@ -169,7 +204,7 @@ export function VerificationPage() {
 
   return (
     <div>
-      <TopNav title={t('verification.title')} backTo="/family" />
+      <TopNav title={t('verification.title')} backTo={hub.back('/family')} />
 
       <div className="px-5 pb-8">
         {loading ? (

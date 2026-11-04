@@ -2,11 +2,22 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import { httpsCallable } from 'firebase/functions';
-import { AccountHome, type AccountSection } from '@ejm/shared-ui';
+import { AccountHome, DeleteAccountSection, type AccountSection } from '@ejm/shared-ui';
+import sitSm from '@ejm/shared-ui/brand-marks/sync-sit-48.png';
+import sitMd from '@ejm/shared-ui/brand-marks/sync-sit-96.png';
+import studySm from '@ejm/shared-ui/brand-marks/sync-study-48.png';
+import studyMd from '@ejm/shared-ui/brand-marks/sync-study-96.png';
 import { getSitRole } from '@ejm/sit-core';
 import { useAuthStore } from '@/stores/authStore';
 import { functions } from '@/config/firebase';
 import { STUDY_APP_URL } from '@/lib/appSwitch';
+import { HUB_PATHS } from '@/lib/hubRoutes';
+
+// Imported directly, not through a shared-ui lookup (#422): this page's own
+// graph then holds only the two marks it actually shows (sync-do never
+// appears here -- decision 20).
+const SIT_MARK = { sm: sitSm, md: sitMd };
+const STUDY_MARK = { sm: studySm, md: studyMd };
 
 /**
  * sync/sit's binding of the shared account hub (#367).
@@ -23,15 +34,23 @@ import { STUDY_APP_URL } from '@/lib/appSwitch';
  * from a sit-hosted hub without a handoff, and do's own rows (tasks, board,
  * endorsements) live behind that switch rather than in this list.
  *
- * The study block is a SINGLE row for the same reason the missing rows are
- * absent: a cross-origin deep link cannot work today (study's handoff page
- * drops the destination), so the hub offers the one move that does. See the
- * note on that section.
+ * The study block deep-links (issue #426): study's `HandoffPage` now honours
+ * a validated `next` in the handoff fragment, so a sit member with a KNOWN
+ * sit role gets role-shaped rows into study (My account / Sessions /
+ * Search) instead of the single generic "Open sync-study" row. Role-aware
+ * is the whole point -- study guards `/family/*` on role="parent", so a sit
+ * student (babysitter) gets study's tutor-shaped equivalents
+ * (`/tutor/account`, `/tutor/sessions`, `/tutor/published-searches`), never
+ * the parent-shaped paths. A signed-in member with NO sit role (admin, or a
+ * study-only tutor) has no signal to shape rows from, so they keep the one
+ * destination that always works -- absent beats broken, same rule as the
+ * sit-only sections above.
  */
 export function AccountHubPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const userDoc = useAuthStore((s) => s.userDoc);
+  const logout = useAuthStore((s) => s.logout);
   const role = userDoc ? getSitRole(userDoc) : null;
   /**
    * A SIT role, not a boolean (#416 review round 4). `getSitRole` returns
@@ -60,8 +79,16 @@ export function AccountHubPage() {
    * study's `/login`. Same shape as `AppSwitchMenuItem`: mint a one-time code,
    * carry it in the URL FRAGMENT (fragments never reach servers or logs), and
    * navigate only once the mint resolves.
+   *
+   * `next` (issue #426) is an in-app STUDY path (`/family/sessions`,
+   * `/tutor/account`, …) -- distinguished from the role-less fallback row,
+   * whose `href` is study's absolute app URL and therefore never starts with
+   * `/`. Only a leading-`/` value is carried as `next`; it is re-validated on
+   * the RECEIVING side (study's `HandoffPage`) against its own route table
+   * regardless -- this app is not the security boundary, since the fragment
+   * is attacker-controllable after it leaves here.
    */
-  const openStudy = async () => {
+  const openStudy = async (next?: string) => {
     if (busy) return;
     setBusy(true);
     setHandoffFailed(false);
@@ -73,11 +100,14 @@ export function AccountHubPage() {
       const res = await mint({});
       // Whitelisted at the source, mirroring the receiver's en|fr allowlist.
       const lang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
+      const deepNext = next?.startsWith('/') ? next : undefined;
+      const nextParam = deepNext ? `&next=${encodeURIComponent(deepNext)}` : '';
       window.location.assign(
-        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}`,
+        `${STUDY_APP_URL}/handoff#code=${encodeURIComponent(res.data.code)}&lang=${encodeURIComponent(lang)}${nextParam}`,
       );
       // Stay busy: the browser is navigating away.
-    } catch {
+    } catch (err) {
+      console.error('[accountHub] mint handoff code failed', err);
       setHandoffFailed(true);
       setBusy(false);
     }
@@ -85,25 +115,32 @@ export function AccountHubPage() {
 
   const sitSections: AccountSection[] = [
     {
-      title: t('accountHub.title'),
+      // "Account" (#445) -- distinct from `accountHub.myAccount` ("My
+      // account"), which is this section's OWN first row. The section title
+      // used to reuse that same string as the page-level heading; now the
+      // page-level heading is the sticky "Sync/Settings" banner (AccountLayout)
+      // and this is purely the first of the three section titles the owner
+      // named: Account, Sync/Sit, Sync/Study.
+      title: t('accountHub.neutralSection'),
       rows: [
         {
           label: t('accountHub.myAccount'),
-          href: isParent ? '/family/account' : '/babysitter/account',
+          href: HUB_PATHS.profile,
         },
         // Family, supervised kids and verification are parent-side concepts
         // in sit: a student belongs to no family here and supervises no one.
         ...(isParent
           ? [
-              { label: t('accountHub.myFamily'), href: '/family/settings' },
-              { label: t('accountHub.supervisedKids'), href: '/family/governance' },
-              { label: t('accountHub.verification'), href: '/family/verification' },
+              { label: t('accountHub.myFamily'), href: HUB_PATHS.family },
+              { label: t('accountHub.supervisedKids'), href: HUB_PATHS.kids },
+              { label: t('accountHub.verification'), href: HUB_PATHS.verification },
             ]
           : []),
       ],
     },
     {
       app: 'sit' as const,
+      mark: SIT_MARK,
       rows: isParent
         ? [
             { label: t('accountHub.appointments'), href: '/family/appointments' },
@@ -119,46 +156,75 @@ export function AccountHubPage() {
     },
   ];
 
+  const errorHint = handoffFailed ? { hint: t('appSwitch.error') } : {};
+
+  /*
+   * Role-shaped deep rows (issue #426): study's own routes, mirrored 1:1 --
+   * minus study's "My account": the account and every app's notification
+   * settings live on THIS hub's My account now, so a second one in study
+   * would be a stale copy. Both `FamilyLayout` and `TutorLayout` in study
+   * serve a sessions and a search-equivalent page under the same names. `next`
+   * is re-validated on arrival regardless (study's `HandoffPage`), so this
+   * table only needs to point at real study routes, not defend against
+   * tampering itself.
+   */
+  const studyDeepRows = isParent
+    ? [
+        { label: t('accountHub.sessions'), href: '/family/sessions' },
+        { label: t('accountHub.search'), href: '/family/search' },
+      ]
+    : sitRole === 'babysitter'
+      ? [
+          { label: t('accountHub.sessions'), href: '/tutor/sessions' },
+          { label: t('accountHub.search'), href: '/tutor/published-searches' },
+        ]
+      : null;
+
+  // Order is DATA too, and pinned (#445): Account, Sync/Sit, Sync/Study.
+  // `sitSections` already holds [neutral, sit] in that order (this app's
+  // owner named it "Account" then "Sync/Sit"); the study block is always
+  // appended last, whether or not `sitSections` is present.
   const sections: AccountSection[] = [
     ...(sitRole ? sitSections : []),
     {
       app: 'study' as const,
+      mark: STUDY_MARK,
       /*
-       * ONE row, not a deep-link list (#416 review round 1).
-       *
-       * The first cut listed study's account/sessions/search as deep links.
-       * Two things were wrong with that and neither is fixable here. Study's
-       * `HandoffPage` reads only `code` and `lang` and always lands via
-       * `postLoginRouter`, so a cross-origin DEEP link is not expressible
-       * today at all -- the destination is dropped on arrival. And the deep
-       * rows were parent-shaped for every role: study guards `/family/*` on
-       * role="parent", so a sit student following them is bounced.
-       *
-       * Adding a `next` to the handoff is the real fix and it is NOT a small
-       * one: the handoff mints a session, so an unvalidated destination on
-       * that endpoint is an open redirect against a freshly authenticated
-       * user. It needs an allowlist of in-app relative paths rejecting any
-       * scheme or `//` prefix, with hostile inputs pinned. Tracked separately.
-       *
-       * Until then this page applies its own rule -- absent beats broken --
-       * and offers the one destination that actually works.
+       * A signed-in member with NO sit role (admin, or a study-only tutor)
+       * gives us no signal to shape rows from -- `next` would guess wrong
+       * for one of the two shapes, and absent beats broken (#416 review
+       * round 1's original reasoning, now scoped to just this case). They
+       * keep the one destination that always works: the plain handoff, no
+       * `next`, landing on study's own `postLoginRouter`.
        */
-      rows: [
-        {
-          label: t('appSwitch.toStudy'),
-          href: STUDY_APP_URL,
-          external: true,
-          ...(handoffFailed ? { hint: t('appSwitch.error') } : {}),
-        },
-      ],
+      rows: studyDeepRows
+        ? studyDeepRows.map((row) => ({ ...row, external: true, ...errorHint }))
+        : [{ label: t('appSwitch.toStudy'), href: STUDY_APP_URL, external: true, ...errorHint }],
     },
   ];
+
+  // Fixed, matching `deleteMyAccount`'s own non-localised confirmation token
+  // (`packages/shared-functions/src/account/deleteMyAccount.ts`). This is
+  // only ever sent by `DeleteAccountSection` once its own gate has already
+  // matched the member's typed input against the identical literal, so
+  // there is nothing to derive here.
+  const deleteMyAccount = () =>
+    httpsCallable<{ confirm: string }, void>(functions, 'deleteMyAccount')({
+      confirm: 'DELETE',
+    }).then(() => undefined);
 
   return (
     <AccountHome
       sections={sections}
       onNavigate={(href) => void navigate(href)}
-      onNavigateExternal={() => void openStudy()}
+      onNavigateExternal={(href) => void openStudy(href)}
+      footer={
+        <DeleteAccountSection
+          onSignOut={logout}
+          onDeleteAccount={deleteMyAccount}
+          onDeleted={() => navigate('/account-deleted')}
+        />
+      }
     />
   );
 }

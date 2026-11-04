@@ -4,6 +4,7 @@ import { db } from '../config/firebase.js';
 import { getCorsOrigin } from '../config/cors.js';
 import { requireFamilyParent } from './shared.js';
 import { iso, profileSummary } from './oversight.js';
+import { RESEND_API_KEY } from '../config/secrets.js';
 
 /**
  * The supervising family's dashboard: every guardian link of the family (any
@@ -13,7 +14,7 @@ import { iso, profileSummary } from './oversight.js';
  * consent-gated depth lives in getGovernedChildDetail.
  */
 export const getGovernedChildren = onCall(
-  { region: 'europe-west1', cors: getCorsOrigin() },
+  { region: 'europe-west1', cors: getCorsOrigin(), secrets: [RESEND_API_KEY] },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError('unauthenticated', 'Must be logged in');

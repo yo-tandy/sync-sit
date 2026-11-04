@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { APP_ACCENT, APP_NAME, BRAND_MARKS, type SyncApp } from '../lib/brandMarks.js';
+import { APP_ACCENT, APP_NAME, type AppMark, type SyncApp } from '../lib/brandMarks.js';
 
 /** One destination in the hub. A row with no destination is not a row. */
 export interface AccountRow {
@@ -16,13 +16,20 @@ export interface AccountRow {
   external?: boolean;
 }
 
-export interface AccountSection {
-  /** Omitted for the neutral block; set for a per-app block. */
-  app?: SyncApp;
-  /** Heading for the neutral block. Per-app blocks use the app's own name. */
-  title?: string;
-  rows: AccountRow[];
-}
+/**
+ * A discriminated union, not two independent optional fields (#422): a
+ * per-app block's icon comes from `mark`, supplied by the caller via
+ * `@ejm/shared-ui/brand-marks/sync-<app>-{48,96}.png` rather than resolved
+ * here from a suite-wide lookup -- the lookup that made every app importing
+ * ANY `AccountHome` section ship every app's mark, do's included, whether a
+ * `do` section ever appeared or not. `app` and `mark` are paired for the same
+ * reason `AppSwitchBar`'s `home`/`account` are ONE OBJECT each: an `app` with
+ * no `mark` would be a heading with a silently missing icon rather than a
+ * type error.
+ */
+export type AccountSection =
+  | { app: SyncApp; mark: AppMark; title?: undefined; rows: AccountRow[] }
+  | { app?: undefined; mark?: undefined; title: string; rows: AccountRow[] };
 
 export interface AccountHomeProps {
   sections: AccountSection[];
@@ -50,6 +57,19 @@ export interface AccountHomeProps {
  * of the app you arrived from. It is not below anything; the bottom bar is how
  * you leave. Callers must not wrap this in a TopNav carrying `backTo`.
  *
+ * NO HEADER HERE (#445 review). An earlier revision of this component
+ * rendered its own sticky "Sync/Account" banner, which painted OVER
+ * `AccountLayout`'s existing `md+` desktop exit header (Home link +
+ * app-switch menu) -- two headers stacked at the same `z-40`, one hiding the
+ * other. There must be exactly ONE header, and it has to be full-bleed
+ * (spanning the viewport, not just this component's own width-capped
+ * column), which only the HOST layout can render for free since it sits
+ * outside `PageContainer` already. So the sticky "Sync/Account" banner now
+ * lives in `AccountLayout` (apps/web) -- see that file's docstring -- and
+ * this component goes back to being page BODY only: subtitle, sections,
+ * footer. A host that mounts `AccountHome` owns its own header the same way
+ * it owns `AuthGuard` and the ground token.
+ *
  * Rows are DATA. A destination that does not exist is an absent row, never a
  * disabled one -- study has no family "favorites" and sync-do has no account
  * routes at all, and the honest rendering of a feature that does not exist is
@@ -65,7 +85,6 @@ export function AccountHome({
 
   return (
     <div className="px-5 pt-4 pb-8">
-      <h1 className="mb-1 text-2xl font-bold text-gray-900">{t('accountHub.title')}</h1>
       <p className="mb-6 text-sm text-gray-500">{t('accountHub.subtitle')}</p>
 
       {sections
@@ -78,8 +97,8 @@ export function AccountHome({
                 {section.app ? (
                   <>
                     <img
-                      src={BRAND_MARKS[section.app].sm}
-                      srcSet={`${BRAND_MARKS[section.app].sm} 1x, ${BRAND_MARKS[section.app].md} 2x`}
+                      src={section.mark.sm}
+                      srcSet={`${section.mark.sm} 1x, ${section.mark.md} 2x`}
                       alt=""
                       width={18}
                       height={18}
